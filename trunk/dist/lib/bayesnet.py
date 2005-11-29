@@ -8,7 +8,7 @@ license file for legal information.'''
 __version__ = '0.1'
 __author__ = 'Kosta Gaitanis'
 __author_email__ = 'gaitanis@tele.ucl.ac.be'
-
+import types
 import graph.graph as graph
 import delegate
 import numarray as na
@@ -36,8 +36,6 @@ class RawCPT(delegate.Delegate):
        self.Fv = [f[0] for f in self.Fv]   # list of names of vars ordered by index
        # self.Fv contains the names of the Family of V
        # only use self.Fv for iterating over dimensions... not self.p.items()
-
-
        self.cpt = na.ones(shape, type='Float32')
 
    def setCPT(self, cpt):
@@ -85,8 +83,53 @@ class RawCPT(delegate.Delegate):
        return aa*bb
 
    def __str__(self): return str(self.cpt)
-
-
+   
+   def __getitem__(self, index):
+      """ Overload array-style indexing behaviour.  Index can be a string as in PBNT ('1,:,1'), a dictionary of var name:value pairs, or pure numbers as in the standard way of accessing a numarray array array[1,:,1]
+      """
+      if isinstance(index, types.DictType):
+         strIndex = self._strIndexFromDict(index)
+         return self._getStrIndex(strIndex)
+      if isinstance(index, types.StringType):
+         return self._getStrIndex(index)
+      return self._getNumItem(index)
+   
+   def _getStrIndex(self, index):
+      """ Helper function for __getitem__, takes a string as index.
+      """
+      return eval("self.cpt["+index+"]")
+   
+   def _getNumItem(self, index):
+      """ Helper function for __getitem__, index are numbers as in array[1,:,1]
+      """
+      return self.cpt[index]
+   
+   def __setitem__(self, index, value):
+      """ Overload array-style indexing and setting behaviour, as in __getitem__ this will take a dictionary, string, or normal set of numbers as index
+      """
+      if isinstance(index, types.DictType):
+         strIndex = self._strIndexFromDict(index)
+         return self._setStrIndex(strIndex, value)
+      if isinstance(index, types.StringType):
+         return self._setStrIndex(index, value)
+      return self._setNumItem(index, value)
+   
+   def _setStrIndex(self, index, value):
+      exec "self.cpt["+index+"]=" + repr(value)
+   
+   def _setNumItem(self, index, value):
+      self.cpt[index] = value
+      return
+   
+   def _strIndexFromDict(self, d):
+      index = '';
+      for vname in self.Fv:
+         if d.has_key(vname):
+            index += repr(d[vname]) + ','
+         else:
+            index += ':,'
+      return index[:-1]
+   
    def FindCorrespond(a,b):
        correspond = []
        k = len(b.p)
