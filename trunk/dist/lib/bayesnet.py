@@ -427,62 +427,62 @@ class MoralGraph(graph.Graph):
         
         return v
 
-def Triangulate(self):
-    """
-    Returns a Triangulated graph and its clusters.
-    
-    POST :  Graph, list of clusters
-    
-    An undirected graph is TRIANGULATED iff every cycle of length
-    four or greater contains an edge that connects two
-    nonadjacent nodes in the cycle.
-    
-    Procedure for triangulating a graph :
-    
-    1. Make a copy of G, call it Gt
-    2. while there are still nodes left in Gt:
-    a) Select a node V from Gt according to the criterion
-    described below
-    b) The node V and its neighbours in Gt form a cluster.
-    Connect of the nodes in the cluster. For each edge added
-    to Gt, add the same corresponding edge t G
-    c) Remove V from Gt
-    3. G, modified by the additional arcs introduces in previous
-    steps is now triangulated.
-    
-    The WEIGHT of a node V is the nmber of values V can take (BVertex.nvalues)
-    The WEIGHT of a CLUSTER is the product of the weights of its
-    constituent nodes
-    
-    Selection Criterion :
-    Choose the node that causes the least number of edges to be added in
-    step 2b, breaking ties by choosing the nodes that induces the cluster with
-    the smallest weight
-    Implementation in Graph.ChooseVertex()
-    """
-    logging.info('Triangulating Tree and extracting Clusters')
-    # don't touch this graph, create a copy of it
-    Gt = copy.deepcopy(self)
-    Gt.name = 'Triangulised ' + str(Gt.name)
-    
-    # make a copy of Gt
-    G2 = copy.deepcopy(Gt)
-    G2.name = 'Copy of '+ Gt.name
-    
-    clusters = []
-    
-    while len(G2.v):
-        v = G2.ChooseVertex()
-        #logging.debug('Triangulating: chosen '+str(v))
-        cluster = list(v.adjacent_v)
-        cluster.append(v)
+    def Triangulate(self):
+        """
+        Returns a Triangulated graph and its clusters.
         
-        #logging.debug('Cluster: '+str([str(c) for c in cluster]))
+        POST :  Graph, list of clusters
         
-        c = Cluster(*cluster)
-        if c.NotSetSepOf(clusters):
-            #logging.debug('Appending cluster')
-            clusters.append(c)
+        An undirected graph is TRIANGULATED iff every cycle of length
+        four or greater contains an edge that connects two
+        nonadjacent nodes in the cycle.
+        
+        Procedure for triangulating a graph :
+        
+        1. Make a copy of G, call it Gt
+        2. while there are still nodes left in Gt:
+        a) Select a node V from Gt according to the criterion
+        described below
+        b) The node V and its neighbours in Gt form a cluster.
+        Connect of the nodes in the cluster. For each edge added
+        to Gt, add the same corresponding edge t G
+        c) Remove V from Gt
+        3. G, modified by the additional arcs introduces in previous
+        steps is now triangulated.
+        
+        The WEIGHT of a node V is the nmber of values V can take (BVertex.nvalues)
+        The WEIGHT of a CLUSTER is the product of the weights of its
+        constituent nodes
+        
+        Selection Criterion :
+        Choose the node that causes the least number of edges to be added in
+        step 2b, breaking ties by choosing the nodes that induces the cluster with
+        the smallest weight
+        Implementation in Graph.ChooseVertex()
+        """
+        logging.info('Triangulating Tree and extracting Clusters')
+        # don't touch this graph, create a copy of it
+        Gt = copy.deepcopy(self)
+        Gt.name = 'Triangulised ' + str(Gt.name)
+        
+        # make a copy of Gt
+        G2 = copy.deepcopy(Gt)
+        G2.name = 'Copy of '+ Gt.name
+    
+        clusters = []
+    
+        while len(G2.v):
+            v = G2.ChooseVertex()
+            #logging.debug('Triangulating: chosen '+str(v))
+            cluster = list(v.adjacent_v)
+            cluster.append(v)
+        
+            #logging.debug('Cluster: '+str([str(c) for c in cluster]))
+        
+            c = Cluster(*cluster)
+            if c.NotSetSepOf(clusters):
+                #logging.debug('Appending cluster')
+                clusters.append(c)
             
             clusterleft = copy.copy(cluster)
             
@@ -864,12 +864,19 @@ class CPTIndexTestCase(unittest.TestCase):
         cpt.setCPT(range(48))
         self.cpt = cpt
     
-    def testSetCPT(self):
-        """ Violate abstraction and check that setCPT actually worked correctly
+    def testGetCPT(self):
+        """ Violate abstraction and check that setCPT actually worked correctly, by getting things out of the matrix
         """
         assert(na.all(self.cpt.cpt[0,0,0,:] == na.array([0,1])) and \
                na.all(self.cpt.cpt[1,0,0,:] == na.array([24,25]))), \
               "Error setting raw cpt"
+    
+    def testSetCPT(self):
+        """ Violate abstraction and check that we can actually set elements.
+        """
+        self.cpt.cpt[0,1,0,:] = na.array([4,5])
+        assert(na.all(self.cpt.cpt[0,1,0,:] == na.array([4,5]))), \
+              "Error setting the array when violating abstraction"
         
     def testStrIndex(self):
         """ test that an index using strings works correctly
@@ -888,7 +895,7 @@ class CPTIndexTestCase(unittest.TestCase):
         index3 = '1,1,0,:'
         self.cpt[index] = -1
         self.cpt[index2] = 100
-        self.cpt[index3] = na.array([-2 -3])
+        self.cpt[index3] = na.array([-2, -3])
         assert(na.all(self.cpt.cpt[0,0,0,:] == na.array([-1, -1])) and \
                na.all(self.cpt.cpt[1,0,0,:] == na.array([100, 100])) and \
                na.all(self.cpt.cpt[1,1,0,:] == na.array([-2, -3]))), \
@@ -911,7 +918,7 @@ class CPTIndexTestCase(unittest.TestCase):
         index3 = {'a':1,'b':1,'c':0}
         self.cpt[index] = -1
         self.cpt[index2] = 100
-        self.cpt[index3] = na.array([-2 -3])
+        self.cpt[index3] = na.array([-2, -3])
         assert(na.all(self.cpt.cpt[0,0,0,:] == array([-1, -1])) and \
                na.all(self.cpt.cpt[1,0,0,:] == array([100, 100])) and \
                na.all(self.cpt.cpt[1,1,0,:] == array([-2, -3]))), \
@@ -929,7 +936,7 @@ class CPTIndexTestCase(unittest.TestCase):
         """
         self.cpt[0,0,0,:] = -1
         self.cpt[1,0,0,:] = 100
-        self.cpt[1,1,0,:] = na.array([-2 -3])
+        self.cpt[1,1,0,:] = na.array([-2, -3])
         assert(na.all(self.cpt.cpt[0,0,0,:] == na.array([-1, -1])) and \
                na.all(self.cpt.cpt[1,0,0,:] == na.array([100, 100])) and \
                na.all(self.cpt.cpt[1,1,0,:] == na.array([-2, -3]))), \
