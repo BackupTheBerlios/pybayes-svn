@@ -1,25 +1,31 @@
-'''Bayesian network implementation.  Influenced by Cecil Huang's and Adnan
+"""Bayesian network implementation.  Influenced by Cecil Huang's and Adnan
 Darwiche's "Inference in Belief Networks: A Procedural Guide," International
 Journal of Approximate Reasoning, 1994.
 
 Copyright 2005, Kosta Gaitanis (gaitanis@tele.ucl.ac.be).  Please see the
-license file for legal information.'''
+license file for legal information.
+"""
 
 __version__ = '0.1'
 __author__ = 'Kosta Gaitanis'
 __author_email__ = 'gaitanis@tele.ucl.ac.be'
+#Python Standard Distribution Packages
+import sys
+import unittest
 import types
-import graph.graph as graph
-import delegate
-import numarray as na
-import numarray.mlab
-from numarray.random_array import randint, seed
-from numarray.ieeespecial import setnan, getnan
 import copy
 from timeit import Timer, time
 import profile
 import bisect       # for appending elements to a sorted list
 import logging
+#Major Packages
+import numarray as na
+import numarray.mlab
+from numarray.random_array import randint, seed
+from numarray.ieeespecial import setnan, getnan
+#Library Specific Modules
+import graph.graph as graph
+import delegate
 
 seed()
 na.Error.setMode(invalid='ignore')
@@ -34,8 +40,6 @@ class RawCPT(delegate.Delegate):
         self.Fv = [f[0] for f in self.Fv]   # list of names of vars ordered by index
         # self.Fv contains the names of the Family of V
         # only use self.Fv for iterating over dimensions... not self.p.items()
-        
-        
         self.cpt = na.ones(shape, type='Float32')
         
     def setCPT(self, cpt):
@@ -87,8 +91,8 @@ class RawCPT(delegate.Delegate):
         """ Overload array-style indexing behaviour.  Index can be a string as in PBNT ('1,:,1'), a dictionary of var name:value pairs, or pure numbers as in the standard way of accessing a numarray array array[1,:,1]
         """
         if isinstance(index, types.DictType):
-            strIndex = self._strIndexFromDict(index)
-            return self._getStrIndex(strIndex)
+            numIndex = self._numIndexFromDict(index)
+            return self._getNumItem(numIndex)
         if isinstance(index, types.StringType):
             return self._getStrIndex(index)
         return self._getNumItem(index)
@@ -114,21 +118,30 @@ class RawCPT(delegate.Delegate):
         return self._setNumItem(index, value)
     
     def _setStrIndex(self, index, value):
-        exec "self.cpt["+index+"]=" + repr(value)
+        exec "self.cpt["+index+"]=na." + repr(value)
     
     def _setNumItem(self, index, value):
         self.cpt[index] = value
         return
     
     def _strIndexFromDict(self, d):
-        index = '';
+        index = ''
         for vname in self.Fv:
             if d.has_key(vname):
                 index += repr(d[vname]) + ','
             else:
                 index += ':,'
         return index[:-1]
-
+    
+    def _numIndexFromDict(self, d):
+        index = []
+        for vname in self.Fv:
+            if d.has_key(vname):
+                index.append(d[vname])
+            else:
+                index.append(slice(None,None,None))
+        return index
+        
     def FindCorrespond(a,b):
         correspond = []
         k = len(b.p)
@@ -414,80 +427,78 @@ class MoralGraph(graph.Graph):
         
         return v
 
-    def Triangulate(G):
-        """
-        Returns a Triangulated graph and its clusters.
+def Triangulate(self):
+    """
+    Returns a Triangulated graph and its clusters.
+    
+    POST :  Graph, list of clusters
+    
+    An undirected graph is TRIANGULATED iff every cycle of length
+    four or greater contains an edge that connects two
+    nonadjacent nodes in the cycle.
+    
+    Procedure for triangulating a graph :
+    
+    1. Make a copy of G, call it Gt
+    2. while there are still nodes left in Gt:
+    a) Select a node V from Gt according to the criterion
+    described below
+    b) The node V and its neighbours in Gt form a cluster.
+    Connect of the nodes in the cluster. For each edge added
+    to Gt, add the same corresponding edge t G
+    c) Remove V from Gt
+    3. G, modified by the additional arcs introduces in previous
+    steps is now triangulated.
+    
+    The WEIGHT of a node V is the nmber of values V can take (BVertex.nvalues)
+    The WEIGHT of a CLUSTER is the product of the weights of its
+    constituent nodes
+    
+    Selection Criterion :
+    Choose the node that causes the least number of edges to be added in
+    step 2b, breaking ties by choosing the nodes that induces the cluster with
+    the smallest weight
+    Implementation in Graph.ChooseVertex()
+    """
+    logging.info('Triangulating Tree and extracting Clusters')
+    # don't touch this graph, create a copy of it
+    Gt = copy.deepcopy(self)
+    Gt.name = 'Triangulised ' + str(Gt.name)
+    
+    # make a copy of Gt
+    G2 = copy.deepcopy(Gt)
+    G2.name = 'Copy of '+ Gt.name
+    
+    clusters = []
+    
+    while len(G2.v):
+        v = G2.ChooseVertex()
+        #logging.debug('Triangulating: chosen '+str(v))
+        cluster = list(v.adjacent_v)
+        cluster.append(v)
         
-        POST :  Graph, list of clusters
+        #logging.debug('Cluster: '+str([str(c) for c in cluster]))
         
-        An undirected graph is TRIANGULATED iff every cycle of length
-        four or greater contains an edge that connects two
-        nonadjacent nodes in the cycle.
-        
-        Procedure for triangulating a graph :
-        
-        1. Make a copy of G, call it Gt
-        2. while there are still nodes left in Gt:
-        a) Select a node V from Gt according to the criterion
-        described below
-        b) The node V and its neighbours in Gt form a cluster.
-        Connect of the nodes in the cluster. For each edge added
-        to Gt, add the same corresponding edge t G
-        c) Remove V from Gt
-        3. G, modified by the additional arcs introduces in previous
-        steps is now triangulated.
-        
-        The WEIGHT of a node V is the nmber of values V can take (BVertex.nvalues)
-        The WEIGHT of a CLUSTER is the product of the weights of its
-        constituent nodes
-        
-        Selection Criterion :
-        Choose the node that causes the least number of edges to be added in
-        step 2b, breaking ties by choosing the nodes that induces the cluster with
-        the smallest weight
-        Implementation in Graph.ChooseVertex()
-        """
-        logging.info('Triangulating Tree and extracting Clusters')
-        # don't touch this graph, create a copy of it
-        G = copy.deepcopy(G)
-        G.name = 'Triangulised ' + str(G.name)
-        
-        # make a copy of G
-        G2 = copy.deepcopy(G)
-        G2.name = 'Copy of '+ G.name
-        
-        clusters = []
-        
-        while len(G2.v):
-            v = G2.ChooseVertex()
-            #logging.debug('Triangulating: chosen '+str(v))
-            cluster = list(v.adjacent_v)
-            cluster.append(v)
+        c = Cluster(*cluster)
+        if c.NotSetSepOf(clusters):
+            #logging.debug('Appending cluster')
+            clusters.append(c)
             
-            #logging.debug('Cluster: '+str([str(c) for c in cluster]))
-
-            c = Cluster(*cluster)
-            if c.NotSetSepOf(clusters):
-                #logging.debug('Appending cluster')
-                clusters.append(c)
-
             clusterleft = copy.copy(cluster)
-
+            
             for v1 in cluster:
                 clusterleft.pop(0)
-                for v2 in clusterleft:
-                    if not (v1 in v2.adjacent_v):
-                        v1g = G.v[v1.name]
-                        v2g = G.v[v2.name]
-                        G.add_e(graph.UndirEdge(max(G.e.keys())+1,v1g,v2g))
-                        G2.add_e(graph.UndirEdge(max(G2.e.keys())+1,v1,v2))
-                        
+            for v2 in clusterleft:
+                if not (v1 in v2.adjacent_v):
+                    v1g = Gt.v[v1.name]
+                    v2g = Gt.v[v2.name]
+                    Gt.add_e(graph.UndirEdge(max(Gt.e.keys())+1,v1g,v2g))
+                    G2.add_e(graph.UndirEdge(max(G2.e.keys())+1,v1,v2))
+                    
             # remove from G2
             del G2.v[v.name]
-
-
-            return G, clusters
-
+        return Gt, clusters
+       
 #=======================================================================
 
 class BNet(graph.Graph):
@@ -844,8 +855,92 @@ class MCMCEngine(graph.Graph):
             val = MBval.sample()
             return val
 
+#========================================================================
+class CPTIndexTestCase(unittest.TestCase):
+    def setUp(self):
+        names = ['a','b','c','d']
+        shape = (2,3,4,2)
+        cpt = RawCPT(names,shape)
+        cpt.setCPT(range(48))
+        self.cpt = cpt
+    
+    def testSetCPT(self):
+        """ Violate abstraction and check that setCPT actually worked correctly
+        """
+        assert(na.all(self.cpt.cpt[0,0,0,:] == na.array([0,1])) and \
+               na.all(self.cpt.cpt[1,0,0,:] == na.array([24,25]))), \
+              "Error setting raw cpt"
+        
+    def testStrIndex(self):
+        """ test that an index using strings works correctly
+        """
+        index = '0,0,0,:'
+        index2 = '1,0,0,:'
+        assert(na.all(self.cpt.cpt[0,0,0,:] == self.cpt[index]) and \
+               na.all(self.cpt.cpt[1,0,0,:] == self.cpt[index2])), \
+              "Error getting with str index"
+    
+    def testStrSet(self):
+        """ test that an index using strings can access and set a value in the cpt
+        """
+        index = '0,0,0,:'
+        index2 = '1,0,0,:'
+        index3 = '1,1,0,:'
+        self.cpt[index] = -1
+        self.cpt[index2] = 100
+        self.cpt[index3] = na.array([-2 -3])
+        assert(na.all(self.cpt.cpt[0,0,0,:] == na.array([-1, -1])) and \
+               na.all(self.cpt.cpt[1,0,0,:] == na.array([100, 100])) and \
+               na.all(self.cpt.cpt[1,1,0,:] == na.array([-2, -3]))), \
+              "Error setting with str indices"
+    
+    def testDictIndex(self):
+        """ test that an index using a dictionary works correctly
+        """
+        index = {'a':0,'b':0,'c':0}
+        index2 = {'a':1,'b':0,'c':0}
+        assert(na.all(self.cpt.cpt[0,0,0,:] == self.cpt[index]) and \
+               na.all(self.cpt.cpt[1,0,0,:] == self.cpt[index2])), \
+              "Error getting with dict index"
+    
+    def testDictSet(self):
+        """ test that an index using a dictionary can set a value within the cpt 
+        """
+        index = {'a':0,'b':0,'c':0}
+        index2 = {'a':1,'b':0,'c':0}
+        index3 = {'a':1,'b':1,'c':0}
+        self.cpt[index] = -1
+        self.cpt[index2] = 100
+        self.cpt[index3] = na.array([-2 -3])
+        assert(na.all(self.cpt.cpt[0,0,0,:] == array([-1, -1])) and \
+               na.all(self.cpt.cpt[1,0,0,:] == array([100, 100])) and \
+               na.all(self.cpt.cpt[1,1,0,:] == array([-2, -3]))), \
+              "Error setting cpt with dict"
+    
+    def testNumIndex(self):
+        """ test that a raw index of numbers works correctly
+        """
+        assert(na.all(self.cpt.cpt[0,:,0,:] == self.cpt[0,:,0,:]) and \
+               na.all(self.cpt.cpt[1,0,0,:] == self.cpt[1,0,0,:])), \
+              "Error getting item with num indices"
+    
+    def testNumSet(self):
+        """ test that a raw index of numbers can access and set a position in the 
+        """
+        self.cpt[0,0,0,:] = -1
+        self.cpt[1,0,0,:] = 100
+        self.cpt[1,1,0,:] = na.array([-2 -3])
+        assert(na.all(self.cpt.cpt[0,0,0,:] == na.array([-1, -1])) and \
+               na.all(self.cpt.cpt[1,0,0,:] == na.array([100, 100])) and \
+               na.all(self.cpt.cpt[1,1,0,:] == na.array([-2, -3]))), \
+              "Error Setting cpt with num indices"
+        
+        
 if __name__=='__main__':
     ''' Water Sprinkler example '''
+    suite = unittest.makeSuite(CPTIndexTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
     
     G = BNet('Water Sprinkler Bayesian Network')
     
