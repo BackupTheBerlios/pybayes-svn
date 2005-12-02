@@ -797,8 +797,8 @@ class JoinTree(graph.Graph):
 class MCMCEngine(graph.Graph):
         """ Implementation of MCMC (aka Gibbs Sampler), as described on p.517 of Russell and Norvig
         """
-        def __init__(self, name, BNet, cut=100):
-            graph.Graph.__init__(name)
+        def __init__(self, BNet, cut=100):
+            graph.Graph.__init__(BNet.name)
             self.BNet = Bnet
             self.cut = cut
             self.evidence = {}
@@ -857,6 +857,8 @@ class MCMCEngine(graph.Graph):
 
 #========================================================================
 class CPTIndexTestCase(unittest.TestCase):
+    """ Unit tests for indexing and setting the RawCPT class with [] notation.
+    """
     def setUp(self):
         names = ['a','b','c','d']
         shape = (2,3,4,2)
@@ -942,6 +944,52 @@ class CPTIndexTestCase(unittest.TestCase):
                na.all(self.cpt.cpt[1,1,0,:] == na.array([-2, -3]))), \
               "Error Setting cpt with num indices"
         
+        
+class MCMCTestCase(unittest.TestCase):
+    """ MCMC unit tests.
+    """
+    def setUp(self):
+        G = BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(BVertex(nm,2,True)) for nm in 'c s r w'.split()]
+        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
+        G.InitCPTs()
+        c.setCPT([0.5, 0.5])
+        s.setCPT([0.5, 0.9, 0.5, 0.1])
+        r.setCPT([0.8, 0.2, 0.2, 0.8])
+        w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
+        self.engine = MCMCEngine(G,cut=100)
+        self.c = c
+        self.s = s
+        self.r = r
+        self.w = w
+        
+    def testUnobserved(self):
+        """ Compute and check the probability of c=true and r=true given no evidence
+        """
+        N=1000
+        cprob = self.engine.Marginalise(self.c.name, N)
+        rprob = self.engine.Marginalise(self.r.name, N)
+        #FIX: fill in actual value
+        assert(cprob[True] == 'value' and \
+               rprob[True] == 'value'), \
+              "Incorrect probability of Cloudy or Rain being true"
+    
+    def testObserved(self):
+        """ Compute and check the probability of w=true|r=false,c=true and s=false|w=true,c=false
+        """
+        N=1000
+        self.engine.SetObs([self.c.name,self.r.name],[True,False])
+        wprob = self.engine.Marginalise(self.w.name,N)
+        #Violates abstraction
+        self.engine.evidence.clear()
+        self.engine.SetObs([self.c.name,self.w.name],[False,True])
+        sprob = self.engine.Marginalise(self.s.name,N)
+        #FIX: fill in actual value
+        assert(wprob[True] == 'value' and \
+               sprob[False] == 'value'), \
+              "Either P(w=true|c=true,r=false) or P(s=false|c=false,w=true) was incorrect"
+    
         
 if __name__=='__main__':
     ''' Water Sprinkler example '''
