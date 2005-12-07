@@ -419,20 +419,23 @@ class JoinTree(graph.Graph):
         # add any missing vales:
         for vv in self.BNet.v.values():
             if not temp.has_key(vv.name): temp[vv.name] = -1
-                    
+            
+        self.EnterEvidence(temp)
+    
+    def EnterEvidence(self, ev):
         # Check for Global Retraction, or Global Update
         retraction = False
         for vv in self.BNet.v.values():
-            if self.likedict[vv.name].IsRetracted(temp[vv.name]):
+            if self.likedict[vv.name].IsRetracted(ev[vv.name]):
                 retraction = True
-            elif self.likedict[vv.name].IsUnchanged(temp[vv.name]):
-                del temp[vv.name]
+            elif self.likedict[vv.name].IsUnchanged(ev[vv.name]):
+                del ev[vv.name]
                 # remove any unobserved variables
-            elif temp[vv.name] == -1: del temp[vv.name]
+            elif ev[vv.name] == -1: del ev[vv.name]
             
             # initialise
-            if retraction: self.GlobalRetraction(temp)
-            else: self.GlobalUpdate(temp)
+            if retraction: self.GlobalRetraction(ev)
+            else: self.GlobalUpdate(ev)
             
     def SetFinding(self, v):
         ''' v becomes True (v=1), all other observed variables are false '''
