@@ -718,55 +718,55 @@ class Delegate(object):
 
 
 if __name__ == '__main__':
-            class Base(Delegate):
-                    def __init__(self, basearg):
-                                self.__Delegate.__init__(self)
-                                self.basearg = basearg
-                                print 'base'
+    class Base(Delegate):
+        def __init__(self, basearg):
+            self.__Delegate.__init__(self)
+            self.basearg = basearg
+            print 'base'
+            
+        def __str__(self): return 'BASE'
+        
 
-                    def __str__(self): return 'BASE'
+    class Left(Base):
+        def __init__(self, basearg, leftarg):
+            self.__Base.__init__(self, basearg)
+            self.leftarg = leftarg
+            print 'left'
 
-
-            class Left(Base):
-                    def __init__(self, basearg, leftarg):
-                                self.__Base.__init__(self, basearg)
-                                self.leftarg = leftarg
-                                print 'left'
-
-                    def __str__(self):
-                                return ' '.join(filter(None, (self.__Base.__str__(self), 'LEFT')))
-
-
-            class Right(Base):
-                    def __init__(self, basearg):
-                                self.__Base.__init__(self, basearg)
-                                print 'right'
-
-                    def __str__(self):
-                                return ' '.join(filter(None, (self.__Base.__str__(self), 'RIGHT')))
+        def __str__(self):
+            return ' '.join(filter(None, (self.__Base.__str__(self), 'LEFT')))
 
 
-            class Der(Left, Right):
-                    def __init__(self, basearg, leftarg):
-                                self.__Left.__init__(self, basearg, leftarg)
-                                self.__Right.__init__(self, basearg)
-                                print 'der'
+    class Right(Base):
+        def __init__(self, basearg):
+            self.__Base.__init__(self, basearg)
+            print 'right'
 
-                    def __str__(self):
-                                return ' '.join(filter(None, (self.__Left.__str__(self),
-                                            self.__Right.__str__(self), 'DER')))
+        def __str__(self):
+            return ' '.join(filter(None, (self.__Base.__str__(self), 'RIGHT')))
 
 
-            print 'should print base, left, right, der'
-            der = Der('basearg', 'leftarg')
+    class Der(Left, Right):
+        def __init__(self, basearg, leftarg):
+            self.__Left.__init__(self, basearg, leftarg)
+            self.__Right.__init__(self, basearg)
+            print 'der'
 
-            print '\nshould print base, left'
-            left = Left('basearg', 'leftarg')
+        def __str__(self):
+            return ' '.join(filter(None, (self.__Left.__str__(self),
+                                          self.__Right.__str__(self), 'DER')))
+        
 
-            print '\nshould print base right'
-            right = Right('basearg')
+    print 'should print base, left, right, der'
+    der = Der('basearg', 'leftarg')
+    
+    print '\nshould print base, left'
+    left = Left('basearg', 'leftarg')
 
-            print '\nshould print BASE LEFT RIGHT DER'
-            print der
+    print '\nshould print base right'
+    right = Right('basearg')
+    
+    print '\nshould print BASE LEFT RIGHT DER'
+    print der
 
 

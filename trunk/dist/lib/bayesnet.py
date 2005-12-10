@@ -38,7 +38,7 @@ na.Error.setMode(invalid='ignore')
 
 # removed CPT and placed Distriution
 class BVertex(graph.Vertex, delegate.Delegate):
-    def __init__(self, name, discrete = True, nvalues = 2, observed = False):
+    def __init__(self, name, discrete = True, nvalues = 2, observed = False, isAdjustable=True):
         '''
         Name neen't be a string but must be hashable and immutable.
         if discrete = True:
@@ -59,6 +59,9 @@ class BVertex(graph.Vertex, delegate.Delegate):
 
         # True if variable can be observed
         self.observed = observed
+        
+        #True if variable's parameters can be adjusted by learning.
+        self.isAdjustable = isAdjustable
 
         self.distribution = None # to be set using SetDistribution
 
@@ -158,6 +161,11 @@ class BNet(graph.Graph):
         for v in self.v.values():
             v.rand()
             v.makecpt()
+    
+    def Sample(self):
+        """ Generate a sample of the network
+        """
+        for v and
 
         
 if __name__=='__main__':

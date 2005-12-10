@@ -8,6 +8,24 @@ import graph.graph as graph
 from distributions import RawCPT
 from potentials import JoinTreePotential
 
+class InferenceEngine(graph.Graph):
+    def __init__(self, BNet):
+        graph.Graph.__init__(self, name)
+        self.BNet = BNet
+        self.evidence = {}
+    
+    def SetObs(self, v, val):
+            """ Incorporate new evidence 
+            """
+            self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
+    
+    def Marginalise(self, v):
+        assert 0, 'In InferenceEngine, method must not be implemented at Child level'
+    
+    def LearnMLParams(self, cases):
+        for v in self.BNet.v.values():
+            
+            
 class Cluster(graph.Vertex, JoinTreePotential):
     """
     A Cluster/Clique node for the Join Tree structure
@@ -503,7 +521,9 @@ class JoinTree(graph.Graph):
             
 
 
+
 class MCMCEngine(graph.Graph):
+    
         """ Implementation of MCMC (aka Gibbs Sampler), as described on p.517 of Russell and Norvig
         """
         def __init__(self, BNet, cut=100):
@@ -513,9 +533,7 @@ class MCMCEngine(graph.Graph):
             self.evidence = {}
         
         def SetObs(self, v, val):
-            """ Incorporate new evidence 
-            """
-            self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
+            pass
                 
         def Marginalise(self, v, N):
             """ Compute the Pr(v) where v is a variable name, N is the number of iterations of MCMC to perform.
@@ -566,8 +584,9 @@ class MCMCEngine(graph.Graph):
 
         
         
-class MCMCTestCase(unittest.TestCase):
-    """ MCMC unit tests.
+
+class InferenceEngineTestCase(unittest.TestCase):
+    """ An abstract set of inference test cases.  Basically anything that is similar between the different inference engines can be implemented here and automatically applied to lower engines.  For example, we can define the learning tests here and they shouldn't have to be redefined for different engines.
     """
     def setUp(self):
         G = BNet('Water Sprinkler Bayesian Network')
@@ -579,11 +598,37 @@ class MCMCTestCase(unittest.TestCase):
         s.setCPT([0.5, 0.9, 0.5, 0.1])
         r.setCPT([0.8, 0.2, 0.2, 0.8])
         w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
-        self.engine = MCMCEngine(G,cut=100)
         self.c = c
         self.s = s
         self.r = r
         self.w = w
+        self.BNet = G
+    
+    def testLearning(self):
+        """ Sample network and then learn parameters and check that they are relatively close to original.
+        """
+        data = []
+        for i in range(1000):
+            data.append(self.engine.BNet.Sample())
+        #Remember what the old CPTs looked like
+        cCPT = self.c.cpt
+        sCPT = self.s.cpt
+        rCPT = self.r.cpt
+        wCPT = self.w.cpt
+        self.engine.LearnMLParams(data)
+        # Check that they match original parameters
+        assert(na.allclose(cCPT,self.c.cpt,atol=.1) and \
+               na.allclose(sCPT,self.s.cpt,atol=.1) and \
+               na.allclose(rCPT,self.r.cpt,atol=.1) and \
+               na.allclose(wCPT,self.w.cpt,atol=.1)),\
+              "CPTs were more than atol apart"
+    
+class MCMCTestCase(InferenceEngineTestCase):
+    """ MCMC unit tests.
+    """
+    def setUp(self):
+        InferenceEngineTestCase.setUp()
+        self.engine = MCMCEngine(self.BNet,cut=100)
         
     def testUnobserved(self):
         """ Compute and check the probability of c=true and r=true given no evidence
@@ -610,4 +655,7 @@ class MCMCTestCase(unittest.TestCase):
         assert(wprob[True] == 'value' and \
                sprob[False] == 'value'), \
               "Either P(w=true|c=true,r=false) or P(s=false|c=false,w=true) was incorrect"
+    
+    def testLearning(self):
+        InferenceEngineTestCase.testLearning()
     
