@@ -1,5 +1,6 @@
 import delegate
 import numarray as na
+import numarray.random_array as ra
 
 # Testing
 import unittest
@@ -91,6 +92,79 @@ class Multinomial_Distribution(Distribution):
         string += repr(self.cpt)
 
         return string
+    def __getitem__(self, index):
+        """ Overload array-style indexing behaviour.  Index can be a string as in PBNT ('1,:,1'), a dictionary of var name:value pairs, or pure numbers as in the standard way of accessing a numarray array array[1,:,1]
+        """
+        if isinstance(index, types.DictType):
+            numIndex = self._numIndexFromDict(index)
+            return self._getNumItem(numIndex)
+        if isinstance(index, types.StringType):
+            return self._getStrIndex(index)
+        return self._getNumItem(index)
+    
+    def _getStrIndex(self, index):
+        """ Helper function for __getitem__, takes a string as index.
+        """
+        return eval("self.cpt["+index+"]")
+    
+    def _getNumItem(self, index):
+        """ Helper function for __getitem__, index are numbers as in array[1,:,1]
+        """
+        return self.cpt[index]
+    
+    def __setitem__(self, index, value):
+        """ Overload array-style indexing and setting behaviour, as in __getitem__ this will take a dictionary, string, or normal set of numbers as index
+        """
+        if isinstance(index, types.DictType):
+            strIndex = self._strIndexFromDict(index)
+            return self._setStrIndex(strIndex, value)
+        if isinstance(index, types.StringType):
+            return self._setStrIndex(index, value)
+        return self._setNumItem(index, value)
+    
+    def _setStrIndex(self, index, value):
+        exec "self.cpt["+index+"]=na." + repr(value)
+        
+    def _setNumItem(self, index, value):
+        self.cpt[index] = value
+        return
+    
+    def _strIndexFromDict(self, d):
+        index = ''
+        for vname in self.Fv:
+            if d.has_key(vname):
+                index += repr(d[vname]) + ','
+            else:
+                index += ':,'
+        return index[:-1]
+            
+    def _numIndexFromDict(self, d):
+        index = []
+        for vname in self.Fv:
+            if d.has_key(vname):
+                index.append(d[vname])
+            else:
+                index.append(slice(None,None,None))
+        return index
+
+    def Sample(self, pvals):
+        """ Return a sample of the distribution P(V | pvals)
+        """
+        #FIXME: Currently assumes that all parents are set in pvals, but doesn't enforce that fact, this is important because if they are not all set, then the index of self.cpt[pvals] is not a table that sums to 1
+        dist = self[pvals]
+        rnum = ra.random()
+        probRange = 0
+        i = -1
+        for prob is dist:
+            probRange += prob
+            i += 1
+            if rnum <= probRange:
+                break
+        return i
+    
+        
+        
+
 
 #=================================================================
 class Gaussian_Distribution(Distribution):

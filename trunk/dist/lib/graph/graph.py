@@ -362,16 +362,16 @@ class Graph(delegate.Delegate):
 
             @staticmethod
             def topological_sort(start_v):
-                    '''Return a topological sort list of vertices.'''
-                    unprocessed = [start_v]
-                    visited = []
-                    while unprocessed:
-                                v = unprocessed.pop(0)
-                                incoming_v = v.adjacent_v - v.out_v
-                                if v not in visited and not (incoming_v - set(visited)):
-                                            visited.append(v)
-                                            unprocessed.extend(v.out_v)
-                    return visited
+                '''Return a topological sort list of vertices.'''
+                unprocessed = [start_v]
+                visited = []
+                while unprocessed:
+                    v = unprocessed.pop(0)
+                    incoming_v = v.adjacent_v - v.out_v
+                    if v not in visited and not (incoming_v - set(visited)):
+                        visited.append(v)
+                        unprocessed.extend(v.out_v)
+                return visited
 
 #================================================================================
 

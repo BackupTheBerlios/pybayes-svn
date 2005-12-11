@@ -165,8 +165,57 @@ class BNet(graph.Graph):
     def Sample(self):
         """ Generate a sample of the network
         """
-        for v and
+        sample = {}
+        for v in self.v.values():
+            sample[v.name] = v.distribution.Sample(sample)
+        return sample
 
+class BNetTestCase(unittest.TestCase):
+    """ Basic Test Case suite for BNet
+    """
+    def setUp(self):
+        G = BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(BVertex(name,2,True)) for name in 'c s r w'.split()]
+        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
+        G.InitCPTs()
+        c.setCPT([0.5, 0.5])
+        s.setCPT([0.5, 0.9, 0.5, 0.1])
+        r.setCPT([0.8, 0.2, 0.2, 0.8])
+        w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
+        
+        self.c = c
+        self.s = s
+        self.r = r
+        self.w = w
+        self.BNet = G
+
+    def testTopoSort(self):
+        sorted = self.BNet.topological_sort(self.s)
+        assert(sorted[0] == self.c and \
+               sorted[1] == self.s and \
+               sorted[2] == self.r and \
+               sorted[3] == self.w), \
+               "Sorted was not in proper topological order"
+
+    def testSample(self):
+        cCPT = Multinomial_Distribution(self.c)
+        sCPT = Multinomial_Distribution(self.s)
+        rCPT = Multinomial_Distribution(self.r)
+        wCPT = Multinomial_Distribution(self.w)
+        for i in range(1000):
+            sample = self.BNet.Sample
+            # Can use sample in all of these, it will ignore extra variables
+            cCPT[sample] += 1
+            sCPT[sample] += 1
+            rCPT[sample] += 1
+            wCPT[sample] += 1
+        assert(na.allclose(cCPT,self.c.cpt,atol=.1) and \
+               na.allclose(sCPT,self.s.cpt,atol-.1) and \
+               na.allclose(rCPT,self.r.cpt,atol-.1) and \
+               na.allclose(wCPT,self.w.cpt,atol-.1)), \
+               "Samples did not generate appropriate CPTs"
+            
         
 if __name__=='__main__':
     ''' Water Sprinkler example '''
