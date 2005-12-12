@@ -22,7 +22,7 @@ class Distribution(object):
                         the order in which the variables are stored
 
     """
-    def __init__(self, BVertex):
+    def __init__(self, BVertex, isAdjustable=True):
         self.family = [BVertex] + [parent for parent in BVertex.in_v]
         self.parents = self.family[1:]
         self.names = [v.name for v in self.family]
@@ -30,6 +30,7 @@ class Distribution(object):
         self.order = dict((k,v) for k,v in zip(self.names, range(len(self.names))))
 
         self.distribution_type = 'None' # just the name of the distribution
+        self.isAjustable = isAdjustable
         
         # self.names contains the names of the Family of V [V,Pa1(V),Pa2(V),...]
         # self.family contains the corresponding vertices (pointers)
@@ -49,8 +50,8 @@ class Multinomial_Distribution(Distribution):
     All nodes involved all discrete --> the distribution is represented by
     a Conditional Probability Table (CPT)
     """
-    def __init__(self, BVertex, cpt = None):
-        Distribution.__init__(self, BVertex)
+    def __init__(self, BVertex, cpt = None, isAdjustable=True):
+        Distribution.__init__(self, BVertex, isAdjustable)
         self.distribution_type = 'Multinomial'
 
         if not na.alltrue(na.array([v.discrete for v in self.family])):
@@ -172,8 +173,8 @@ class Gaussian_Distribution(Distribution):
     
     parents can be either discrete or continuous
     """
-    def __init__(self, BVertex, mu = None, sigma = None, wi = None):
-        Distribution.__init__(self, BVertex)
+    def __init__(self, BVertex, mu = None, sigma = None, wi = None, isAdjustable=True):
+        Distribution.__init__(self, BVertex, isAdjustable)
         self.distribution_type = 'Gaussian'
 
         # check that current node is continuous

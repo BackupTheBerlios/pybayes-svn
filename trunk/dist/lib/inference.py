@@ -26,17 +26,33 @@ class InferenceEngine(graph.Graph):
         """ Learn and set the parameters of the network to the ML estimate contained in cases.  Warning: this is destructive, it does not take any prior parameters into account. Assumes that all evidence is specified.
         """
         for v in self.BNet.v.values():
-            v.distribution.AllOnes()
+            if v.distribution.isAdjustable:
+                v.distribution.AllOnes()
         for case in cases:
             #CHECK: all vertices in case are set
             assert(len(case) == len(self.BNet.v)), "Not all values of 'case' are set"
             for v in self.BNet.v.values():
-                v.distribution[case] += 1
+                if v.distribution.isAdjustable:
+                    v.distribution[case] += 1
         for v in self.BNet.v.values():
-            v.distribution.Normalize()
+            if v.distribution.isAdjustable:
+                v.distribution.Normalize()
     
     def LearnEMParams(self, cases, iterations=10):
-            
+        isConverged = False
+        iter = 0
+        while not isConverged and iter < iterations:
+            LL = self.EMStep(cases)
+            iter += 1
+            isConverged = EMConverged(LL, prevLL, thresh)
+    
+    def EMStep(self, cases):
+        for case in cases:
+            self.SetObs(case)
+            for v in self.BNet.v.values():
+                if v.distribution.isAdjustable:
+                    fMarg= self.FamilyMarginalise(v.name)
+                    #update parameters given fMarg
             
 class Cluster(graph.Vertex, JoinTreePotential):
     """
