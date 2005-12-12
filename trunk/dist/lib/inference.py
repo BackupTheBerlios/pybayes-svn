@@ -23,7 +23,19 @@ class InferenceEngine(graph.Graph):
         assert 0, 'In InferenceEngine, method must not be implemented at Child level'
     
     def LearnMLParams(self, cases):
+        """ Learn and set the parameters of the network to the ML estimate contained in cases.  Warning: this is destructive, it does not take any prior parameters into account. Assumes that all evidence is specified.
+        """
         for v in self.BNet.v.values():
+            v.distribution.AllOnes()
+        for case in cases:
+            #CHECK: all vertices in case are set
+            assert(len(case) == len(self.BNet.v)), "Not all values of 'case' are set"
+            for v in self.BNet.v.values():
+                v.distribution[case] += 1
+        for v in self.BNet.v.values():
+            v.distribution.Normalize()
+    
+    def LearnEMParams(self, cases, iterations=10):
             
             
 class Cluster(graph.Vertex, JoinTreePotential):
