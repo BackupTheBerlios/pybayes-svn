@@ -65,10 +65,17 @@ class Multinomial_Distribution(Distribution):
             self.cpt = na.ones(shape=self.sizes, type='Float32')
         else:
             self.setCPT(cpt)
+        
+        #Used for Learning
+        self.counts = None
 
     def setCPT(self, cpt):
         ''' put values into self.cpt'''
         self.cpt = na.array(cpt, shape=self.sizes, type='Float32')
+    
+    def initializeCounts(self):
+        ''' initialize counts array to ones '''
+        self.counts = na.ones(shape=self.sizes, type='Float32')        
 
     def rand(self):
         ''' put random values to self.cpt '''
@@ -86,6 +93,13 @@ class Multinomial_Distribution(Distribution):
 
     def Convert_to_CPT(self):
         return self.cpt
+    
+    def addToCounts(self, index, counts):
+        strIndex = self._strIndexFromDict(index)
+        if isinstance(counts, na.ArrayType):
+            exec "self.counts["+strIndex+"]+=na." + repr(counts)
+        else:
+            exec "self.counts["+strIndex+"]+=" + repr(counts)
 
     def __str__(self):
         string = 'Multinomial ' + Distribution.__str__(self)
@@ -124,7 +138,10 @@ class Multinomial_Distribution(Distribution):
         return self._setNumItem(index, value)
     
     def _setStrIndex(self, index, value):
-        exec "self.cpt["+index+"]=na." + repr(value)
+        if isinstance(value, na.ArrayType):
+            exec "self.cpt["+index+"]=na." + repr(value)
+        else:
+            exec "self.cpt["+index+"]=" + repr(value)
         
     def _setNumItem(self, index, value):
         self.cpt[index] = value
@@ -156,7 +173,7 @@ class Multinomial_Distribution(Distribution):
         rnum = ra.random()
         probRange = 0
         i = -1
-        for prob is dist:
+        for prob in dist:
             probRange += prob
             i += 1
             if rnum <= probRange:
@@ -361,7 +378,7 @@ class CPTIndexTestCase(unittest.TestCase):
     def setUp(self):
         names = ['a','b','c','d']
         shape = (2,3,4,2)
-        cpt = RawCPT(names,shape)
+        cpt = Multinomial_Distribution(names,shape)
         cpt.setCPT(range(48))
         self.cpt = cpt
     
@@ -442,7 +459,19 @@ class CPTIndexTestCase(unittest.TestCase):
                na.all(self.cpt.cpt[1,0,0,:] == na.array([100, 100])) and \
                na.all(self.cpt.cpt[1,1,0,:] == na.array([-2, -3]))), \
               "Error Setting cpt with num indices"
-
+    
+    def testAddToCounts(self):
+        """ Test that we can add a basic number to the counts.        
+        """
+        index = {'a':1,'b':2,'c':0,'d':0}
+        self.cpt.addToCounts(index, 1)
+        assert(self.cpt.counts[1,2,0,0] == 2), \
+              "Error adding integer to counts"
+        index = {'a':1,'b':2,'c':0}
+        self.cpt.addToCounts(index,na.array([2,3]))
+        assert(na.all(self.cpt.counts[1,2,0,:] == na.array([4,4]))), \
+              "Error adding array to counts"
+        
 if __name__ == '__main__':
     #suite = unittest.makeSuite(CPTIndexTestCase, 'test')
     #runner = unittest.TextTestRunner()

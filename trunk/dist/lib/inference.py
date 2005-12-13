@@ -22,6 +22,9 @@ class InferenceEngine(graph.Graph):
     def Marginalise(self, v):
         assert 0, 'In InferenceEngine, method must not be implemented at Child level'
     
+    def MarinaliseFamily(self, v):
+        assert 0, 'In InferenceEngine, method must not be implemented at appropriate level'
+    
     def LearnMLParams(self, cases):
         """ Learn and set the parameters of the network to the ML estimate contained in cases.  Warning: this is destructive, it does not take any prior parameters into account. Assumes that all evidence is specified.
         """
@@ -47,13 +50,16 @@ class InferenceEngine(graph.Graph):
             isConverged = EMConverged(LL, prevLL, thresh)
     
     def EMStep(self, cases):
+        for v in self.BNet.v.values():
+            v.distribution.initializeCounts()
         for case in cases:
             self.SetObs(case)
             for v in self.BNet.v.values():
                 if v.distribution.isAdjustable:
-                    fMarg= self.FamilyMarginalise(v.name)
+                    fMarg = self.MarginaliseFamily(v.name)
                     #update parameters given fMarg
-            
+        
+        
 class Cluster(graph.Vertex, JoinTreePotential):
     """
     A Cluster/Clique node for the Join Tree structure
@@ -457,6 +463,12 @@ class JoinTree(graph.Graph):
         
         # normalize
         return na.divide(res,na.sum(res.flat))
+    
+    def MarginaliseFamily(self, v):
+        """ returns Pr(fam(v)), v is a variable name
+        """
+        c = self.clusterdict[v]
+        #FIXME: return either cluster distribution over fam(v) or maginalize out non-fam(v) and then return fam(v)
     
     def SetObs(self, v,val):
         """ Incorporate new evidence """

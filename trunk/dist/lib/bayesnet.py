@@ -29,16 +29,15 @@ import delegate
 
 from distributions import *
 from potentials import *
+from inference import *
 
-from JunctionTree import *
-from MCMC import *
 seed()
 na.Error.setMode(invalid='ignore')
 #logging.basicConfig(level= logging.INFO)
 
 # removed CPT and placed Distriution
 class BVertex(graph.Vertex, delegate.Delegate):
-    def __init__(self, name, discrete = True, nvalues = 2, observed = False, isAdjustable=True):
+    def __init__(self, name, discrete = True, nvalues = 2, observed = False):
         '''
         Name neen't be a string but must be hashable and immutable.
         if discrete = True:
@@ -59,9 +58,6 @@ class BVertex(graph.Vertex, delegate.Delegate):
 
         # True if variable can be observed
         self.observed = observed
-        
-        #True if variable's parameters can be adjusted by learning.
-        self.isAdjustable = isAdjustable
 
         self.distribution = None # to be set using SetDistribution
 
@@ -93,7 +89,7 @@ class BVertex(graph.Vertex, delegate.Delegate):
     
     def InitCPT(self):
         ''' Initialise CPT, all edges must be added '''
-        CPT.__init__(self, self)  #second self is for BVertex
+        CPT.__init__(self, self.nvalues, self.in_v)  #second self is for BVertex
 
     def __str__(self):
         if self.discrete:
@@ -219,9 +215,9 @@ class BNetTestCase(unittest.TestCase):
         
 if __name__=='__main__':
     ''' Water Sprinkler example '''
-    suite = unittest.makeSuite(CPTIndexTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+    #suite = unittest.makeSuite(CPTIndexTestCase, 'test')
+    #runner = unittest.TextTestRunner()
+    #runner.run(suite)
     
     G = BNet('Water Sprinkler Bayesian Network')
     
