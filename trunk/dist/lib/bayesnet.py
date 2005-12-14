@@ -36,7 +36,9 @@ na.Error.setMode(invalid='ignore')
 #logging.basicConfig(level= logging.INFO)
 
 # removed CPT and placed Distriution
-class BVertex(graph.Vertex, delegate.Delegate):
+# also removed delegate.Delegate, delaegation is now performed by distributions
+# we can put it back if we really need it, but for the moment i think it's ok
+class BVertex(graph.Vertex, Distribution):
     def __init__(self, name, discrete = True, nvalues = 2, observed = False):
         '''
         Name neen't be a string but must be hashable and immutable.
@@ -54,42 +56,19 @@ class BVertex(graph.Vertex, delegate.Delegate):
         else:
             # continuous node
             self.discrete = False
-            self.nvalues = 0
+            self.nvalues = 0    # irrelevant when node is continuous
 
         # True if variable can be observed
         self.observed = observed
 
-        self.distribution = None # to be set using SetDistribution
-
-    def SetDistribution(self, distribution, *args, **kwargs):
-        ''' sets and returns the distribution for this node
-            distribution = a CLASS, not an instance
-
-            POST : self.distribution = a distribution instance
-
-            # with no arguments, uses defaults            
-            >>> bvertex.SetDistribution(Multinomial_Distribution)
-
-            # with some arguments, uses the order defined in the distribution.__init__
-            >>> bvertex.SetDistribution(Multinomial_Distribution, cpt_array)
-
-            # with some keyword arguments
-            >>> bvertex.SetDistribution(Multinomial_Distribution, cpt = cpt_array)
-            
-        '''
-
-        # this would be much better if BVertex was a Distribution class too like
-        # it was before a CPT class
-        # the problem is that you must specify the class name into the __init__
-        # and you don't know which type of distribution is going to be used
-        self.distribution = distribution.__new__(distribution)
-        self.distribution.__init__(self, *args, **kwargs)
+    def InitDistribution(self):
+        """ Initialise the distribution, all edges must be added"""
+        # this replaces the InitCPT() function
+        Distribution.__init__(self)
         
-        return self.distribution
-    
-    def InitCPT(self):
-        ''' Initialise CPT, all edges must be added '''
-        CPT.__init__(self, self.nvalues, self.in_v)  #second self is for BVertex
+##    def InitCPT(self):
+##        ''' Initialise CPT, all edges must be added '''
+##        CPT.__init__(self, self.nvalues, self.in_v)  #second self is for BVertex
 
     def __str__(self):
         if self.discrete:
@@ -146,12 +125,19 @@ class BNet(graph.Graph):
                         G.add_e(graph.UndirEdge(len(G.e), p1, p2))
 
         return G
+    
     @graph._roprop('List of observed vertices.')
     def observed(self):
         return [v for v in self.v.values() if v.observed]
+
+    def InitDistributions(self):
+        """ Finalizes the network, all edges must be added. A distribution (unknown)
+        is added to each node of the network"""
+        # this replaces the InitCPTs() function
+        for v in self.v.values(): v.InitDistribution()
     
-    def InitCPTs(self):
-        for v in self.v.values(): v.InitCPT()
+##    def InitCPTs(self):
+##        for v in self.v.values(): v.InitCPT()
 
     def RandomizeCPTs(self):
         for v in self.v.values():
