@@ -2,6 +2,7 @@ import numarray as na
 import logging
 import copy
 import unittest
+import types
 
 #Library Specific Modules
 import graph.graph as graph
@@ -106,7 +107,12 @@ class Cluster(graph.Vertex, JoinTreePotential):
 
     def other(self,v):
         """ set of all variables contained in cluster except v, only one at a time... """
-        return set(vv.name for vv in self.vertices) - set((v,))
+        allVertices = set(vv.name for vv in self.vertices)
+        if isinstance(v, (list, set, tuple)):
+            setV = set(v)
+        else:
+            setV = set((v,))
+        return allVertices - setV
 
     def MessagePass(self, c):
         """ Message pass from self to cluster c """
@@ -468,7 +474,8 @@ class JoinTree(graph.Graph):
         """ returns Pr(fam(v)), v is a variable name
         """
         c = self.clusterdict[v]
-        #FIXME: return either cluster distribution over fam(v) or maginalize out non-fam(v) and then return fam(v)
+        res = c.Marginalise(c.other(self.BNet.v[v].family))
+        return res.Normalize()
     
     def SetObs(self, v,val):
         """ Incorporate new evidence """
