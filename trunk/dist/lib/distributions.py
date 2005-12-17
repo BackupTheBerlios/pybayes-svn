@@ -183,63 +183,7 @@ class Multinomial_Distribution(object):
             if rnum <= probRange:
                 break
         return i
-
-    #=========================================================
-    #=== indexing functions
-    #---TODO: this could be part of an indexing class, we will also use it
-    #         for potentials
-    def __getitem__(self, index):
-        """ Overload array-style indexing behaviour.
-        Index can be a string as in PBNT ('1,:,1'), a dictionary
-        of var name:value pairs, or pure numbers as in the standard way
-        of accessing a numarray array array[1,:,1]
-        """
-        if isinstance(index, types.DictType):
-            numIndex = self._numIndexFromDict(index)
-            return self._getNumItem(numIndex)
-        if isinstance(index, types.StringType):
-            return self._getStrIndex(index)
-        return self._getNumItem(index)
     
-    def _getStrIndex(self, index):
-        """ Helper function for __getitem__, takes a string as index.
-        """
-        return eval("self.cpt["+index+"]")
-    
-    def _getNumItem(self, index):
-        """ Helper function for __getitem__, index are numbers as in array[1,:,1]
-        """
-        return self.cpt[index]
-    
-    def __setitem__(self, index, value):
-        """ Overload array-style indexing and setting behaviour, as in __getitem__ this will take a dictionary, string, or normal set of numbers as index
-        """
-        if isinstance(index, types.DictType):
-            numIndex = self._numIndexFromDict(index)    #use numindexfromdict instaead of strindexfromdict, bug fix
-            return self._setNumItem(numIndex, value)
-        if isinstance(index, types.StringType):
-            return self._setStrIndex(index, value)
-        return self._setNumItem(index, value)
-    
-    def _setStrIndex(self, index, value):
-        v = na.array(value) #convert to array
-        exec "self.cpt["+index+"]=na." + repr(v)
-    
-    def _setNumItem(self, index, value):
-        self.cpt[index] = value
-        return
-
-    # deleted _getStrIndexFromDict(), no longer used
-    
-    def _numIndexFromDict(self, d):
-        index = []
-        for vname in self.names:
-            if d.has_key(vname):
-                index.append(d[vname])
-            else:
-                index.append(slice(None,None,None))
-        return tuple(index) # must convert to tuple in order to work, bug fix
-
     #===================================================
     #=== printing functions
     def __str__(self):

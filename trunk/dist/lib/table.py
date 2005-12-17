@@ -13,7 +13,9 @@ __version__ = '0.1'
 __author__ = 'Kosta Gaitanis & Elliot Cohen'
 __author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
 import unittest
+import types
 import numarray as na
+
 class Table(na.NumArray):
    def __init__(self, names, shape, elements, type):
       ''' n provides the length of each dimension,
@@ -21,16 +23,53 @@ class Table(na.NumArray):
       '''
       arr=na.array(sequence=elements, shape=shape, type=type)
       self.__setstate__(arr.__getstate__())
+      self.names = set(names)
+      #dict of name:dim number pairs
       self.assocdim = dict(zip(names,range(len(names))))
-      
+      #dict of dim:name pairs
+      self.assocname = dict(enumerate(names))
+
+   def __getitem__(self, index):
+      """ Overload array-style indexing behaviour.
+      Index can be a dictionary of var name:value pairs, 
+      or pure numbers as in the standard way
+      of accessing a numarray array array[1,:,1]
+      """
+      if isinstance(index, types.DictType):
+         numIndex = self._numIndexFromDict(index)
+      else:
+         numIndex = index
+      return na.NumArray.__getitem__(self, numIndex)
+   
+   def __setitem__(self, index, value):
+      """ Overload array-style indexing behaviour.
+      Index can be a dictionary of var name:value pairs, 
+      or pure numbers as in the standard way
+      of accessing a numarray array array[1,:,1]
+      """
+      if isinstance(index, types.DictType):
+         numIndex = self._numIndexFromDict(index)
+      else:
+         numIndex = index
+      return na.NumArray.__setitem__(self, numIndex, value)
+
+   def _numIndexFromDict(self, d):
+      index = []
+      for dim in range(len(self.shape)):
+         if d.has_key(self.assocname[dim]):
+            index.append(d[self.assocname[dim]])
+         else:
+            index.append(slice(None,None,None))
+      return tuple(index) # must convert to tuple in order to work, bug fix
+     
    def __repr__(self):
-     " Return printable representation of instance."
-     className= self.__class__.__name__
-     className= className.zfill(5).replace('0', ' ')
-     arr= self.copy()
-     arr.__class__= na.NumArray
-     rep= className + na.NumArray.__repr__(arr)[5:]
-     return rep
+      " Return printable representation of instance."
+      className= self.__class__.__name__
+      className= className.zfill(5).replace('0', ' ')
+      arr= self.copy()
+      arr.__class__= na.NumArray
+      rep= className + na.NumArray.__repr__(arr)[5:]
+      return rep
 
    def __str__(self):
      " Return a pretty printed string of the instance."
@@ -58,6 +97,8 @@ class TableTestCase(unittest.TestCase):
    
    def testBasic(self):
       a = na.ones(self.shape, type='Float32')
+      c = na.ones(self.shape, type='Float32')
+      # This fails, need to reimplement __eq__, but others seem to work
       b = self.a == a
       assert(na.all(b)), \
             "Ones array no longer comparable to a normal na ones array"
