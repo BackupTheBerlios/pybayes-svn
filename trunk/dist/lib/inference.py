@@ -57,9 +57,9 @@ class InferenceEngine(graph.Graph):
             self.SetObs(case)
             for v in self.BNet.v.values():
                 if v.distribution.isAdjustable:
-                    fMarg = self.MarginaliseFamily(v.name)
-                    #update parameters given fMarg
-        
+                    v.counts += self.MarginaliseFamily(v.name)
+        for v in self.BNet.v.values():
+            v.ResetParameters()
         
 class Cluster(graph.Vertex, JoinTreePotential):
     """
