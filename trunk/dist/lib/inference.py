@@ -9,6 +9,7 @@ import graph.graph as graph
 from distributions import RawCPT
 from potentials import JoinTreePotential
 
+#logging.basicConfig(level= logging.DEBUG)
 class InferenceEngine(graph.Graph):
     def __init__(self, BNet):
         graph.Graph.__init__(self, name)
@@ -65,10 +66,10 @@ class Cluster(graph.Vertex, JoinTreePotential):
     """
     A Cluster/Clique node for the Join Tree structure
     """
-    def __init__(self, *Bvertices):
+    def __init__(self, Bvertices):
         
         self.vertices = [v for v in Bvertices]    # list of vertices contained in this cluster
-        self.vertices.sort()    # sort list, much better for math operations
+        #self.vertices.sort()    # sort list, much better for math operations
         
         name = ''
         for v in self.vertices: name += v.name
@@ -89,7 +90,26 @@ class Cluster(graph.Vertex, JoinTreePotential):
                 if v.name in [cv.name for cv in c.vertices]: count += 1
             if count == len(self.vertices): return False
 
-            return True
+        return True
+
+    def __mul__(self, other):
+        """
+        a keeps the order of its dimensions
+        
+        always use a = a*b or b=b*a, not b=a*b
+        """
+        # this overloads the table.__mul__
+        
+        aa,bb = self.arr, other.arr
+        
+        correspondab,names, shape = self.FindCorrespond(other)
+        
+        while aa.rank < len(correspondab): aa = aa[..., na.NewAxis]
+        while bb.rank < len(correspondab): bb = bb[..., na.NewAxis]
+
+        bb.transpose(correspondab)
+
+        return aa*bb
 
     def ContainsVar(self, v):
         """
@@ -97,13 +117,14 @@ class Cluster(graph.Vertex, JoinTreePotential):
         returns True if cluster contains them all
         """
         for vv in v:
-            if self.name.find(vv)==-1: return False
+            if vv.name in self.names: return False
 
         return True
 
     def not_in_s(self, sepset):
         """ set of variables in cluster but not not in sepset, X\S"""
-        return set(v.name for v in self.vertices) - set(v.name for v in sepset.vertices)
+        return set(self.names) - set(sepset.names)
+        #return set(v.name for v in self.vertices) - set(v.name for v in sepset.vertices)
 
     def other(self,v):
         """ set of all variables contained in cluster except v, only one at a time... """
@@ -297,7 +318,7 @@ class MoralGraph(graph.Graph):
         
             #logging.debug('Cluster: '+str([str(c) for c in cluster]))
         
-            c = Cluster(*cluster)
+            c = Cluster(cluster)
             if c.NotSetSepOf(clusters):
                 #logging.debug('Appending cluster')
                 clusters.append(c)
@@ -371,13 +392,14 @@ class JoinTree(graph.Graph):
         
         logging.info('Constructing Optimal Tree')
         self.ConstructOptimalJTree()
+
         self.Initialization()
+
         self.GlobalPropagation()
         
     def ConstructOptimalJTree(self):
         # Moralize Graph
         Gm = self.BNet.Moralize()
-        
         
         # triangulate graph and extract clusters
         Gt, clusters = Gm.Triangulate()
@@ -433,7 +455,7 @@ class JoinTree(graph.Graph):
         # multiply cluster potential by v.cpt,
         for v in self.BNet.v.values():
             for c in self.v.values():
-                if c.ContainsVar(v.Fv):
+                if c.ContainsVar(v.family):
                     self.clusterdict[v.name] = c
                     v.parentcluster = c
                     c.cpt = c*v         # phiX = phiX*Pr(V|Pa(V))

@@ -1,6 +1,7 @@
 import delegate # no longer needed. Only RawCPT uses it, erase it when RawCPT doesn't exist anymore
 import types
 import numarray as na
+from table import Table
 
 
 # Testing
@@ -92,7 +93,7 @@ class Distribution(object):
         return string
 
 
-class Multinomial_Distribution(object):
+class Multinomial_Distribution(object, Table):
     """     Multinomial/Discrete Distribution
     All nodes involved all discrete --> the distribution is represented by
     a Conditional Probability Table (CPT)
@@ -116,10 +117,11 @@ class Multinomial_Distribution(object):
         self.sizes = [v.nvalues for v in self.family]
 
         # initialize the cpt
-        if cpt == None:
-            self.cpt = na.ones(shape=self.sizes, type='Float32')
-        else:
-            self.setCPT(cpt)
+        Table.__init__(self, self.names, self.sizes, cpt)
+
+        # for compatibility reasons
+        # I don't like this but it is necessary, any ides ???
+        self.cpt = self.arr
 
         #Used for Learning
         self.counts = None
@@ -132,14 +134,8 @@ class Multinomial_Distribution(object):
     def setCPT(self, cpt):
         ''' put values into self.cpt'''
         self.cpt = na.array(cpt, shape=self.sizes, type='Float32')
+        self.arr = self.cpt
 
-
-    def rand(self):
-        ''' put random values to self.cpt '''
-        self.cpt = na.mlab.rand(*self.sizes)
-
-    def AllOnes(self):
-        self.cpt = na.ones(self.sizes, type='Float32')
 
     def Normalize(self):
         """ puts the cpt into canonical form : Sum(Pr(x=i|Pa(x)))=1 for each
@@ -344,37 +340,38 @@ class MultinomialTestCase(unittest.TestCase):
         """
         assert(na.all(self.a[0,0,0,:] == na.array([0,1])) and \
                na.all(self.a[1,0,0,:] == na.array([24,25]))), \
-              "Error setting raw cpt"
+              "Error getting raw cpt"
     
     def testSetCPT(self):
         """ Violate abstraction and check that we can actually set elements.
         """
-        self.a.cpt[0,1,0,:] = na.array([4,5])
+        self.a.arr[0,1,0,:] = na.array([4,5])
         assert(na.all(self.a[0,1,0,:] == na.array([4,5]))), \
               "Error setting the array when violating abstraction"
-        
-    def testStrIndex(self):
-        """ test that an index using strings works correctly
-        """
-        index = '0,0,0,:'
-        index2 = '1,0,0,:'
-        assert(na.all(self.a[0,0,0,:] == self.a[index]) and \
-               na.all(self.a[1,0,0,:] == self.a[index2])), \
-              "Error getting with str index"
-    
-    def testStrSet(self):
-        """ test that an index using strings can access and set a value in the cpt
-        """
-        index = '0,0,0,:'
-        index2 = '1,0,0,:'
-        index3 = '1,1,0,:'
-        self.a[index] = -1
-        self.a[index2] = 100
-        self.a[index3] = na.array([-2, -3])
-        assert(na.all(self.a[0,0,0,:] == na.array([-1, -1])) and \
-               na.all(self.a[1,0,0,:] == na.array([100, 100])) and \
-               na.all(self.a[1,1,0,:] == na.array([-2, -3]))), \
-              "Error setting with str indices"
+
+# we no longer use string indexing        
+##    def testStrIndex(self):
+##        """ test that an index using strings works correctly
+##        """
+##        index = '0,0,0,:'
+##        index2 = '1,0,0,:'
+##        assert(na.all(self.a[0,0,0,:] == self.a[index]) and \
+##               na.all(self.a[1,0,0,:] == self.a[index2])), \
+##              "Error getting with str index"
+##    
+##    def testStrSet(self):
+##        """ test that an index using strings can access and set a value in the cpt
+##        """
+##        index = '0,0,0,:'
+##        index2 = '1,0,0,:'
+##        index3 = '1,1,0,:'
+##        self.a[index] = -1
+##        self.a[index2] = 100
+##        self.a[index3] = na.array([-2, -3])
+##        assert(na.all(self.a[0,0,0,:] == na.array([-1, -1])) and \
+##               na.all(self.a[1,0,0,:] == na.array([100, 100])) and \
+##               na.all(self.a[1,1,0,:] == na.array([-2, -3]))), \
+##              "Error setting with str indices"
     
     def testDictIndex(self):
         """ test that an index using a dictionary works correctly

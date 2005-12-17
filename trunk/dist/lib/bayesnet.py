@@ -52,7 +52,7 @@ class BVertex(graph.Vertex, Distribution):
         if discrete:
             # discrete node
             self.discrete = True
-            self.nvalues =  nvalues
+            self.nvalues =  int(nvalues)
         else:
             # continuous node
             self.discrete = False
@@ -65,11 +65,11 @@ class BVertex(graph.Vertex, Distribution):
         """ Initialise the distribution, all edges must be added"""
         # this replaces the InitCPT() function
         Distribution.__init__(self)
-        
-##    def InitCPT(self):
-##        ''' Initialise CPT, all edges must be added '''
-##        CPT.__init__(self, self.nvalues, self.in_v)  #second self is for BVertex
 
+        # if all nodes in family are discrete, add a Multinomial_Distribution
+        if na.alltrue([v.discrete for v in self.family]):
+            self.SetDistribution(Multinomial_Distribution)
+        
     def __str__(self):
         if self.discrete:
             return graph.Vertex.__str__(self)+'    (discrete)'
@@ -207,12 +207,12 @@ if __name__=='__main__':
     
     G = BNet('Water Sprinkler Bayesian Network')
     
-    c,s,r,w = [G.add_v(BVertex(name,2,True)) for name in 'c s r w'.split()]
+    c,s,r,w = [G.add_v(BVertex(name,True,2)) for name in 'c s r w'.split()]
     
     for ep in [(c,r), (c,s), (r,w), (s,w)]:
         G.add_e(graph.DirEdge(len(G.e), *ep))
         
-    G.InitCPTs()
+    G.InitDistributions()
     
     c.setCPT([0.5, 0.5])
     s.setCPT([0.5, 0.9, 0.5, 0.1])
@@ -238,7 +238,7 @@ if __name__=='__mains__':
     for ep in [(a, b), (a,c), (b,d), (d,f), (c,e), (e,f), (c,g), (e,h), (g,h)]:
         G.add_e(graph.DirEdge(len(G.e), *ep))
         
-    G.InitCPTs()
+    G.InitDistributions()
     G.RandomizeCPTs()
     
     
