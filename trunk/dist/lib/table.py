@@ -28,7 +28,7 @@ class Table:
       if elements == None:
           elements = na.ones(shape = shape)
           
-      self.arr = na.array(sequence=elements, shape=shape, type=type)
+      self.cpt = na.array(sequence=elements, shape=shape, type=type)
       
       self.shape = tuple(shape)
       self.names = set(names)
@@ -43,17 +43,17 @@ class Table:
     #==================================
     #Administration stuff
     def __getattr__(self, name):
-        """ delegate to self.arr """
-        return getattr(self.arr,name)
+        """ delegate to self.cpt """
+        return getattr(self.cpt,name)
 
     #===================================
     # Put values into the cpt
     def rand(self):
         ''' put random values to self.cpt '''
-        self.arr = na.mlab.rand(*self.shape)
+        self.cpt = na.mlab.rand(*self.shape)
 
     def AllOnes(self):
-        self.arr = na.ones(self.shape, type='Float32')
+        self.cpt = na.ones(self.shape, type='Float32')
     #==================================
     # Indexing
     def __getitem__(self, index):
@@ -66,7 +66,7 @@ class Table:
          numIndex = self._numIndexFromDict(index)
       else:
          numIndex = index
-      return self.arr[numIndex]
+      return self.cpt[numIndex]
 
     def __setitem__(self, index, value):
       """ Overload array-style indexing behaviour.
@@ -78,7 +78,7 @@ class Table:
          numIndex = self._numIndexFromDict(index)
       else:
          numIndex = index
-      self.arr[numIndex] = value
+      self.cpt[numIndex] = value
 
     def _numIndexFromDict(self, d):
       index = []
@@ -95,22 +95,25 @@ class Table:
       " Return printable representation of instance."
       className= self.__class__.__name__
       className= className.zfill(5).replace('0', ' ')
-      rep= className + repr(self.arr)[5:]
+      rep= className + repr(self.cpt)[5:]
       return rep
 
     #=====================================
     # Operations
     def __eq__(a,b):
         """ True if a and b have same elements, size and names """
-        if b.__class__ == Table:
-            return (na.alltrue(a.arr.flat == b.arr.flat)  \
-                    and a.shape == b.shape \
-                    and a.names_list == b.names_list)
-        elif b.__class__ == na.NumArray:
-            return (na.alltrue(a.arr.flat == b.flat) \
+        if b.__class__ == na.NumArray:
+            return (na.alltrue(a.cpt.flat == b.flat) \
                     and a.shape == b.shape)
+        elif b == None: return False
         else:
-            raise 'Can not compare %s with %s' %(a.__class__,b.__class__)
+            # the b class should better be a Table or something like that
+            return (a.shape == b.shape \
+                    and a.names_list == b.names_list \
+                    and na.alltrue(a.cpt.flat == b.cpt.flat)  \
+                    )
+
+
 
     def __mul__(self, other):
         """
@@ -119,7 +122,7 @@ class Table:
         always use a = a*b or b=b*a, not b=a*b
         """
         
-        aa,bb = self.arr, other.arr
+        aa,bb = self.cpt, other.cpt
         
         correspondab,names, shape = self.FindCorrespond(other)
         
@@ -135,7 +138,7 @@ class Table:
         newnames = self.names_list
         newshape = list(self.shape)
         
-        aa,bb = self.arr, other.arr
+        aa,bb = self.cpt, other.cpt
         k = bb.rank
         for i in range(aa.rank):
             p = self.assocname[i]   #p=var name in self
@@ -282,7 +285,7 @@ class TableTestCase(unittest.TestCase):
               " Multiplication does not work"
 
    def testDelegate(self):
-       assert (na.alltrue(self.a.flat == self.a.arr.flat)), \
+       assert (na.alltrue(self.a.flat == self.a.cpt.flat)), \
               " Delegation does not work check __getattr__"
        
        

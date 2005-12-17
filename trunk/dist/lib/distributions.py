@@ -119,10 +119,6 @@ class Multinomial_Distribution(object, Table):
         # initialize the cpt
         Table.__init__(self, self.names, self.sizes, cpt)
 
-        # for compatibility reasons
-        # I don't like this but it is necessary, any ides ???
-        self.cpt = self.arr
-
         #Used for Learning
         self.counts = None
         
@@ -134,7 +130,6 @@ class Multinomial_Distribution(object, Table):
     def setCPT(self, cpt):
         ''' put values into self.cpt'''
         self.cpt = na.array(cpt, shape=self.sizes, type='Float32')
-        self.arr = self.cpt
 
 
     def Normalize(self):

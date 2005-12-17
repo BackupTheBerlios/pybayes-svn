@@ -1,4 +1,5 @@
 import numarray as na
+from numarray.ieeespecial import getnan
 import logging
 import copy
 import unittest
@@ -94,13 +95,21 @@ class Cluster(graph.Vertex, JoinTreePotential):
 
     def __mul__(self, other):
         """
-        a keeps the order of its dimensions
+        a = a*b <=> a *= b
+        this is an In-place operation!
         
-        always use a = a*b or b=b*a, not b=a*b
+        a keeps the order of its dimensions
+        the new dimensions of b are inserted in the same order they appear
+        at the end of a
+        [a,b,c] * [a,c,d,e] = [a,b,c,d,e]
+               
         """
+        #---TODO: This must be verified !!!
+        # do we really add new dimensions using __mul__ ???
+        # add an ExpandDims() function, maybe
         # this overloads the table.__mul__
         
-        aa,bb = self.arr, other.arr
+        aa,bb = self.cpt, other.cpt
         
         correspondab,names, shape = self.FindCorrespond(other)
         
@@ -109,7 +118,10 @@ class Cluster(graph.Vertex, JoinTreePotential):
 
         bb.transpose(correspondab)
 
-        return aa*bb
+        self.cpt = aa*bb
+
+        #self.names = names
+        #self.shape = shape
 
     def ContainsVar(self, v):
         """
@@ -137,6 +149,9 @@ class Cluster(graph.Vertex, JoinTreePotential):
 
     def MessagePass(self, c):
         """ Message pass from self to cluster c """
+        ####################################################
+        ### This part must be revisioned !!!!!!!!!
+        ####################################################
         logging.debug('Message Pass from '+ str(self)+' to '+str(c))
         # c must be connected to self by a sepset
         e = self.connecting_e(c)    # sepset that connect the two clusters
@@ -151,7 +166,7 @@ class Cluster(graph.Vertex, JoinTreePotential):
         e.cpt = newphiR/oldphiR         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
         e.cpt[getnan(e.cpt)] = 0        # replace -1.#IND by 0
         
-        c.cpt = c*e
+        c*e
         e.cpt = newphiR
 
     def CollectEvidence(self, X=None):
@@ -458,7 +473,7 @@ class JoinTree(graph.Graph):
                 if c.ContainsVar(v.family):
                     self.clusterdict[v.name] = c
                     v.parentcluster = c
-                    c.cpt = c*v         # phiX = phiX*Pr(V|Pa(V))
+                    c*v         # phiX = phiX*Pr(V|Pa(V))
                     break   # stop c loop, continue with next v
 
         # set all likelihoods to ones

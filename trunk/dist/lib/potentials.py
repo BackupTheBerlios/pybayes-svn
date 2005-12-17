@@ -27,10 +27,8 @@ class DiscretePotential(Potential, table.Table):
             elements = na.ones(shape=shape)
         table.Table.__init__(self, names, shape, elements, 'Float32')
 
-        # for compatibility reasons
-        # I don't like this but it is necessary, any ides ???
-        self.cpt = self.arr
-               
+    #=========================
+    # Operations
     def Marginalise(self, varnames):
         """ sum(varnames) self.arr """
         temp = self.view()
@@ -41,11 +39,18 @@ class DiscretePotential(Potential, table.Table):
         remainingNames = self.names - set(varnames)
         return DiscretePotential(remainingNames, temp.shape, elements=temp.flat)
 
+    def Normalise(self):
+        self.cpt = na.divide(self.cpt, na.sum(self.cpt.flat), self.cpt)
+
+    #================================
+    # Initialise
     def Uniform(self):
         ' Uniform distribution '
         N = na.product(self.shape)
         self[:] = 1.0/N
 
+    #===================================
+    # Printing
     def __str__(self): return str(self.arr)
 
     def Printcpt(self):
@@ -69,7 +74,7 @@ class DiscretePotentialTestCase(unittest.TestCase):
         assert(b.names == self.a.names - var and \
                b[0,1] == na.sum(self.a[0,1]) and \
                c.names == self.a.names - var2 and \
-               na.alltrue(c.arr.flat == na.sum(na.sum(self.a.arr,axis=2),axis=0))), \
+               na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2),axis=0))), \
                " Marginalisation doesn't work"
 
 
@@ -81,7 +86,7 @@ class JoinTreePotential(DiscretePotential):
     The potential of each node/Cluster and edge/SepSet in a
     Join Tree Structure
     
-    self.arr = Pr(X)
+    self.cpt = Pr(X)
     
     where X is the set of variables contained in Cluster or SepSet
     self.vertices contains the graph.vertices instances where the variables
@@ -94,6 +99,8 @@ class JoinTreePotential(DiscretePotential):
         DiscretePotential.__init__(self, names, shape)
 
 
+    #=========================================
+    # Operations
     def __add__(c,s):
         """
         sum(X\S)phiX
@@ -103,12 +110,8 @@ class JoinTreePotential(DiscretePotential):
         var = set(v.name for v in c.vertices) - set(v.name for v in s.vertices)
         return c.Marginalise(var)
 
-    # result has the same variable order as c (cluster) (without some variables)
-    # result has also the same variable order as s (SepSet)
-    # this is because variables are sorted at initialisation
-    
-    def Normalise(self):
-        self.arr = na.divide(self.arr, na.sum(self.arr.flat), self.arr)
+
+
 
 if __name__ == '__main__':
     suite = unittest.makeSuite(DiscretePotentialTestCase, 'test')

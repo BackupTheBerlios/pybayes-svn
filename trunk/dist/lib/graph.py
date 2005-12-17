@@ -124,6 +124,9 @@ class Vertex(delegate.Delegate):
             @_roprop('True if vertex has incoming and outgoing edges.')
             def is_intermed(self): return not self.is_sink and not self.is_src
 
+            def __eq__(a,b):
+                return hash(a) == hash(b)
+
 #===========================================================================
 
 class RawEdge(delegate.Delegate):
