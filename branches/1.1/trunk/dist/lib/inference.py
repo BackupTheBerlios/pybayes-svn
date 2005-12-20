@@ -6,7 +6,7 @@ import unittest
 import types
 
 #Library Specific Modules
-import graph.graph as graph
+import graph
 from distributions import RawCPT
 from potentials import JoinTreePotential
 
@@ -473,7 +473,7 @@ class JoinTree(graph.Graph):
                 if c.ContainsVar(v.family):
                     self.clusterdict[v.name] = c
                     v.parentcluster = c
-                    c*v         # phiX = phiX*Pr(V|Pa(V))
+                    c*v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
                     break   # stop c loop, continue with next v
 
         # set all likelihoods to ones

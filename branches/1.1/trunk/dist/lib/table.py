@@ -54,6 +54,9 @@ class Table:
 
     def AllOnes(self):
         self.cpt = na.ones(self.shape, type='Float32')
+    
+    def setValues(self, values):
+        self.cpt = na.array(values, shape=self.sizes, type='Float32')
     #==================================
     # Indexing
     def __getitem__(self, index):

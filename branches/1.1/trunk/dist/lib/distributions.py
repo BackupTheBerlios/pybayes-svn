@@ -24,67 +24,17 @@ class Distribution(object):
                         the order in which the variables are stored
 
     """
-    def __init__(self, isAdjustable = False):
-        self.family = [self] + [parent for parent in self.in_v]
+    def __init__(self, v, isAdjustable = False):
+        self.family = [v] + [parent for parent in v.in_v]
         self.ndimensions = len(self.family)
         self.parents = self.family[1:]
         self.names = [v.name for v in self.family]
         # order = dict{ var name : index }
+        #OPTIMIZE: what is this used for outside the discrete case in which it is already defined in table class
         self.order = dict((k,v) for k,v in zip(self.names, range(len(self.names))))
-
-        self.distribution_type = 'None' # just the name of the distribution
-        self.distribution = None
-
+        
         #used for learning
         self.isAjustable = isAdjustable
-        
-        # self.names contains the names of the Family of V [V,Pa1(V),Pa2(V),...]
-        # self.family contains the corresponding vertices (pointers)
-        # only use self.family/names for iterating over dimensions...
-
-        # order is given by the underlying BNet
-
-    def SetDistribution(self, distribution, *args, **kwargs):
-        ''' sets and returns the distribution for this node
-            distribution = a CLASS, not an instance
-
-            POST : self.distribution = a distribution instance
-
-            # with no arguments, uses defaults            
-            >>> bvertex.SetDistribution(Multinomial_Distribution)
-
-            # with some arguments, (uses the order defined in the distribution.__init__)
-            >>> bvertex.SetDistribution(Multinomial_Distribution, cpt_array)
-
-            # with some keyword arguments
-            >>> bvertex.SetDistribution(Multinomial_Distribution, cpt = cpt_array)
-            
-        '''
-        # creates self.distribution as an instance of the class specified
-        # all the work is done by this new distribution. This class simply
-        # delegates everything to self.distribution (__getitem__,__setitem__ and all
-        # other unknown attributes). This way, this class becomes virtually a
-        # ditribution of the type specified
-        self.distribution = distribution.__new__(distribution)
-        self.distribution.__init__(self, *args, **kwargs)
-        return self.distribution
-
-    def __getitem__(self,index):
-        # delegate to self.distribution
-        return self.distribution[index]
-
-    def __setitem__(self,index, value):
-        # delegate to self.distribution
-        self.distribution[index] = value
-
-    def __getattr__(self, name):
-        """ any attributes not found on this instance are delegated to
-        self.distribution, if they exist """
-        # delegate only if self.distribution contains that attribute
-        if self.distribution.__dict__.has_key(name) or type(self.distribution).__dict__.has_key(name):
-            return getattr(self.distribution, name)
-        else:
-            raise 'Could not find attribute',name
         
     def __str__(self):
         string = 'Distribution for node : '+ self.names[0]
@@ -93,27 +43,17 @@ class Distribution(object):
         return string
 
 
-class Multinomial_Distribution(object, Table):
+class MultinomialDistribution(Distribution, Table):
     """     Multinomial/Discrete Distribution
     All nodes involved all discrete --> the distribution is represented by
     a Conditional Probability Table (CPT)
+    This class now inherits from Distribution and Table.
     """
-    def __init__(self, parent_dist, cpt = None):
-        # this class is not a child of Distributions !!!
-        # it virtually passes all calls to attributes that do not exist
-        # in this class to the parent_distribution class which is defined at
-        # __init__.
-        # this way, this class is virtually inheriting parent_distribution
-        # (attributes like self.family, self.names, etc.. can be accessed
-        # by using self.names
-        self.parent_dist = parent_dist
-        parent_dist.distribution_type = 'Multinomial'
-
-        if not na.alltrue(na.array([v.discrete for v in self.family])):
-            error = 'All nodes in family '+ str(self.names)+ ' must be discrete !!!'
-            raise error
-            
-                          
+    def __init__(self, v, cpt = None, isAdjustable=False):
+        Distribution.__init__(self, v, isAdjustable=isAdjustable)
+        assert(na.alltrue([v.discrete for v in self.family])), \
+              'All nodes in family '+ str(self.names)+ ' must be discrete !!!'
+        
         self.sizes = [v.nvalues for v in self.family]
 
         # initialize the cpt
@@ -121,16 +61,16 @@ class Multinomial_Distribution(object, Table):
 
         #Used for Learning
         self.counts = None
-        
-    def __getattr__(self, name):
-        # always delegate to parent_dist
-        # if it is not found there, an error will occur
-        return getattr(self.parent_dist, name)
     
+    def __getitem__(self, index):
+        Table.__getitem__(self, index)
+    
+    def __setitem(self, index, value):
+        Table.__getitem__(self, index, values)
+        
     def setCPT(self, cpt):
-        ''' put values into self.cpt'''
-        self.cpt = na.array(cpt, shape=self.sizes, type='Float32')
-
+        ''' put values into self.cpt, delegated to Table class'''
+        Table.setValues(self, cpt)
 
     def Normalize(self):
         """ puts the cpt into canonical form : Sum(Pr(x=i|Pa(x)))=1 for each
@@ -154,11 +94,7 @@ class Multinomial_Distribution(object, Table):
         self.counts = na.ones(shape=self.sizes, type='Float32')        
 
     def addToCounts(self, index, counts):
-        strIndex = self._strIndexFromDict(index)
-        if isinstance(counts, na.ArrayType):
-            exec "self.counts["+strIndex+"]+=na." + repr(counts)
-        else:
-            exec "self.counts["+strIndex+"]+=" + repr(counts)
+        self.counts[index] += counts
 
     def Sample(self, pvals):
         """ Return a sample of the distribution P(V | pvals)

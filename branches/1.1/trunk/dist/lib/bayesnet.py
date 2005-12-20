@@ -24,12 +24,12 @@ import numarray.mlab
 from numarray.random_array import randint, seed
 from numarray.ieeespecial import setnan, getnan
 #Library Specific Modules
-import graph.graph as graph
+import graph
 import delegate
 
-from distributions import *
-from potentials import *
-from inference import *
+import distributions
+import potentials
+import inference
 
 seed()
 na.Error.setMode(invalid='ignore')
@@ -38,7 +38,7 @@ na.Error.setMode(invalid='ignore')
 # removed CPT and placed Distriution
 # also removed delegate.Delegate, delaegation is now performed by distributions
 # we can put it back if we really need it, but for the moment i think it's ok
-class BVertex(graph.Vertex, Distribution):
+class BVertex(graph.Vertex):
     def __init__(self, name, discrete = True, nvalues = 2, observed = False):
         '''
         Name neen't be a string but must be hashable and immutable.
@@ -60,15 +60,19 @@ class BVertex(graph.Vertex, Distribution):
 
         # True if variable can be observed
         self.observed = observed
+        self.family = [self] + list(self.in_v)
 
-    def InitDistribution(self):
+    def InitDistribution(self, cpt=None):
         """ Initialise the distribution, all edges must be added"""
-        # this replaces the InitCPT() function
-        Distribution.__init__(self)
-
-        # if all nodes in family are discrete, add a Multinomial_Distribution
-        if na.alltrue([v.discrete for v in self.family]):
-            self.SetDistribution(Multinomial_Distribution)
+        #first decide which type of Distribution (if all nodes are discrete, then Multinomial)
+        if na.alltrue([v.discrete for v in self.in_v]):
+            self.distribution = distributions.MultinomialDistribution(self, cpt=cpt) 
+            return
+        
+        #other cases go here
+    
+    def setCPT(self, cpt):
+        self.distribution.setCPT(cpt)
         
     def __str__(self):
         if self.discrete:
@@ -97,7 +101,7 @@ class BNet(graph.Graph):
 
     def Moralize(self):
         logging.info('Moralising Tree')
-        G = MoralGraph(name = 'Moralized ' + str(self.name))
+        G = inference.MoralGraph(name = 'Moralized ' + str(self.name))
         
         # for each vertice, create a corresponding vertice
         for v in self.v.values():
@@ -148,8 +152,21 @@ class BNet(graph.Graph):
         """ Generate a sample of the network
         """
         sample = {}
-        for v in self.v.values():
-            sample[v.name] = v.distribution.Sample(sample)
+        #OPTIMIZE: could make this faster
+        vertices = self.v.values()
+        lastN = len(vertices) - 1
+        while len(vertices) > 0:
+            assert(lastN < len(self.v.values())), 'No nodes have no parents'
+            for v in vertices:
+                allSet = True
+                for parent in v.in_v():
+                    if not sample.has_key(parent.name):
+                        allSet = False
+                        break
+                if allSet:
+                    sample[v.name] = v.distribution.Sample(sample)
+                    vertices -= v
+                    lastN -= 1
         return sample
 
 class BNetTestCase(unittest.TestCase):
@@ -181,10 +198,10 @@ class BNetTestCase(unittest.TestCase):
                "Sorted was not in proper topological order"
 
     def testSample(self):
-        cCPT = Multinomial_Distribution(self.c)
-        sCPT = Multinomial_Distribution(self.s)
-        rCPT = Multinomial_Distribution(self.r)
-        wCPT = Multinomial_Distribution(self.w)
+        cCPT = distributions.MultinomialDistribution(self.c)
+        sCPT = distributions.MultinomialDistribution(self.s)
+        rCPT = distributions.MultinomialDistribution(self.r)
+        wCPT = distributions.MultinomialDistribution(self.w)
         for i in range(1000):
             sample = self.BNet.Sample
             # Can use sample in all of these, it will ignore extra variables
@@ -222,7 +239,7 @@ if __name__=='__main__':
     
     print G
     
-    JT = JoinTree(G)
+    JT = inference.JoinTree(G)
     
     JT.SetObs(['w','r'],[1,1])
     JT.MargAll()
