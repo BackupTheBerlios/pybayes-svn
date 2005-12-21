@@ -42,9 +42,9 @@ class Table:
 
     #==================================
     #Administration stuff
-    def __getattr__(self, name):
-        """ delegate to self.cpt """
-        return getattr(self.cpt,name)
+    #def __getattr__(self, name):
+        #""" delegate to self.cpt """
+        #return getattr(self.cpt,name)
 
     #===================================
     # Put values into the cpt
@@ -108,7 +108,10 @@ class Table:
         if b.__class__ == na.NumArray:
             return (na.alltrue(a.cpt.flat == b.flat) \
                     and a.shape == b.shape)
-        elif b == None: return False
+        elif b == None: 
+            return False
+        elif isinstance(b, (int, float, long)):
+            return a.cpt == b
         else:
             # the b class should better be a Table or something like that
             return (a.shape == b.shape \
@@ -135,6 +138,13 @@ class Table:
         bb.transpose(correspondab)
 
         return self.__class__(names, shape, aa*bb)
+    
+    def __div__(self, other):
+        """ Assumes that all dimensions are equal and in correct order
+        """
+        #FIXME: Add assertion that both tables are over same variables and order
+        newcpt = self.cpt / other.cpt
+        return self.__class__(self.names, self.shape, newcpt)
 
     def FindCorrespond(self, other):
         correspond = []

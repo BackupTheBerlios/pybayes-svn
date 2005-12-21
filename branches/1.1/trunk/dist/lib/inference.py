@@ -135,7 +135,7 @@ class Cluster(graph.Vertex):
         
         # Absorption
         potential = newphiR/oldphiR         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
-        potential[getnan(potential)] = 0        # replace -1.#IND by 0
+        potential[oldphiR==0] = 0        # replace -1.#IND by 0
         
         #OPTIMIZE: Can make this destructive and faster
         c.potential *= potential

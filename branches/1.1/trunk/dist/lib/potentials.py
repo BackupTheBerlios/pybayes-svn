@@ -31,13 +31,13 @@ class DiscretePotential(Potential, table.Table):
     # Operations
     def Marginalise(self, varnames):
         """ sum(varnames) self.arr """
-        temp = self.view()
+        temp = self.cpt.view()
         ax = [self.assocdim[v] for v in varnames]
         ax.sort(reverse=True)  # sort and reverse list to avoid inexistent dimensions
         for a in ax:
             temp = na.sum(temp, axis = a)
         remainingNames = self.names - set(varnames)
-        return DiscretePotential(remainingNames, temp.shape, elements=temp.flat)
+        return self.__class__(remainingNames, temp.shape, temp.flat)
 
     def Normalise(self):
         self.cpt = na.divide(self.cpt, na.sum(self.cpt.flat), self.cpt)
@@ -78,14 +78,14 @@ class JoinTreePotential(DiscretePotential):
 
     #=========================================
     # Operations
-    def __add__(c,s):
+    def __add__(self, other):
         """
         sum(X\S)phiX
 
         marginalise the variables contained in BOTH SepSet AND in Cluster
         """
-        var = set(v.name for v in c.vertices) - set(v.name for v in s.vertices)
-        return c.Marginalise(var)
+        var = set(v for v in self.names) - set(v for v in other.names)
+        return self.Marginalise(var)
 
 
 class DiscretePotentialTestCase(unittest.TestCase):
@@ -107,6 +107,12 @@ class DiscretePotentialTestCase(unittest.TestCase):
                c.names == self.a.names - var2 and \
                na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2),axis=0))), \
                " Marginalisation doesn't work"
+    
+    def testIntEQIndex(self):
+        self.a[1,1,1] = -2
+        self.a[self.a==-2] = -3
+        assert(self.a[1,1,1] == -3), \
+              "Set by EQ does not work"
 
 
 if __name__ == '__main__':
