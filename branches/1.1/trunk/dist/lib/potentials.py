@@ -57,6 +57,37 @@ class DiscretePotential(Potential, table.Table):
         string =  str(self.arr) + '\nshape:'+str(self.arr.shape)+'\nnames:'+str(self.names)+'\nsum : ' +str(na.sum(self.arr.flat))
         print string
 
+# this class should be named discreteJointTree Potential
+# we will later create anotther two classes of JoinTreePotential :
+# - Continuous and SG Potential (continuous & discrete)
+class JoinTreePotential(DiscretePotential):
+    """
+    The potential of each node/Cluster and edge/SepSet in a
+    Join Tree Structure
+    
+    self.cpt = Pr(X)
+    
+    where X is the set of variables contained in Cluster or SepSet
+    self.vertices contains the graph.vertices instances where the variables
+    come from
+    """
+    def __init__(self, names, shape, cpt=None):
+        """ self. vertices must be set """
+        DiscretePotential.__init__(self, names, shape, cpt)
+
+
+    #=========================================
+    # Operations
+    def __add__(c,s):
+        """
+        sum(X\S)phiX
+
+        marginalise the variables contained in BOTH SepSet AND in Cluster
+        """
+        var = set(v.name for v in c.vertices) - set(v.name for v in s.vertices)
+        return c.Marginalise(var)
+
+
 class DiscretePotentialTestCase(unittest.TestCase):
     def setUp(self):
       names = ('a','b','c')
@@ -76,41 +107,6 @@ class DiscretePotentialTestCase(unittest.TestCase):
                c.names == self.a.names - var2 and \
                na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2),axis=0))), \
                " Marginalisation doesn't work"
-
-
-# this class should be named discreteJointTree Potential
-# we will later create anotther two classes of JoinTreePotential :
-# - Continuous and SG Potential (continuous & discrete)
-class JoinTreePotential(DiscretePotential):
-    """
-    The potential of each node/Cluster and edge/SepSet in a
-    Join Tree Structure
-    
-    self.cpt = Pr(X)
-    
-    where X is the set of variables contained in Cluster or SepSet
-    self.vertices contains the graph.vertices instances where the variables
-    come from
-    """
-    def __init__(self):
-        """ self. vertices must be set """
-        names = [v.name for v in self.vertices]
-        shape = [v.nvalues for v in self.vertices]
-        DiscretePotential.__init__(self, names, shape)
-
-
-    #=========================================
-    # Operations
-    def __add__(c,s):
-        """
-        sum(X\S)phiX
-
-        marginalise the variables contained in BOTH SepSet AND in Cluster
-        """
-        var = set(v.name for v in c.vertices) - set(v.name for v in s.vertices)
-        return c.Marginalise(var)
-
-
 
 
 if __name__ == '__main__':

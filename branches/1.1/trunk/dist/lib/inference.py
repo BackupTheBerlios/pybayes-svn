@@ -63,7 +63,7 @@ class InferenceEngine(graph.Graph):
         for v in self.BNet.v.values():
             v.ResetParameters()
         
-class Cluster(graph.Vertex, JoinTreePotential):
+class Cluster(graph.Vertex):
     """
     A Cluster/Clique node for the Join Tree structure
     """
@@ -74,9 +74,10 @@ class Cluster(graph.Vertex, JoinTreePotential):
         
         name = ''
         for v in self.vertices: name += v.name
-        
-        JoinTreePotential.__init__(self)        # self.psi = ones
         graph.Vertex.__init__(self, name)
+        names = [v.name for v in self.vertices]
+        shape = [v.nvalues for v in self.vertices]
+        self.potential = JoinTreePotential(names, shape)
         
         # weight
         self.weight = reduce(lambda x,y: x*y, [v.nvalues for v in self.vertices])
@@ -93,49 +94,19 @@ class Cluster(graph.Vertex, JoinTreePotential):
 
         return True
 
-    def __mul__(self, other):
-        """
-        a = a*b <=> a *= b
-        this is an In-place operation!
-        
-        a keeps the order of its dimensions
-        the new dimensions of b are inserted in the same order they appear
-        at the end of a
-        [a,b,c] * [a,c,d,e] = [a,b,c,d,e]
-               
-        """
-        #---TODO: This must be verified !!!
-        # do we really add new dimensions using __mul__ ???
-        # add an ExpandDims() function, maybe
-        # this overloads the table.__mul__
-        
-        aa,bb = self.cpt, other.cpt
-        
-        correspondab,names, shape = self.FindCorrespond(other)
-        
-        while aa.rank < len(correspondab): aa = aa[..., na.NewAxis]
-        while bb.rank < len(correspondab): bb = bb[..., na.NewAxis]
-
-        bb.transpose(correspondab)
-
-        self.cpt = aa*bb
-
-        #self.names = names
-        #self.shape = shape
-
     def ContainsVar(self, v):
         """
         v = list of variable name
         returns True if cluster contains them all
         """
         for vv in v:
-            if vv.name in self.names: return False
+            if vv.name in self.potential.names: return False
 
         return True
 
     def not_in_s(self, sepset):
         """ set of variables in cluster but not not in sepset, X\S"""
-        return set(self.names) - set(sepset.names)
+        return set(self.potential.names) - set(sepset.potential.names)
         #return set(v.name for v in self.vertices) - set(v.name for v in sepset.vertices)
 
     def other(self,v):
@@ -159,15 +130,16 @@ class Cluster(graph.Vertex, JoinTreePotential):
         e = e[0]    # only one edge should connect 2 clusters
         
         # Projection
-        oldphiR = copy.copy(e.cpt)  # oldphiR = phiR
-        newphiR = self+e            # phiR = sum(X/R)phiX
+        oldphiR = copy.copy(e.potential)  # oldphiR = phiR
+        newphiR = self.potential+e.potential            # phiR = sum(X/R)phiX
         
         # Absorption
-        e.cpt = newphiR/oldphiR         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
-        e.cpt[getnan(e.cpt)] = 0        # replace -1.#IND by 0
+        potential = newphiR/oldphiR         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
+        potential[getnan(potential)] = 0        # replace -1.#IND by 0
         
-        c*e
-        e.cpt = newphiR
+        #OPTIMIZE: Can make this destructive and faster
+        c.potential *= potential
+        e.potential = newphiR
 
     def CollectEvidence(self, X=None):
         """
@@ -192,7 +164,7 @@ class Cluster(graph.Vertex, JoinTreePotential):
             if not v.marked: v.DistributeEvidence()
 
 
-class SepSet(graph.UndirEdge, JoinTreePotential):
+class SepSet(graph.UndirEdge):
     """
     A Separation Set
     """
@@ -208,8 +180,9 @@ class SepSet(graph.UndirEdge, JoinTreePotential):
         
         self.label = ''
         for v in self.vertices: self.label += v.name
-        
-        JoinTreePotential.__init__(self)        # self.psi = ones
+        names = [v.name for v in self.vertices]
+        shape = [v.nvalues for v in self.vertices]
+        self.potential = JoinTreePotential(names, shape)        # self.psi = ones
         graph.UndirEdge.__init__(self, name, c1, c2)
         
         # mass and cost
@@ -463,8 +436,8 @@ class JoinTree(graph.Graph):
     def Initialization(self):
         logging.info('Initialising Potentials for clusters and SepSets')
         # for each cluster and sepset X, set phiX = 1
-        for c in self.v.values():   c.AllOnes()         # PhiX = 1
-        for s in self.e.values():   s.AllOnes()
+        for c in self.v.values():   c.potential.AllOnes()         # PhiX = 1
+        for s in self.e.values():   s.potential.AllOnes()
         
         # assign a cluster to each variable
         # multiply cluster potential by v.cpt,
@@ -473,7 +446,8 @@ class JoinTree(graph.Graph):
                 if c.ContainsVar(v.family):
                     self.clusterdict[v.name] = c
                     v.parentcluster = c
-                    c*v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
+                    #OPTIMIZE: can make this operation destructive to speed things up
+                    c.potential *= v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
                     break   # stop c loop, continue with next v
 
         # set all likelihoods to ones
