@@ -7,7 +7,7 @@ import types
 
 #Library Specific Modules
 import graph
-from distributions import RawCPT
+import distributions
 from potentials import JoinTreePotential
 
 #logging.basicConfig(level= logging.DEBUG)
@@ -328,10 +328,10 @@ class MoralGraph(graph.Graph):
        
 #=======================================================================
 #========================================================================
-class Likelihood(RawCPT):
+class Likelihood(distributions.MultinomialDistribution):
     """ Likelihood class """
     def __init__(self, BVertex):
-        RawCPT.__init__(self, (BVertex.name,), BVertex.nvalues)
+        distributions.MultinomialDistribution.__init__(self, (BVertex.name,), BVertex.nvalues)
         self.v = BVertex
         self.AllOnes()      # -1 = unobserved
         

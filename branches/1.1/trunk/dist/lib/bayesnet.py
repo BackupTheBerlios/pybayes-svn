@@ -39,7 +39,7 @@ na.Error.setMode(invalid='ignore')
 # also removed delegate.Delegate, delaegation is now performed by distributions
 # we can put it back if we really need it, but for the moment i think it's ok
 class BVertex(graph.Vertex):
-    def __init__(self, name, discrete = True, nvalues = 2, observed = False):
+    def __init__(self, name, discrete = True, nvalues = 2, observed = True):
         '''
         Name neen't be a string but must be hashable and immutable.
         if discrete = True:
