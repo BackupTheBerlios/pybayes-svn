@@ -99,10 +99,12 @@ class Cluster(graph.Vertex):
         v = list of variable name
         returns True if cluster contains them all
         """
+        success = True
         for vv in v:
-            if vv.name in self.potential.names: return False
-
-        return True
+            if not vv.name in self.potential.names: 
+                success = False
+                break
+        return success
 
     def not_in_s(self, sepset):
         """ set of variables in cluster but not not in sepset, X\S"""
@@ -331,7 +333,7 @@ class MoralGraph(graph.Graph):
 class Likelihood(distributions.MultinomialDistribution):
     """ Likelihood class """
     def __init__(self, BVertex):
-        distributions.MultinomialDistribution.__init__(self, (BVertex.name,), BVertex.nvalues)
+        distributions.MultinomialDistribution.__init__(self, BVertex)
         self.v = BVertex
         self.AllOnes()      # -1 = unobserved
         
@@ -476,17 +478,16 @@ class JoinTree(graph.Graph):
         # find a cluster containing v
         # v.parentcluster is a convenient choice, can make better...
         c = self.clusterdict[v]
-        res = c.Marginalise(c.other(v))
+        res = c.potential.Marginalise(c.other(v))
         
-        # normalize
-        return na.divide(res,na.sum(res.flat))
+        return res.Normalise()
     
     def MarginaliseFamily(self, v):
         """ returns Pr(fam(v)), v is a variable name
         """
         c = self.clusterdict[v]
         res = c.Marginalise(c.other(self.BNet.v[v].family))
-        return res.Normalize()
+        return res.Normalise()
     
     def SetObs(self, v,val):
         """ Incorporate new evidence """
@@ -556,7 +557,7 @@ class JoinTree(graph.Graph):
             c = self.clusterdict[vv]     # cluster containing likelihood, same as v
             l = self.likedict[vv]    
             l.SetObs(vval)
-            c.cpt = c*l
+            c.potential *= l
 
     def MargAll(self):
         for v in self.BNet.v.values():

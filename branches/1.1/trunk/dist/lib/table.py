@@ -169,6 +169,9 @@ class Table:
                 newshape.append(other.shape[correspond[-1]])
                 
         return correspond, newnames, tuple(newshape)
+    
+    def Normalize(self):
+        
 
 #==========================================================
 # Table inherits numarray

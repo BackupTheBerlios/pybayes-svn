@@ -49,6 +49,7 @@ class BVertex(graph.Vertex):
         observed = True means that this node CAN be observed
         '''
         graph.Vertex.__init__(self, name)
+        self.distribution = None
         if discrete:
             # discrete node
             self.discrete = True
