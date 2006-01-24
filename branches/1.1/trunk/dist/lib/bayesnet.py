@@ -49,7 +49,10 @@ class BVertex(graph.Vertex):
         observed = True means that this node CAN be observed
         '''
         graph.Vertex.__init__(self, name)
+
+        # self.distribution contains the type of distribution for this node
         self.distribution = None
+        
         if discrete:
             # discrete node
             self.discrete = True
@@ -61,7 +64,9 @@ class BVertex(graph.Vertex):
 
         # True if variable can be observed
         self.observed = observed
-        self.family = [self] + list(self.in_v)
+
+        # family is created by the distribution
+        #self.family = [self] + list(self.in_v)
 
     def InitDistribution(self, cpt=None):
         """ Initialise the distribution, all edges must be added"""
@@ -69,18 +74,39 @@ class BVertex(graph.Vertex):
         if na.alltrue([v.discrete for v in self.in_v]):
             self.distribution = distributions.MultinomialDistribution(self, cpt=cpt) 
             return
+
+        #---TODO: other cases go here
+
+    def __getattr__(self, name):
+        """ any attributes not found on this instance are delegated to
+        self.distribution, if they exist """
+        # delegate only if self.distribution contains that attribute
+        try:
+            return getattr(self.distribution, name)
+        except:
+            raise 'Could not find attribute',name
+
         
-        #other cases go here
-    
-    def setCPT(self, cpt):
-        self.distribution.setCPT(cpt)
+    # also delegate get and set to the distribution
+    def __getitem__(self, index):
+        #print 'BVertex.__getitem__'
+        return self.distribution.__getitem__(index)
+
+    def __setitem__(self,index,value):
+        return self.distribution.__setitem__(index,value)
         
     def __str__(self):
+        string = ''
         if self.discrete:
-            return graph.Vertex.__str__(self)+'    (discrete)'
+            string += graph.Vertex.__str__(self)+'    (discrete)'
         else:
-            return graph.Vertex.__str__(self)+'    (continuous)'
+            string += graph.Vertex.__str__(self)+'    (continuous)'
 
+        #if self.distribution != None:
+        #    string += self.distribution.__str__()
+
+        return string
+            
     # This function is necessary for correct Message Pass
     # we fix the order of variables, by using a cmp function
     def __cmp__(a,b):
@@ -139,7 +165,7 @@ class BNet(graph.Graph):
         """ Finalizes the network, all edges must be added. A distribution (unknown)
         is added to each node of the network"""
         # this replaces the InitCPTs() function
-        for v in self.v.values(): v.InitDistribution()
+        for v in self.all_v: v.InitDistribution()
     
 ##    def InitCPTs(self):
 ##        for v in self.v.values(): v.InitCPT()

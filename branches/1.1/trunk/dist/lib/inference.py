@@ -383,6 +383,8 @@ class JoinTree(graph.Graph):
         logging.info('Constructing Optimal Tree')
         self.ConstructOptimalJTree()
 
+        print self
+
         self.Initialization()
 
         self.GlobalPropagation()

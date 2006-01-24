@@ -10,37 +10,27 @@ class Potential:
     Distributions
     """
     def __init__(self, names, shape):
-        self.names = set(names)
-        self.names_list = list(names)
+        self.names = list(names)
+        self.names_set = set(names)
         self.shape = shape
         
 class DiscretePotential(Potential, table.Table):
     """ This is a basic potential to represent discrete potentials.
     It is very similar to a MultinomialDistribution except that 
-    it defines several operations such as __mult__, __add__, 
-    and Marginalise().
+    it defines some initialisation functions and does not contain family, parents
+    etc...
     """
-    def __init__(self, names, shape, elements=None):
+    def __init__(self, names, shape, cpt=None):
         Potential.__init__(self, names, shape)
         
-        if elements == None:
-            elements = na.ones(shape=shape)
-        table.Table.__init__(self, names, shape, elements, 'Float32')
+        if cpt == None:
+            cpt = na.ones(shape=shape)
+        table.Table.__init__(self, names, shape, cpt, 'Float32')
 
     #=========================
     # Operations
-    def Marginalise(self, varnames):
-        """ sum(varnames) self.arr """
-        temp = self.cpt.view()
-        ax = [self.assocdim[v] for v in varnames]
-        ax.sort(reverse=True)  # sort and reverse list to avoid inexistent dimensions
-        for a in ax:
-            temp = na.sum(temp, axis = a)
-        remainingNames = self.names - set(varnames)
-        return self.__class__(remainingNames, temp.shape, temp.flat)
+    # all operations are defined into Table
 
-    def Normalise(self):
-        self.cpt = na.divide(self.cpt, na.sum(self.cpt.flat), self.cpt)
 
     #================================
     # Initialise
@@ -63,13 +53,11 @@ class DiscretePotential(Potential, table.Table):
 class JoinTreePotential(DiscretePotential):
     """
     The potential of each node/Cluster and edge/SepSet in a
-    Join Tree Structure
+    JoinTree Structure
     
     self.cpt = Pr(X)
     
     where X is the set of variables contained in Cluster or SepSet
-    self.vertices contains the graph.vertices instances where the variables
-    come from
     """
     def __init__(self, names, shape, cpt=None):
         """ self. vertices must be set """
@@ -102,9 +90,9 @@ class DiscretePotentialTestCase(unittest.TestCase):
         var2 = set(['c','a'])
         c = self.a.Marginalise(var2)
 
-        assert(b.names == self.a.names - var and \
+        assert(b.names_set == self.a.names_set - var and \
                b[0,1] == na.sum(self.a[0,1]) and \
-               c.names == self.a.names - var2 and \
+               c.names_set == self.a.names_set - var2 and \
                na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2),axis=0))), \
                " Marginalisation doesn't work"
     

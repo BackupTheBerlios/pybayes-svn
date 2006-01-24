@@ -31,6 +31,9 @@ class Distribution(object):
         self.names = [v.name for v in self.family]
         # order = dict{ var name : index }
         #OPTIMIZE: what is this used for outside the discrete case in which it is already defined in table class
+        #Kostas: even continuous distributions must have an order for the variables
+        #        involved... and they don't inherit from Table...so
+        #        but I agree that then it is Table that has a superfluous variable...
         self.order = dict((k,v) for k,v in zip(self.names, range(len(self.names))))
         
         #used for learning
@@ -39,6 +42,7 @@ class Distribution(object):
     def __str__(self):
         string = 'Distribution for node : '+ self.names[0]
         string += '\nParents : ' + str(self.names[1:])
+        string += '\nFamily : ' + str(self.names)
 
         return string
 
@@ -50,6 +54,8 @@ class MultinomialDistribution(Distribution, Table):
     This class now inherits from Distribution and Table.
     """
     def __init__(self, v, cpt = None, isAdjustable=False):
+        #self.vertex = v
+        
         Distribution.__init__(self, v, isAdjustable=isAdjustable)
         assert(na.alltrue([v.discrete for v in self.family])), \
               'All nodes in family '+ str(self.names)+ ' must be discrete !!!'
@@ -58,20 +64,14 @@ class MultinomialDistribution(Distribution, Table):
 
         # initialize the cpt
         Table.__init__(self, self.names, self.sizes, cpt)
-
         #Used for Learning
         self.counts = None
-    
-    def __getitem__(self, index):
-        Table.__getitem__(self, index)
-    
-    def __setitem(self, index, value):
-        Table.__getitem__(self, index, values)
         
     def setCPT(self, cpt):
         ''' put values into self.cpt, delegated to Table class'''
         Table.setValues(self, cpt)
 
+    # overrides Table.Normalize()
     def Normalize(self):
         """ puts the cpt into canonical form : Sum(Pr(x=i|Pa(x)))=1 for each
         i in values(x)
@@ -199,24 +199,22 @@ class DistributionTestCase(unittest.TestCase):
     def setUp(self):
         from bayesnet import BNet, BVertex, graph
         # create a small BayesNet
-        G = BNet('Water Sprinkler Bayesian Network')
+        self.G = G = BNet('Water Sprinkler Bayesian Network')
         
-        c,s,r,w = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('c s r w'.split(),[2,3,4,2])]
+        c,s,r,w = [G.add_v(BVertex(nm, discrete=True, nvalues=nv)) for nm,nv in zip('c s r w'.split(),[2,3,4,2])]
         
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
 
         G.InitDistributions()
-        
-        self.G = G
-        #print G
+
 
     def testFamily(self):
         """ test parents, family, etc... """
-        
         G = self.G
         c,s,r,w = G.v['c'],G.v['s'],G.v['r'],G.v['w']
 
+        
         assert(c.parents == [] and \
                set(w.parents) == set([r,s]) and \
                r.parents == [c] and \
@@ -226,7 +224,7 @@ class DistributionTestCase(unittest.TestCase):
         assert(c.family == [c] and \
                set(s.family) == set([c,s]) and \
                set(r.family) == set([r,c]) and \
-               set(w.family) == set([w,r,s])), \
+               set(w.family) == set([w,r,s]) ), \
                "Error with family"
 
         assert(c.order['c'] == 0 and \
@@ -252,9 +250,6 @@ class MultinomialTestCase(unittest.TestCase):
 
         G.InitDistributions()
 
-        for v in G.v.values():
-            v.SetDistribution(Multinomial_Distribution)
-
         a.setCPT(na.arange(48))
         
         self.G = G
@@ -262,6 +257,7 @@ class MultinomialTestCase(unittest.TestCase):
         #print G
 
     def testSizes(self):
+        """ test the sizes of the nodes """
         assert (self.a.sizes == [2,3,4,2]), "Error with self.sizes"
 
 
@@ -276,7 +272,7 @@ class MultinomialTestCase(unittest.TestCase):
     def testSetCPT(self):
         """ Violate abstraction and check that we can actually set elements.
         """
-        self.a.arr[0,1,0,:] = na.array([4,5])
+        self.a[0,1,0,:] = na.array([4,5])
         assert(na.all(self.a[0,1,0,:] == na.array([4,5]))), \
               "Error setting the array when violating abstraction"
 
@@ -445,35 +441,23 @@ if __name__ == '__main__':
     runner = unittest.TextTestRunner()
     runner.run(suite)
     
-    # create a small BayesNet
-    G = BNet('Water Sprinkler Bayesian Network')
-    
-    c,s,r,w = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('c s r w'.split(),[2,3,4,5])]
-    
-    for ep in [(c,r), (c,s), (r,w), (s,w)]:
-        G.add_e(graph.DirEdge(len(G.e), *ep))
 
-    print G
+    # create a small BayesNet, Water-Sprinkler
+    G = BNet('Test')
+    
+    a,b,c,d = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('a b c d'.split(),[2,3,4,2])]
+    # sizes = (2,3,4,2)
+    # a has 3 parents, b,c and d
+    for ep in [(b,a), (c,a), (d,a)]:
+        G.add_e(graph.DirEdge(len(G.e), *ep))
 
     G.InitDistributions()
 
-    w.SetDistribution(Multinomial_Distribution)
-    index = {'w':0,'c':1}
-   
-    #ds = s.SetDistribution(Multinomial_Distribution)
-    #ds.Normalize()
-    #print ds.cpt
+    a.setCPT(na.arange(48))
 
-    #dw = w.SetDistribution(Gaussian_Distribution,mu=[0,1])
-    #print dw
+    print G
 
-    class A:
-        cpt = na.arange(10,shape=(2,5))
-        def __getitem__(self,i):
-            print i,i.__class__
-            return self.cpt[i]
 
-    a=A()
-    a[0]
+
     
     
