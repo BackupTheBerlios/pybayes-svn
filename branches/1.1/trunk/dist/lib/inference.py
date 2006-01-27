@@ -8,9 +8,9 @@ import types
 #Library Specific Modules
 import graph
 import distributions
-from potentials import JoinTreePotential
+from potentials import DiscretePotential
 
-#logging.basicConfig(level= logging.DEBUG)
+logging.basicConfig(level= logging.DEBUG)
 class InferenceEngine(graph.Graph):
     def __init__(self, BNet):
         graph.Graph.__init__(self, name)
@@ -77,7 +77,8 @@ class Cluster(graph.Vertex):
         graph.Vertex.__init__(self, name)
         names = [v.name for v in self.vertices]
         shape = [v.nvalues for v in self.vertices]
-        self.potential = JoinTreePotential(names, shape)
+        #---TODO: Continuous....
+        self.potential = DiscretePotential(names, shape)
         #### Debug ####
         if not len(names) == len(self.vertices):
             lkj = 1
@@ -130,21 +131,25 @@ class Cluster(graph.Vertex):
         ####################################################
         logging.debug('Message Pass from '+ str(self)+' to '+str(c))
         # c must be connected to self by a sepset
-        e = self.connecting_e(c)    # sepset that connect the two clusters
+        e = self.connecting_e(c)    # sepset that connects the two clusters
         if not e: raise 'Clusters '+str(self)+' and '+ str(c)+ ' are not connected'
         e = e[0]    # only one edge should connect 2 clusters
         
         # Projection
-        oldphiR = copy.copy(e.potential)  # oldphiR = phiR
+        
+        oldphiR = e.potential                           # oldphiR = phiR
         newphiR = self.potential+e.potential            # phiR = sum(X/R)phiX
-        
+
+        # we shouldn't use the .cpt attribute because continuous potentials
+        # will not have a cpt...
+        #---TODO: create an update method
+        e.potential.cpt = newphiR.copy()
+
         # Absorption
-        potential = newphiR/oldphiR         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
-        potential[oldphiR==0] = 0        # replace -1.#IND by 0
+        newphiR/oldphiR
         
-        #OPTIMIZE: Can make this destructive and faster
-        c.potential *= potential
-        e.potential = newphiR
+        c.potential * newphiR
+
 
     def CollectEvidence(self, X=None):
         """
@@ -187,7 +192,8 @@ class SepSet(graph.UndirEdge):
         for v in self.vertices: self.label += v.name
         names = [v.name for v in self.vertices]
         shape = [v.nvalues for v in self.vertices]
-        self.potential = JoinTreePotential(names, shape)        # self.psi = ones
+        #---TODO: Continuous....
+        self.potential = DiscretePotential(names, shape)        # self.psi = ones
         graph.UndirEdge.__init__(self, name, c1, c2)
         
         # mass and cost
@@ -446,21 +452,13 @@ class JoinTree(graph.Graph):
         
         # assign a cluster to each variable
         # multiply cluster potential by v.cpt,
-        for v in self.BNet.v.values():
-            for c in self.v.values():
+        for v in self.BNet.all_v:
+            for c in self.all_v:
                 if c.ContainsVar(v.family):
                     self.clusterdict[v.name] = c
                     v.parentcluster = c
-                    #### Debug ####
-                    tmpnames = c.potential.names
-                    ###############
-                    #OPTIMIZE: can make this operation destructive to speed things up
-                    c.potential *= v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
-                    #### Debug ####
-                    if not tmpnames == c.potential.names:
-                        adsfa = 1
-                    ###############
-                    break   # stop c loop, continue with next v
+                    # in place multiplication!
+                    c.potential * v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
 
         # set all likelihoods to ones
         for l in self.likelihoods: l.AllOnes()

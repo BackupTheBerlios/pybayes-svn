@@ -38,7 +38,7 @@ class Distribution(object):
         
     def __str__(self):
         string = 'Distribution for node : '+ self.names[0]
-        string += '\nParents : ' + str(self.names[1:])
+        if len(names)>1: string += '\nParents : ' + str(self.names[1:])
 
         return string
 
@@ -215,22 +215,23 @@ class DistributionTestCase(unittest.TestCase):
         """ test parents, family, etc... """
         
         G = self.G
-        c,s,r,w = G.v['c'],G.v['s'],G.v['r'],G.v['w']
-
-        assert(c.parents == [] and \
-               set(w.parents) == set([r,s]) and \
-               r.parents == [c] and \
-               s.parents == [c]), \
+        c,s,r,w = G.v['c'],G.v['s'], \
+                  G.v['r'],G.v['w']
+        
+        assert(c.distribution.parents == [] and \
+               set(w.distribution.parents) == set([r,s]) and \
+               r.distribution.parents == [c] and \
+               s.distribution.parents == [c]), \
                "Error with parents"
 
-        assert(c.family == [c] and \
-               set(s.family) == set([c,s]) and \
-               set(r.family) == set([r,c]) and \
-               set(w.family) == set([w,r,s])), \
+        assert(c.distribution.family == [c] and \
+               set(s.distribution.family) == set([c,s]) and \
+               set(r.distribution.family) == set([r,c]) and \
+               set(w.distribution.family) == set([w,r,s])), \
                "Error with family"
 
-        assert(c.order['c'] == 0 and \
-               set([w.order['w'],w.order['s'], w.order['r']]) == set([0,1,2])), \
+        assert(c.distribution.order['c'] == 0 and \
+               set([w.distribution.order['w'],w.distribution.order['s'], w.distribution.order['r']]) == set([0,1,2])), \
                "Error with order"
  
 #=================================================================
@@ -245,15 +246,14 @@ class MultinomialTestCase(unittest.TestCase):
         G = BNet('Test')
         
         a,b,c,d = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('a b c d'.split(),[2,3,4,2])]
+        ad,bd,cd,dd = a.distribution, b.distribution, c.distribution, d.distribution
+        
         # sizes = (2,3,4,2)
         # a has 3 parents, b,c and d
         for ep in [(b,a), (c,a), (d,a)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
 
         G.InitDistributions()
-
-        for v in G.v.values():
-            v.SetDistribution(Multinomial_Distribution)
 
         a.setCPT(na.arange(48))
         
@@ -262,55 +262,32 @@ class MultinomialTestCase(unittest.TestCase):
         #print G
 
     def testSizes(self):
-        assert (self.a.sizes == [2,3,4,2]), "Error with self.sizes"
+        assert (self.a.distribution.sizes == [2,3,4,2]), "Error with self.sizes"
 
 
     # test the indexing of the cpt
     def testGetCPT(self):
         """ Violate abstraction and check that setCPT actually worked correctly, by getting things out of the matrix
         """
-        assert(na.all(self.a[0,0,0,:] == na.array([0,1])) and \
-               na.all(self.a[1,0,0,:] == na.array([24,25]))), \
+        assert(na.all(self.a.distribution[0,0,0,:] == na.array([0,1])) and \
+               na.all(self.a.distribution[1,0,0,:] == na.array([24,25]))), \
               "Error getting raw cpt"
     
     def testSetCPT(self):
         """ Violate abstraction and check that we can actually set elements.
         """
-        self.a.arr[0,1,0,:] = na.array([4,5])
-        assert(na.all(self.a[0,1,0,:] == na.array([4,5]))), \
+        self.a.distribution.cpt[0,1,0,:] = na.array([4,5])
+        assert(na.all(self.a.distribution[0,1,0,:] == na.array([4,5]))), \
               "Error setting the array when violating abstraction"
 
-# we no longer use string indexing        
-##    def testStrIndex(self):
-##        """ test that an index using strings works correctly
-##        """
-##        index = '0,0,0,:'
-##        index2 = '1,0,0,:'
-##        assert(na.all(self.a[0,0,0,:] == self.a[index]) and \
-##               na.all(self.a[1,0,0,:] == self.a[index2])), \
-##              "Error getting with str index"
-##    
-##    def testStrSet(self):
-##        """ test that an index using strings can access and set a value in the cpt
-##        """
-##        index = '0,0,0,:'
-##        index2 = '1,0,0,:'
-##        index3 = '1,1,0,:'
-##        self.a[index] = -1
-##        self.a[index2] = 100
-##        self.a[index3] = na.array([-2, -3])
-##        assert(na.all(self.a[0,0,0,:] == na.array([-1, -1])) and \
-##               na.all(self.a[1,0,0,:] == na.array([100, 100])) and \
-##               na.all(self.a[1,1,0,:] == na.array([-2, -3]))), \
-##              "Error setting with str indices"
     
     def testDictIndex(self):
         """ test that an index using a dictionary works correctly
         """
         index = {'a':0,'b':0,'c':0}
         index2 = {'a':1,'b':0,'c':0}
-        assert(na.all(self.a[0,0,0,:] == self.a[index]) and \
-               na.all(self.a[1,0,0,:] == self.a[index2])), \
+        assert(na.all(self.a.distribution[0,0,0,:] == self.a.distribution[index]) and \
+               na.all(self.a.distribution[1,0,0,:] == self.a.distribution[index2])), \
               "Error getting with dict index"
     
     def testDictSet(self):
@@ -319,119 +296,31 @@ class MultinomialTestCase(unittest.TestCase):
         index = {'a':0,'b':0,'c':0}
         index2 = {'a':1,'b':0,'c':0}
         index3 = {'a':1,'b':1,'c':0}
-        self.a[index] = -1
-        self.a[index2] = 100
-        self.a[index3] = na.array([-2, -3])
-        assert(na.all(self.a[0,0,0,:] == na.array([-1, -1])) and \
-               na.all(self.a[1,0,0,:] == na.array([100, 100])) and \
-               na.all(self.a[1,1,0,:] == na.array([-2, -3]))), \
+        self.a.distribution[index] = -1
+        self.a.distribution[index2] = 100
+        self.a.distribution[index3] = na.array([-2, -3])
+        assert(na.all(self.a.distribution[0,0,0,:] == na.array([-1, -1])) and \
+               na.all(self.a.distribution[1,0,0,:] == na.array([100, 100])) and \
+               na.all(self.a.distribution[1,1,0,:] == na.array([-2, -3]))), \
               "Error setting cpt with dict"
     
     def testNumIndex(self):
         """ test that a raw index of numbers works correctly
         """
-        assert(na.all(self.a[0,:,0,:] == self.a[0,:,0,:]) and \
-               na.all(self.a[1,0,0,:] == self.a[1,0,0,:])), \
+        assert(na.all(self.a.distribution[0,:,0,:] == self.a.distribution[0,:,0,:]) and \
+               na.all(self.a.distribution[1,0,0,:] == self.a.distribution[1,0,0,:])), \
               "Error getting item with num indices"
     
     def testNumSet(self):
         """ test that a raw index of numbers can access and set a position in the 
         """
-        self.a[0,0,0,:] = -1
-        self.a[1,0,0,:] = 100
-        self.a[1,1,0,:] = na.array([-2, -3])
-        assert(na.all(self.a[0,0,0,:] == na.array([-1, -1])) and \
-               na.all(self.a[1,0,0,:] == na.array([100, 100])) and \
-               na.all(self.a[1,1,0,:] == na.array([-2, -3]))), \
+        self.a.distribution[0,0,0,:] = -1
+        self.a.distribution[1,0,0,:] = 100
+        self.a.distribution[1,1,0,:] = na.array([-2, -3])
+        assert(na.all(self.a.distribution[0,0,0,:] == na.array([-1, -1])) and \
+               na.all(self.a.distribution[1,0,0,:] == na.array([100, 100])) and \
+               na.all(self.a.distribution[1,1,0,:] == na.array([-2, -3]))), \
               "Error Setting cpt with num indices"
-
-#=================================================================
-#=================================================================
-# old code, didn't touch this part but it's becoming obsolete
-# keep it because we can fetch code in that
-# I deleted any parts no longer needed
-class RawCPT(delegate.Delegate):
-    def Marginalise(self, varnames):
-        """ sum(varnames) self.cpt """
-        temp = self.cpt
-        ax = [self.p[v] for v in varnames]
-        ax.sort(reverse=True)  # sort and reverse list to avoid inexistent dimensions
-        for a in ax:
-            temp = na.sum(temp, axis = a)
-        return temp
-
-    def Uniform(self):
-        ' Uniform distribution '
-        N = len(self.cpt.flat)
-        self.cpt = na.array([1.0/N for n in range(N)], shape = self.cpt.shape, type='Float32')
-
-    def __mul__(a,b):
-        """
-        a keeps the order of its dimensions
-        
-        always use a = a*b or b=b*a, not b=a*b
-        """
-        
-        aa,bb = a.cpt, b.cpt
-        
-        correspondab = a.FindCorrespond(b)
-        
-        while aa.rank < len(correspondab): aa = aa[..., na.NewAxis]
-        while bb.rank < len(correspondab): bb = bb[..., na.NewAxis]
-
-        bb = na.transpose(bb, correspondab)
-
-        return aa*bb
-
-    def __str__(self): return str(self.cpt)
-
-    def FindCorrespond(a,b):
-        correspond = []
-        k = len(b.p)
-        for p in a.Fv:   #p=var name
-            if b.p.has_key(p): correspond.append(b.p[p])
-            else:
-                correspond.append(k)
-                k += 1
-
-        for p in b.Fv:
-            if not a.p.has_key(p):
-                correspond.append(b.p[p])
-                
-        return correspond
-
-    def Printcpt(self):
-        string =  str(self.cpt) + '\nshape:'+str(self.cpt.shape)+'\nFv:'+str(self.Fv)+'\nsum : ' +str(na.sum(self.cpt.flat))
-        print string
-
-
-
-class CPT(RawCPT):
-    def __init__(self, nvalues, parents):
-        names = [self.name]
-        names.extend([p.name for p in parents])
-        shape = [p.nvalues for p in parents]
-        shape.insert(0, nvalues)
-        
-        RawCPT.__init__(self, names, shape)
-
-    def makecpt(self):
-        """
-        makes a consistent conditional probability distribution
-        sum(parents)=1
-        """
-        shape = self.cpt.shape
-        self.cpt.shape = (shape[0], MultiplyElements(shape[1:]))
-        self.cpt /= na.sum(self.cpt, axis=0)
-        self.cpt.shape = shape
-
-def MultiplyElements(d):
-    "multiplies the elements of d between them"
-    #this one is the fastest
-    nel = 1
-    for x in d: nel = nel * x
-
-    return nel
 
 
 if __name__ == '__main__':

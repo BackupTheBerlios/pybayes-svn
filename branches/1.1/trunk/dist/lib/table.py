@@ -15,16 +15,21 @@ __author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
 import unittest
 import types
 import numarray as na
+from copy import copy
+from numarray.ieeespecial import getnan
 
 # same behaviour as your class, but this one is not a children of numarray
 # it simply contains an array. Operations are delegated to this array
 class Table:
-    def __init__(self, names, shape, elements = None, type = 'Float32'):
+    def __init__(self, names, shape = None, elements = None, type = 'Float32'):
       ''' names = ['a','b',...]
-          shape = (2,3,...)
-          elements = [0,1,2,....] (a list)
-          type = 'Float32' or 'Float64' or 'UInt8', etc...
+          shape = (2,3,...) (default: binary)
+          elements = [0,1,2,....] (a list or a numarray, default: all ones)
+          type = 'Float32' or 'Float64' or 'UInt8', etc... (default: Float32)
       '''
+      # set default parameters
+      if shape == None:
+          shape = [2]*len(names)
       if elements == None:
           elements = na.ones(shape = shape)
           
@@ -42,9 +47,9 @@ class Table:
 
     #==================================
     #Administration stuff
-    #def __getattr__(self, name):
-        #""" delegate to self.cpt """
-        #return getattr(self.cpt,name)
+    def __getattr__(self, name):
+        """ delegate to self.cpt """
+        return getattr(self.cpt,name)
 
     #===================================
     # Put values into the cpt
@@ -99,6 +104,7 @@ class Table:
       className= self.__class__.__name__
       className= className.zfill(5).replace('0', ' ')
       rep= className + repr(self.cpt)[5:]
+      rep += '\nVariables :' + str(self.names_list)
       return rep
 
     #=====================================
@@ -119,148 +125,106 @@ class Table:
                     and na.alltrue(a.cpt.flat == b.cpt.flat)  \
                     )
 
+    def __imul__(a,b): return a*b
+    def __idiv__(a,b): return a/b
 
-
-    def __mul__(self, other):
+    def __mul__(a,b):
         """
-        a keeps the order of its dimensions
-        
-        always use a = a*b or b=b*a, not b=a*b
+        in place multiplication
+        a = a*b <==> a*b <==> a*=b
+
+        a keeps the order of it's dimensions
+        b MUST be a subset of a
+        b can have any variable order
         """
-        
-        aa,bb = self.cpt, other.cpt
-        
-        correspondab,names, shape = self.FindCorrespond(other)
-        
-        while aa.rank < len(correspondab): aa = aa[..., na.NewAxis]
-        while bb.rank < len(correspondab): bb = bb[..., na.NewAxis]
+        cptb = a.prepareDimensions(b)
 
-        bb.transpose(correspondab)
+        # multiply in place, a's values are changed
+        a.cpt *= cptb
 
-        return self.__class__(names, shape, aa*bb)
+        return a
+
+    def __div__(a, b):
+        """
+        in place multiplication
+        a = a/b <==> a/b <==> a/=b
+
+        a keeps the order of it's dimensions
+        b MUST be a subset of a
+        b can have any variable order
+
+        0/0 are replaced by 0s
+        """
+        cptb = a.prepareDimensions(b)
+
+        # divide in place, a's values are changed
+        a.cpt /= cptb
+
+        ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
+        # replace INFs by 0s
+        a.cpt[getnan(a.cpt)] = 0
+
+        return a
+
+    def prepareDimensions(a,b):
+        """
+        prepares b.cpt for multiplication with a
+            - b MUST be a subset of a
+            - new dimensions are added for each variable in a that does not
+              exist in b
+            - variables are put in the correct order
+            - does not touch b.cpt
+
+        return b.cpt ready for multiplication with a.cpt
+        """
+        #FIXME: Add assertion that both tables are over same variables
+
+        cptb = b.cpt
+        # create new empty dimensions in cptb for the extra a variables
+        while cptb.rank < a.cpt.rank: cptb = cptb[...,na.NewAxis]
+        
+        # find correspondance between b vars and a vars
+        correspondab = a.findCorrespond(b)
+
+        # put the b dimensions into the right place
+        cptb.transpose(correspondab)
+
+        return cptb
     
-    def __div__(self, other):
-        """ Assumes that all dimensions are equal and in correct order
-        """
-        #FIXME: Add assertion that both tables are over same variables and order
-        newcpt = self.cpt / other.cpt
-        return self.__class__(self.names, self.shape, newcpt)
+    def findCorrespond(self, other):
+        """ Returns the correspondance vector between the variables of
+        two Tables
+        other.variables MUST be a subset of self.variables !!!
+        eg. a= Pr(A,B,C)
+            b= Pr(C,B)
+            a.FindCorrespond(b) --> [2,1,0]
+            b.FindCorrespond(a) --> error (a not a subset of b)
 
-    def FindCorrespond(self, other):
+            a=Pr(A,B,C,D,E)
+            b=Pr(B,E)
+            a.FindCorrespond(b) --> [1,4,0,2,3]
+
+        any variables in a but do not exist in b are added at the end of list
+        """
+        #---TODO: ASSERT other must be a subset of self !!!
+        #raise str(other.names_list) + " not a subset of " + str(self.names_list)
+        
         correspond = []
-        newnames = self.names_list
-        newshape = list(self.shape)
-        
-        aa,bb = self.cpt, other.cpt
-        k = bb.rank
-        for i in range(aa.rank):
-            p = self.assocname[i]   #p=var name in self
-            if other.assocdim.has_key(p): 
-                correspond.append(other.assocdim[p])
-            else:
+        for varb in other.names_list:
+            # varb is the name of a variable in other
+            # self MUST contain all the variables of b
+            correspond.append(self.assocdim[varb])
+
+        k = 0
+        for vara in self.names_list:
+            # vara is the name of a variable in self
+            # add all variables contained in a and not in b
+            if not other.assocdim.has_key(vara):
                 correspond.append(k)
-                k += 1
+            k += 1
 
-        for i in range(bb.rank):
-            p = other.assocname[i]  #p=var name in other
-            if not self.assocdim.has_key(p):
-                correspond.append(other.assocdim[p])
-                newnames.append(p)
-                newshape.append(other.shape[correspond[-1]])
-                
-        return correspond, newnames, tuple(newshape)
+        return correspond
         
-
-#==========================================================
-# Table inherits numarray
-# a numarray is ot really meant to be subclassed since it is written in C++
-# by subclassing it, I believe that we lose a lot of time on accessing
-# it's elements.
-# we could obtain the same behaviour by simply containing an array and delegating
-# where we need
-class Table_numarray(na.NumArray):
-   def __init__(self, names, shape, elements, type):
-      ''' n provides the length of each dimension,
-      a is the constant value to be plugged.
-      '''
-      arr=na.array(sequence=elements, shape=shape, type=type)
-      self.__setstate__(arr.__getstate__())
-      
-      self.names = set(names)
-      self.names_list = list(names) # just to keep the order in an easy to use way
-
-      # dict of name:dim number pairs
-      self.assocdim = dict(zip(names,range(len(names))))
-
-      # dict of dim:name pairs
-      self.assocname = dict(enumerate(names))
-
-   def __getitem__(self, index):
-      """ Overload array-style indexing behaviour.
-      Index can be a dictionary of var name:value pairs, 
-      or pure numbers as in the standard way
-      of accessing a numarray array array[1,:,1]
-      """
-      if isinstance(index, types.DictType):
-         numIndex = self._numIndexFromDict(index)
-      else:
-         numIndex = index
-      return na.NumArray.__getitem__(self, numIndex)
-   
-   def __setitem__(self, index, value):
-      """ Overload array-style indexing behaviour.
-      Index can be a dictionary of var name:value pairs, 
-      or pure numbers as in the standard way
-      of accessing a numarray array array[1,:,1]
-      """
-      if isinstance(index, types.DictType):
-         numIndex = self._numIndexFromDict(index)
-      else:
-         numIndex = index
-      return na.NumArray.__setitem__(self, numIndex, value)
-
-   def _numIndexFromDict(self, d):
-      index = []
-      for dim in range(len(self.shape)):
-         if d.has_key(self.assocname[dim]):
-            index.append(d[self.assocname[dim]])
-         else:
-            index.append(slice(None,None,None))
-      return tuple(index) # must convert to tuple in order to work, bug fix
-     
-   def __repr__(self):
-      " Return printable representation of instance."
-      className= self.__class__.__name__
-      className= className.zfill(5).replace('0', ' ')
-      arr= self.copy()
-      arr.__class__= na.NumArray
-      rep= className + na.NumArray.__repr__(arr)[5:]
-      return rep
-
-   def __str__(self):
-     " Return a pretty printed string of the instance."
-     stri= self.copy()
-     stri.__class__= na.NumArray
-     return na.NumArray.__str__(stri)
-
-   #=====================================
-   # Operations
-   def __eq__(a,b):
-        """ True if a and b have same elements, size and names """
-        if b.__class__ == Table:
-            return (a.tolist() == b.tolist() \
-                    and a._shape == b._shape \
-                    and a.names == b.names)
-        elif b.__class__ == na.NumArray:
-            return (a.tolist() == b.tolist() \
-                    and a._shape == b._shape)
-        else:
-            print 'Can not compare',a.__class__,'with',b.__class__
-            return False
-
-        
-
-    
 def ones(names, shape, type='Int32'):
    return Table(names,shape,na.product(shape)*[1],type)
 
@@ -275,6 +239,7 @@ class TableTestCase(unittest.TestCase):
       names = ('a','b','c')
       shape = (2,3,4)
       self.a = ones(names,shape,type='Float32')
+      self.b = ones(names[1:],shape[1:],type='Float32')
       self.names = names
       self.shape = shape
    
@@ -289,15 +254,50 @@ class TableTestCase(unittest.TestCase):
                 "__eq__ does not work"
 
    def testMul(self):
-       a = Table(['a','b'],[2,3],range(6),'Float32')
-       b = Table(['b','c'],[3,4],range(12),'Float32')
+       a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+       b = Table(['c','b'],[4,3],range(12))
+       c = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+   
+       acpt = na.arange(2*3*4*5,shape=(2,3,4,5), type='Float32')
+       bcpt = na.arange(12,shape=(4,3),type='Float32')[...,na.NewAxis,na.NewAxis]
+       bcpt.transpose([2,1,0,3])
 
-       c = na.arange(6,shape=(2,3))[...,na.NewAxis]
-       d = na.arange(12,shape=(3,4))[na.NewAxis,...]
+       # test the three types of possible notations
+       a*b
+       c*=c
+       b = b*b
 
-       assert (a*b == Table(['a','b','c'],[2,3,4],c*d)), \
+       assert (a == Table(['a','b','c','d'],[2,3,4,5],acpt*bcpt) and \
+               c == Table(['a','b','c','d'],[2,3,4,5],na.arange(2*3*4*5)**2) and \
+               b == Table(['c','b'],[4,3],na.arange(12)**2)), \
               " Multiplication does not work"
 
+   def testDiv(self):
+       a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+       b = Table(['c','b'],[4,3],range(12))
+       c = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+   
+       acpt = na.arange(2*3*4*5,shape=(2,3,4,5), type='Float32')
+       bcpt = na.arange(12,shape=(4,3),type='Float32')[...,na.NewAxis,na.NewAxis]
+       bcpt.transpose([2,1,0,3])
+
+       # test the three types of possible notations
+       a/b
+       c/=c
+       b = b/b
+
+       cres = na.ones(2*3*4*5)
+       cres[0] = 0
+       bres = na.ones(12)
+       bres[0] = 0
+       ares = acpt/bcpt
+       ares[getnan(ares)] = 0
+       
+       assert (a == Table(['a','b','c','d'],[2,3,4,5],ares) and \
+               c == Table(['a','b','c','d'],[2,3,4,5],cres) and \
+               b == Table(['c','b'],[4,3],bres) ), \
+              " Division does not work"
+       
    def testDelegate(self):
        assert (na.alltrue(self.a.flat == self.a.cpt.flat)), \
               " Delegation does not work check __getattr__"
@@ -323,15 +323,35 @@ class TableTestCase(unittest.TestCase):
       assert(self.a[index] == self.a[1,1,1] and \
              self.a[index] == 3.0), \
             "Dictionary Index not equivalent to normal index or could not set properly"
-      
+
+   def testFindCorrespond(self):
+        a = Table(['a','b','c','d','e'])
+        b = Table(['d','b'])
+
+        assert(a.findCorrespond(b) == [3,1,0,2,4]), \
+                "findCorrespond does not work correctly..."
       
 if __name__ == '__main__':
-   suite = unittest.makeSuite(TableTestCase, 'test')
-   runner = unittest.TextTestRunner()
-   runner.run(suite)
+    suite = unittest.makeSuite(TableTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
 
-   a = Table(['a','b'],[2,3],range(6),'Float32')
-   b = Table(['b','c'],[3,4],range(12),'Float32')
+    a = Table(['a','b'],[2,3],range(6))
+    b = Table(['b'],[3],range(3))
+    c = Table(['b','e'],[3,2],range(6))
+    d = Table(['a','b','c','d','e'],[2,2,2,2,2],range(2**5))
+    
+    print a
+    a/a
+    print a
+##    a*c
+##    print a
+##    print c
 
-   c = a*b
-   print c
+    #a*b
+    #print 'mul'
+    #print a
+
+    
+
+  

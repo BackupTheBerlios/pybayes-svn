@@ -30,14 +30,40 @@ class DiscretePotential(Potential, table.Table):
     #=========================
     # Operations
     def Marginalise(self, varnames):
-        """ sum(varnames) self.arr """
+        """ sum(varnames) self.arr
+        eg. a = Pr(A,B,C,D)
+        a.Marginalise(['A','C']) --> Pr(B,D)
+
+        returns a new DiscretePotential instance
+        the variables keep their relative order
+        """
         temp = self.cpt.view()
         ax = [self.assocdim[v] for v in varnames]
         ax.sort(reverse=True)  # sort and reverse list to avoid inexistent dimensions
         for a in ax:
             temp = na.sum(temp, axis = a)
         remainingNames = self.names - set(varnames)
+        
         return self.__class__(remainingNames, temp.shape, temp.flat)
+
+    def __add__(self, other):
+        """
+        sum(X\S)phiX
+
+        marginalise the variables contained in BOTH SepSet AND in Cluster
+        returns a new DiscretePotential instance
+
+        eg: a = Pr(A,B,C)
+            b = Pr(B,C)
+
+            a + b <=> a.Marginalise(set(a.names) - set(b.names))
+            = Sum(A)a = Pr(B,C)
+
+        only the names of the variables contained in b are relevant!
+        no operation with b is done in practice
+        """
+        var = set(v for v in self.names) - set(v for v in other.names)
+        return self.Marginalise(var)
 
     def Normalise(self):
         self.cpt /= na.sum(self.cpt.flat)
@@ -51,41 +77,11 @@ class DiscretePotential(Potential, table.Table):
 
     #===================================
     # Printing
-    def __str__(self): return str(self.cpt)
+    #def __str__(self): return str(self.cpt)
 
     def Printcpt(self):
-        string =  str(self.arr) + '\nshape:'+str(self.arr.shape)+'\nnames:'+str(self.names)+'\nsum : ' +str(na.sum(self.arr.flat))
+        string =  str(self.cpt) + '\nshape:'+str(self.cpt.shape)+'\nnames:'+str(self.names)+'\nsum : ' +str(na.sum(self.cpt.flat))
         print string
-
-# this class should be named discreteJointTree Potential
-# we will later create anotther two classes of JoinTreePotential :
-# - Continuous and SG Potential (continuous & discrete)
-class JoinTreePotential(DiscretePotential):
-    """
-    The potential of each node/Cluster and edge/SepSet in a
-    Join Tree Structure
-    
-    self.cpt = Pr(X)
-    
-    where X is the set of variables contained in Cluster or SepSet
-    self.vertices contains the graph.vertices instances where the variables
-    come from
-    """
-    def __init__(self, names, shape, cpt=None):
-        """ self. vertices must be set """
-        DiscretePotential.__init__(self, names, shape, cpt)
-
-
-    #=========================================
-    # Operations
-    def __add__(self, other):
-        """
-        sum(X\S)phiX
-
-        marginalise the variables contained in BOTH SepSet AND in Cluster
-        """
-        var = set(v for v in self.names) - set(v for v in other.names)
-        return self.Marginalise(var)
 
 
 class DiscretePotentialTestCase(unittest.TestCase):
@@ -101,12 +97,20 @@ class DiscretePotentialTestCase(unittest.TestCase):
         b = self.a.Marginalise(var)
         var2 = set(['c','a'])
         c = self.a.Marginalise(var2)
+        d = DiscretePotential(['b','c'],[3,4],na.arange(12))
+      
 
         assert(b.names == self.a.names - var and \
                b[0,1] == na.sum(self.a[0,1]) and \
                c.names == self.a.names - var2 and \
                na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2),axis=0))), \
                " Marginalisation doesn't work"
+
+    def testAdd(self):
+        d = DiscretePotential(['b','c'],[3,4],na.arange(12))
+        
+        assert(self.a + d == self.a.Marginalise(['a'])), \
+               "Addition does not work..."
     
     def testIntEQIndex(self):
         self.a[1,1,1] = -2
