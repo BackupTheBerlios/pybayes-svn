@@ -3,6 +3,7 @@ import numarray as na
 import delegate
 import table
 import unittest
+import copy
 
 class Potential:
     """ General Potential class that will be inherited by all potentials
@@ -29,22 +30,30 @@ class DiscretePotential(Potential, table.Table):
 
     #=========================
     # Operations
-    def Marginalise(self, varnames):
+    def Marginalise(self, vars):
         """ sum(varnames) self.arr
         eg. a = Pr(A,B,C,D)
-        a.Marginalise(['A','C']) --> Pr(B,D)
+        a.Marginalise(['A','C']) --> Pr(A,C)
+        THIS HAS BEEN REVERSED FROM INITIAL WRITE, TO 
+        MAKE CLOSER TO SPECIFICATION IN HUANG
 
         returns a new DiscretePotential instance
         the variables keep their relative order
         """
+        assert(self.names.issuperset(vars))
+        varnames = self.names.difference(vars)
         temp = self.cpt.view()
         ax = [self.assocdim[v] for v in varnames]
+        ox = list(set(self.assocdim.values()) - set(ax))
+        ox.sort()
+        #extract proper names in proper order
+        names_list = [self.assocname[dim] for dim in ox]
+
         ax.sort(reverse=True)  # sort and reverse list to avoid inexistent dimensions
         for a in ax:
             temp = na.sum(temp, axis = a)
-        remainingNames = self.names - set(varnames)
         
-        return self.__class__(remainingNames, temp.shape, temp.flat)
+        return self.__class__(names_list, temp.shape, temp.flat)
 
     def __add__(self, other):
         """
@@ -63,7 +72,13 @@ class DiscretePotential(Potential, table.Table):
         no operation with b is done in practice
         """
         var = set(v for v in self.names) - set(v for v in other.names)
-        return self.Marginalise(var)
+        return self.Marginalise(var) 
+    
+    def __copy__(self):
+        names = copy.copy(self.names_list)
+        shape = copy.copy(self.shape)
+        newcpt = self.cpt.copy()
+        return self.__class__(names,shape,newcpt)
 
     def Normalise(self):
         self.cpt /= na.sum(self.cpt.flat)
@@ -82,7 +97,7 @@ class DiscretePotential(Potential, table.Table):
     def Printcpt(self):
         string =  str(self.cpt) + '\nshape:'+str(self.cpt.shape)+'\nnames:'+str(self.names)+'\nsum : ' +str(na.sum(self.cpt.flat))
         print string
-
+    
 
 class DiscretePotentialTestCase(unittest.TestCase):
     def setUp(self):

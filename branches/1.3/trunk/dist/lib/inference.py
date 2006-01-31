@@ -138,12 +138,8 @@ class Cluster(graph.Vertex):
         # Projection
         
         oldphiR = e.potential                           # oldphiR = phiR
-        newphiR = self.potential+e.potential            # phiR = sum(X/R)phiX
-
-        # we shouldn't use the .cpt attribute because continuous potentials
-        # will not have a cpt...
-        #---TODO: create an update method
-        e.potential.cpt = newphiR.copy()
+        newphiR = self.potential.Marginalise(e.potential.names)            # phiR = sum(X/R)phiX
+        e.potential = copy.copy(newphiR)
 
         # Absorption
         newphiR/oldphiR
@@ -486,7 +482,7 @@ class JoinTree(graph.Graph):
         # find a cluster containing v
         # v.parentcluster is a convenient choice, can make better...
         c = self.clusterdict[v]
-        res = c.potential.Marginalise(c.other(v))
+        res = c.potential.Marginalise(v)
         res.Normalise()
         return res
     

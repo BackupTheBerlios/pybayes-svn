@@ -28,17 +28,17 @@ class Distribution(object):
         self.family = [v] + [parent for parent in v.in_v]
         self.ndimensions = len(self.family)
         self.parents = self.family[1:]
-        self.names = [v.name for v in self.family]
+        self.names_list = [v.name for v in self.family]
         # order = dict{ var name : index }
         #OPTIMIZE: what is this used for outside the discrete case in which it is already defined in table class
-        self.order = dict((k,v) for k,v in zip(self.names, range(len(self.names))))
+        self.order = dict((k,v) for k,v in zip(self.names_list, range(len(self.names_list))))
         
         #used for learning
         self.isAjustable = isAdjustable
         
     def __str__(self):
-        string = 'Distribution for node : '+ self.names[0]
-        if len(names)>1: string += '\nParents : ' + str(self.names[1:])
+        string = 'Distribution for node : '+ self.names_list[0]
+        if len(self.names_list)>1: string += '\nParents : ' + str(self.names_list[1:])
 
         return string
 
@@ -57,7 +57,7 @@ class MultinomialDistribution(Distribution, Table):
         self.sizes = [v.nvalues for v in self.family]
 
         # initialize the cpt
-        Table.__init__(self, self.names, self.sizes, cpt)
+        Table.__init__(self, self.names_list, self.sizes, cpt)
 
         #Used for Learning
         self.counts = None
