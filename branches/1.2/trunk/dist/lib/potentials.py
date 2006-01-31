@@ -118,6 +118,30 @@ class DiscretePotentialTestCase(unittest.TestCase):
         assert(self.a[1,1,1] == -3), \
               "Set by EQ does not work"
 
+    def testAll(self):
+        """ this is actually the Water-sprinkler example """
+        c = DiscretePotential(['c'],[2],[0.5,0.5])                  # Pr(C)
+        s = DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1]) # Pr(S|C)
+        r = DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])    # Pr(R|C)
+        w = DiscretePotential(['w','s','r'],[2,2,2])                # Pr(W|S,R)
+        w[:,0,0]=[0.99, 0.01]
+        w[:,0,1]=[0.1, 0.9]
+        w[:,1,0]=[0.1, 0.9]
+        w[:,1,1]=[0.0, 1.0]
+
+        cr = c*r        # Pr(C,R)     = Pr(R|C) * Pr(C)
+        crs = cr*s      # Pr(C,S,R)   = Pr(S|C) * Pr(C,R)
+        crsw = crs*w    # Pr(C,S,R,W) = Pr(W|S,R) * Pr(C,R,S)
+
+        # this can be verified using any bayesian network software
+
+        # check the result for the multiplication and marginalisation
+        assert(na.allclose(crsw.Marginalise('s r w'.split()).cpt,[0.5,0.5]) and \
+               na.allclose(crsw.Marginalise('c r w'.split()).cpt,[0.7,0.3]) and \
+               na.allclose(crsw.Marginalise('c s w'.split()).cpt,[0.5,0.5]) and \
+               na.allclose(crsw.Marginalise('c s r'.split()).cpt,[0.349099,0.6509])),\
+                "Something's wrong on the big Test..."
+
 
 if __name__ == '__main__':
     suite = unittest.makeSuite(DiscretePotentialTestCase, 'test')
@@ -126,3 +150,26 @@ if __name__ == '__main__':
     names = ('a','b','c')
     shape = (2,3,4)
     a = DiscretePotential(names,shape,na.arange(24))
+
+    names = ('a','d','b')
+    shape = (2,5,3)
+    b = DiscretePotential(names,shape,na.arange(2*5*3))
+
+    c = DiscretePotential(['c'],[2],[0.5,0.5])
+    s = DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1])
+    r = DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])
+    w = DiscretePotential(['w','s','r'],[2,2,2])
+    w[:,0,0]=[0.99, 0.01]
+    w[:,0,1]=[0.1, 0.9]
+    w[:,1,0]=[0.1, 0.9]
+    w[:,1,1]=[0.0, 1.0]
+
+    cr = c*r
+    crs = cr*s
+    crsw = crs*w
+
+    print 'c:', crsw.Marginalise('s r w'.split())
+    print 's:', crsw.Marginalise('c r w'.split())
+    print 'r:', crsw.Marginalise('c s w'.split())
+    print 'w:', crsw.Marginalise('c s r'.split())
+

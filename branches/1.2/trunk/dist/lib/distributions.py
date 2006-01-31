@@ -62,12 +62,7 @@ class MultinomialDistribution(Distribution, Table):
         #Used for Learning
         self.counts = None
     
-    def __getitem__(self, index):
-        Table.__getitem__(self, index)
     
-    def __setitem(self, index, value):
-        Table.__getitem__(self, index, values)
-        
     def setCPT(self, cpt):
         ''' put values into self.cpt, delegated to Table class'''
         Table.setValues(self, cpt)
@@ -346,8 +341,6 @@ if __name__ == '__main__':
 
     G.InitDistributions()
 
-    w.SetDistribution(Multinomial_Distribution)
-    index = {'w':0,'c':1}
    
     #ds = s.SetDistribution(Multinomial_Distribution)
     #ds.Normalize()
@@ -356,13 +349,5 @@ if __name__ == '__main__':
     #dw = w.SetDistribution(Gaussian_Distribution,mu=[0,1])
     #print dw
 
-    class A:
-        cpt = na.arange(10,shape=(2,5))
-        def __getitem__(self,i):
-            print i,i.__class__
-            return self.cpt[i]
-
-    a=A()
-    a[0]
     
     

@@ -146,9 +146,9 @@ class Cluster(graph.Vertex):
         e.potential.cpt = newphiR.copy()
 
         # Absorption
-        newphiR/oldphiR
+        newphiR /= oldphiR
         
-        c.potential * newphiR
+        c.potential *= newphiR
 
 
     def CollectEvidence(self, X=None):
@@ -725,4 +725,4 @@ class MCMCTestCase(InferenceEngineTestCase):
     
     def testLearning(self):
         InferenceEngineTestCase.testLearning()
-    
+

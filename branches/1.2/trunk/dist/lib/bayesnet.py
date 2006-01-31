@@ -32,7 +32,6 @@ import potentials
 import inference
 
 seed()
-na.Error.setMode(invalid='ignore')
 #logging.basicConfig(level= logging.INFO)
 
 # removed CPT and placed Distriution
@@ -234,42 +233,47 @@ if __name__=='__main__':
     #runner = unittest.TextTestRunner()
     #runner.run(suite)
     
-##    G = BNet('Water Sprinkler Bayesian Network')
-##    
-##    c,s,r,w = [G.add_v(BVertex(name,True,2)) for name in 'c s r w'.split()]
-##    
-##    for ep in [(c,r), (c,s), (r,w), (s,w)]:
-##        G.add_e(graph.DirEdge(len(G.e), *ep))
-##        
-##    G.InitDistributions()
-##    
-##    c.setCPT([0.5, 0.5])
-##    s.setCPT([0.5, 0.9, 0.5, 0.1])
-##    r.setCPT([0.8, 0.2, 0.2, 0.8])
-##    w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
-##    
-##    print G
-##    
-##    JT = inference.JoinTree(G)
-##    clusters = JT.all_v
-##    c1,c2 = clusters[:]
-##    
-##    print c1.potential
-##    print c2.potential
-##    #JT.SetObs(['w','r'],[1,1])
-##    #print JT.Marginalise('w')
-##    JT.MargAll()
-    G = BNet('test')
-
-    a,b = [G.add_v(BVertex(name)) for name in 'a b'.split()]
-
-    for ep in [(a,b)]:
+    G = BNet('Water Sprinkler Bayesian Network')
+    
+    c,s,r,w = [G.add_v(BVertex(name,True,2)) for name in 'c s r w'.split()]
+    
+    for ep in [(c,r), (c,s), (r,w), (s,w)]:
         G.add_e(graph.DirEdge(len(G.e), *ep))
-
+        
     G.InitDistributions()
-                
-    a.setCPT([0.5, 0.5])
-    b.setCPT([0.1, 0.2, 0.3, 0.4])
+    
+    c.setCPT([0.5, 0.5])
+    s.setCPT([0.5, 0.9, 0.5, 0.1])
+    r.setCPT([0.8, 0.2, 0.2, 0.8])
+    w.distribution[:,0,0]=[0.99, 0.01]
+    w.distribution[:,0,1]=[0.1, 0.9]
+    w.distribution[:,1,0]=[0.1, 0.9]
+    w.distribution[:,1,1]=[0.0, 1.0]
+    
+    print G
+    
+    JT = inference.JoinTree(G)
+    clusters = JT.all_v
+    c1,c2 = clusters[:]
+    
+    print c1.potential
+    #print c2.potential
+    #JT.SetObs(['w','r'],[1,1])
+    #print JT.Marginalise('w')
+    JT.MargAll()
+##    G = BNet('test')
+##
+##    a,b = [G.add_v(BVertex(name)) for name in 'a b'.split()]
+##
+##    for ep in [(a,b)]:
+##        G.add_e(graph.DirEdge(len(G.e), *ep))
+##
+##    G.InitDistributions()
+##                
+##    a.setCPT([0.5, 0.5])
+##    b.setCPT([0.1, 0.2, 0.3, 0.4])
+
+    
 
 if __name__=='__mains__':
     G = BNet('Bnet')

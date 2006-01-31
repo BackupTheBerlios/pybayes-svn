@@ -18,8 +18,9 @@ import numarray as na
 from copy import copy
 from numarray.ieeespecial import getnan
 
-# same behaviour as your class, but this one is not a children of numarray
-# it simply contains an array. Operations are delegated to this array
+# avoid divide by zero warnings...
+na.Error.setMode(invalid='ignore', dividebyzero='ignore')
+
 class Table:
     def __init__(self, names, shape = None, elements = None, type = 'Float32'):
       ''' names = ['a','b',...]
@@ -34,8 +35,7 @@ class Table:
           elements = na.ones(shape = shape)
           
       self.cpt = na.array(sequence=elements, shape=shape, type=type)
-      
-      self.shape = tuple(shape)
+
       self.names = set(names)
       self.names_list = list(names) # just to keep the order in an easy to use way
 
@@ -50,6 +50,10 @@ class Table:
     def __getattr__(self, name):
         """ delegate to self.cpt """
         return getattr(self.cpt,name)
+
+    def __copy__(self):
+        """ copy method """
+        return Table(self.names_list,self.shape,self.cpt,self.cpt.type())
 
     #===================================
     # Put values into the cpt
@@ -109,6 +113,19 @@ class Table:
 
     #=====================================
     # Operations
+    def addDim(self, newDimName):
+        """adds a new unary dimension to the table """
+        # add a new dimension to the cpt
+        self.cpt = self.cpt[...,na.NewAxis]
+
+        self.names.add(newDimName)
+        self.names_list.append(newDimName) # just to keep the order in an easy to use way
+
+        # dict of name:dim number pairs
+        self.assocdim[newDimName] = len(self.names)-1
+        # dict of dim:name pairs
+        self.assocname[len(self.names)-1] = newDimName     
+        
     def __eq__(a,b):
         """ True if a and b have same elements, size and names """
         if b.__class__ == na.NumArray:
@@ -131,100 +148,115 @@ class Table:
     def __mul__(a,b):
         """
         in place multiplication
+        PRE:
+            a=Pr(A); A = {'a','b','c'}
+            b=Pr(B); B = {'c','a','d','e'}
+
+        usage:
         a = a*b <==> a*b <==> a*=b
 
-        a keeps the order of it's dimensions
-        b MUST be a subset of a
-        b can have any variable order
+        POST:
+            a=Pr(A U B) = Pr(a,b,c,d,e)
+
+        Notes :
+        -   a keeps the order of its existing variables
+        -   any new variables in b (d and e) are added at the end of a in the
+            order they appear in b
+        -   b is not touched during this operation
+        -   operation is done in-place for a, a is not the same after the operation
         """
+        # prepare dimensions in a and b for multiplication
         cptb = a.prepareDimensions(b)
 
         # multiply in place, a's values are changed
-        a.cpt *= cptb
+        #a.cpt *= cptb  # this does not work correctly for some reason...
+        #na.multiply(a.cpt,cptb,a.cpt) # does not work either
+        a.cpt = a.cpt * cptb    #this one works fine
+                                #is this a numarray BUG????
 
         return a
 
     def __div__(a, b):
         """
-        in place multiplication
+        in place division
+        PRE:
+            a=Pr(A); A = {'a','b','c'}
+            b=Pr(B); B = {'c','a','d','e'}
+
+        usage:
         a = a/b <==> a/b <==> a/=b
 
-        a keeps the order of it's dimensions
-        b MUST be a subset of a
-        b can have any variable order
+        POST:
+            a=Pr(A U B) = Pr(a,b,c,d,e)
 
-        0/0 are replaced by 0s
+        Notes :
+        -   a keeps the order of its existing variables
+        -   any new variables in b (d and e) are added at the end of a in the
+            order they appear in b
+        -   b is not touched during this operation
+        -   operation is done in-place for a, a is not the same after the operation
+        -   0/0 are replaced by 0s
         """
         cptb = a.prepareDimensions(b)
 
         # divide in place, a's values are changed
-        a.cpt /= cptb
-
+        #a.cpt /= cptb  # this does not work correctly for some reason...
+        #na.divide(a.cpt,cptb,a.cpt) #does not work either
+        a.cpt = a.cpt / cptb    #this one works fine
+                                #is this a numarray BUG????
         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
         # replace INFs by 0s
         a.cpt[getnan(a.cpt)] = 0
+        #---TODO: replace this very SLOW function with a ufunc
 
         return a
 
     def prepareDimensions(a,b):
-        """
-        prepares b.cpt for multiplication with a
-            - b MUST be a subset of a
-            - new dimensions are added for each variable in a that does not
-              exist in b
-            - variables are put in the correct order
-            - does not touch b.cpt
-
-        return b.cpt ready for multiplication with a.cpt
-        """
-        #FIXME: Add assertion that both tables are over same variables
-
-        cptb = b.cpt
-        # create new empty dimensions in cptb for the extra a variables
-        while cptb.rank < a.cpt.rank: cptb = cptb[...,na.NewAxis]
-        
-        # find correspondance between b vars and a vars
-        correspondab = a.findCorrespond(b)
-
-        # put the b dimensions into the right place
-        cptb.transpose(correspondab)
-
-        return cptb
-    
-    def findCorrespond(self, other):
         """ Returns the correspondance vector between the variables of
-        two Tables
-        other.variables MUST be a subset of self.variables !!!
-        eg. a= Pr(A,B,C)
-            b= Pr(C,B)
-            a.FindCorrespond(b) --> [2,1,0]
-            b.FindCorrespond(a) --> error (a not a subset of b)
-
-            a=Pr(A,B,C,D,E)
-            b=Pr(B,E)
-            a.FindCorrespond(b) --> [1,4,0,2,3]
-
-        any variables in a but do not exist in b are added at the end of list
+        two Tables and inserts any extra dimensions needed in both a
+        and b. the b dimensions are transposed to correspond with the ones
+        in a.
+        
+        eg. a= Pr(A,B,C,D,E)
+            b= Pr(C,G,A,F)
+            a.prepareDims(b) --> a = Pr(A,B,C,D,E,G,F)  (G,F added at the end)
+                                 b = Pr(A,B,C,D,E,G,F)  (B,D,E added and dimensions
+                                                         rearranged)
+        Notes:
+        -    the operation is destructive for a only, b remains unchanged
+        -    a and b must be Table instances
+        -    a always keeps the same order of its existing variables
+        -    any new variables found in b are added at the end of a in the order
+             they appear in b.
+        -    new dimensions are added with numarray.NewAxis
+        -    a and b have exactly the same dimensions at the end and are ready
+             for any kind of operation, *,/,...
         """
-        #---TODO: ASSERT other must be a subset of self !!!
-        #raise str(other.names_list) + " not a subset of " + str(self.names_list)
+        bcpt = b.cpt.copy()     # don't touch b
         
-        correspond = []
-        for varb in other.names_list:
-            # varb is the name of a variable in other
-            # self MUST contain all the variables of b
-            correspond.append(self.assocdim[varb])
+        for varb in b.names_list:
+            # varb is the name of a variable in b
+            if not a.assocdim.has_key(varb):
+                a.addDim(varb) # add new variable to a
 
-        k = 0
-        for vara in self.names_list:
-            # vara is the name of a variable in self
-            # add all variables contained in a and not in b
-            if not other.assocdim.has_key(vara):
-                correspond.append(k)
-            k += 1
+        # a now contains all the variables contained in b
+        # A = A U B
 
-        return correspond
-        
+        correspond = []        
+        bnames = copy(b.names_list)
+        for vara in a.names_list:
+            # vara is the name of a variable in a
+            if not b.assocdim.has_key(vara):
+                bcpt = bcpt[...,na.NewAxis]
+                bnames.append(vara)
+            correspond.append(bnames.index(vara))
+
+        # transpose dimensions in b to match those in a
+        btr = na.transpose(bcpt, axes = correspond)
+
+        # btr is now ready for any operation for a
+        return btr
+    
 def ones(names, shape, type='Int32'):
    return Table(names,shape,na.product(shape)*[1],type)
 
@@ -255,47 +287,47 @@ class TableTestCase(unittest.TestCase):
 
    def testMul(self):
        a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
-       b = Table(['c','b'],[4,3],range(12))
-       c = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+       b = Table(['c','b','e'],[4,3,6],range(12*6))
+       c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
    
-       acpt = na.arange(2*3*4*5,shape=(2,3,4,5), type='Float32')
-       bcpt = na.arange(12,shape=(4,3),type='Float32')[...,na.NewAxis,na.NewAxis]
-       bcpt.transpose([2,1,0,3])
+       acpt = copy(a.cpt)[...,na.NewAxis]
+       bcpt = copy(b.cpt)[...,na.NewAxis,na.NewAxis]
+       bcpt.transpose([3,1,0,4,2])
 
        # test the three types of possible notations
        a*b
        c*=c
        b = b*b
 
-       assert (a == Table(['a','b','c','d'],[2,3,4,5],acpt*bcpt) and \
-               c == Table(['a','b','c','d'],[2,3,4,5],na.arange(2*3*4*5)**2) and \
-               b == Table(['c','b'],[4,3],na.arange(12)**2)), \
+       assert (a == Table(['a','b','c','d','e'],[2,3,4,5,6],acpt*bcpt) and \
+               c == Table(['a','b','c','d','e'],[2,3,4,5,6],na.arange(2*3*4*5*6)**2) and \
+               b == Table(['c','b','e'],[4,3,6],na.arange(12*6)**2)), \
               " Multiplication does not work"
 
    def testDiv(self):
        a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
-       b = Table(['c','b'],[4,3],range(12))
-       c = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+       b = Table(['c','b','e'],[4,3,6],range(12*6))
+       c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
    
-       acpt = na.arange(2*3*4*5,shape=(2,3,4,5), type='Float32')
-       bcpt = na.arange(12,shape=(4,3),type='Float32')[...,na.NewAxis,na.NewAxis]
-       bcpt.transpose([2,1,0,3])
-
+       acpt = copy(a.cpt)[...,na.NewAxis]
+       bcpt = copy(b.cpt)[...,na.NewAxis,na.NewAxis]
+       bcpt.transpose([3,1,0,4,2])
+       
        # test the three types of possible notations
        a/b
        c/=c
        b = b/b
 
-       cres = na.ones(2*3*4*5)
+       cres = na.ones(2*3*4*5*6)
        cres[0] = 0
-       bres = na.ones(12)
+       bres = na.ones(12*6)
        bres[0] = 0
        ares = acpt/bcpt
        ares[getnan(ares)] = 0
        
-       assert (a == Table(['a','b','c','d'],[2,3,4,5],ares) and \
-               c == Table(['a','b','c','d'],[2,3,4,5],cres) and \
-               b == Table(['c','b'],[4,3],bres) ), \
+       assert (a == Table(['a','b','c','d','e'],[2,3,4,5,6],ares) and \
+               c == Table(['a','b','c','d','e'],[2,3,4,5,6],cres) and \
+               b == Table(['c','b','e'],[4,3,6],bres) ), \
               " Division does not work"
        
    def testDelegate(self):
@@ -324,12 +356,29 @@ class TableTestCase(unittest.TestCase):
              self.a[index] == 3.0), \
             "Dictionary Index not equivalent to normal index or could not set properly"
 
-   def testFindCorrespond(self):
-        a = Table(['a','b','c','d','e'])
-        b = Table(['d','b'])
+   def testAddDim(self):
+        a = Table('a b c'.split())
+        a.addDim('d')
 
-        assert(a.findCorrespond(b) == [3,1,0,2,4]), \
-                "findCorrespond does not work correctly..."
+        assert(a.names == set('a b c d'.split()) and \
+               a.names_list ==  'a b c d'.split() and \
+               a.assocdim.has_key('d') and \
+               a.assocname.has_key(3)), \
+               "add Dim does not work correctly..."
+        
+
+   def testPrepareDimensions(self):
+        #print 'a:2,b:3,c:4,d:5,e:6,g:7,f:8'
+        a = Table('a b c d e'.split(), [2,3,4,5,6])
+        b = Table('c g a f'.split(), [4,7,2,8])
+
+        bcpt = a.prepareDimensions(b)
+
+        assert(bcpt.shape == tuple([2,1,4,1,1,7,8]) and \
+               a.cpt.shape == tuple([2,3,4,5,6,1,1]) and \
+               a.names_list == 'a b c d e g f'.split()), \
+               " prepareDimensions does not work..."
+
       
 if __name__ == '__main__':
     suite = unittest.makeSuite(TableTestCase, 'test')
