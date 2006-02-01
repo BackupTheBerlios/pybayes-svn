@@ -116,18 +116,22 @@ class Table:
     def __eq__(a,b):
         """ True if a and b have same elements, size and names """
         if b.__class__ == na.NumArray:
-            return (na.alltrue(a.cpt.flat == b.flat) \
-                    and a.shape == b.shape)
+            return(na.all(a.cpt == b) and a.shape == b.shape)
         elif b == None: 
             return False
         elif isinstance(b, (int, float, long)):
             return a.cpt == b
+        elif isinstance(b, Table):
+            # b is a Table or child class, should account for dims being in different order
+            if a.names == b.names:
+                a.transpose(b.names_list)
+                #FIXME: there is a bug in numarrays __eq__, so have to use allclose
+                ret = na.allclose(a,b,atol=.000001)
+            else:
+                ret = False
+            return ret
         else:
-            # the b class should better be a Table or something like that
-            return (a.shape == b.shape \
-                    and a.names_list == b.names_list \
-                    and na.alltrue(a.cpt.flat == b.cpt.flat)  \
-                    )
+            raise TypeError("b is not a valid type")
 
     def __imul__(self,b): return self*b
     def __idiv__(self,b): return self/b
@@ -144,6 +148,7 @@ class Table:
         #FIXME: fixed else case get rid of assert
         assert(self.names.issuperset(b.names))
         if self.names.issuperset(b.names):
+            #prepareDimensions transposes self
             cptb = self.prepareDimensions(b)
             # multiply in place, a's values are changed
             self.cpt *= cptb
@@ -175,9 +180,9 @@ class Table:
 
         return self
 
-    def __div__(a, b):
+    def __div__(self, b):
         """
-        in place multiplication
+        in place division
         a = a/b <==> a/b <==> a/=b
 
         a keeps the order of it's dimensions
@@ -186,16 +191,17 @@ class Table:
 
         0/0 are replaced by 0s
         """
-        cptb = a.prepareDimensions(b)
+        assert(self.names.issuperset(b.names))
+        cptb = self.prepareDimensions(b)
 
         # divide in place, a's values are changed
-        a.cpt /= cptb
+        self.cpt /= cptb
 
         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
         # replace INFs by 0s
-        a.cpt[getnan(a.cpt)] = 0
+        self.cpt[getnan(self.cpt)] = 0
 
-        return a
+        return self
 
     def prepareDimensions(self,b):
         """
@@ -203,10 +209,10 @@ class Table:
             - b MUST be a subset of a
             - new dimensions are added for each variable in a that does not
               exist in b
-            - variables are put in the correct order
+            - 1D dimensions must be at the end of b, so transpose self to match b's dimensions
             - does not touch b.cpt
 
-        return b.cpt ready for multiplication with a.cpt
+        return b.cpt ready for multiplication with newly transposed a
         """
         #Assumes that b is a subset of self
         #if not self.names.issuperset(b.names):
@@ -216,13 +222,27 @@ class Table:
         
         while cptb.rank < self.cpt.rank: cptb = cptb[...,na.NewAxis]
         
-        # find correspondance between b vars and a vars
-        correspondab = self.findCorrespond(b)
-
-        # put the b dimensions into the right place
-        cptb.transpose(correspondab)
+        #NewAxis is 1D, has to be last dimension to work, so transpose self, not b.
+        vars = b.names_list + list(self.names - b.names)
+        self.transpose(vars)
 
         return cptb
+    
+    def transpose(self, vars):
+        """ transposes the dimensions of self to match the order given in the vars list.
+        """
+        #build transpose list for underlying cpt
+        shape = []
+        for var in vars:
+            shape.append(self.assocdim[var])
+        self.cpt.transpose(shape)
+        self.names_list = vars # just to keep the order in an easy to use way
+        
+        # dict of name:dim number pairs
+        self.assocdim = dict(zip(vars,range(len(vars))))
+        
+        # dict of dim:name pairs
+        self.assocname = dict(enumerate(vars))
     
     def findCorrespond(self, other):
         """ Returns the correspondance vector between the variables of
@@ -300,69 +320,79 @@ def array(names, shape, type='Int32'):
 
 class TableTestCase(unittest.TestCase):
     def setUp(self):
-       names = ('a','b','c')
+       names = ['a','b','c']
        shape = (2,3,4)
        self.a = ones(names,shape,type='Float32')
        self.b = ones(names[1:],shape[1:],type='Float32')
        self.names = names
        self.shape = shape
     
+    def testTranspose(self):
+        a = Table(['a','b'],[2,3],range(6),'Float32')
+        a.transpose(['b','a'])
+        b = na.array(range(6),shape=(2,3))
+        b.transpose((1,0))
+        d1 = {'b':0,'a':1}
+        d2 = {0:'b',1:'a'}
+        l = ['b','a']
+        assert(a.shape == b.shape and na.all(a.cpt.flat == b.flat) and \
+               a.assocdim == d1 and a.assocname == d2 and \
+               a.names == set(l) and a.names_list == l), \
+              "transpose does not work"
+    
     def testEq(self):
         a = Table(['a','b'],[2,3],range(6),'Float32')
         b = Table(['a','b'],[2,3],range(6),'Float32')
         c = Table(['a'],[6],range(6),'Float32')
         d = na.arange(6,shape=(2,3))
+        e = Table(['a','b'],[2,3],range(6),'Float32')
+        e.transpose(['b','a'])
         assert(a == b and \
-               not a == c and \
-               a == d), \
-                 "__eq__ does not work"
+               not(a == c) and \
+               a == d and \
+               a == e), "__eq__ does not work"
  
     def testMul(self):
-        a = Table(['c','d'],[2,3],range(2*3))
-        #a = Table(['a','b','c'],[2,3,4],range(2*3*4))
-        b = Table(['c','b'],[2,4],range(2*4))
-        c = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
-        a*b
-        acpt = na.arange(2*3*4*5,shape=(2,3,4,5), type='Float32')
-        bcpt = na.arange(12,shape=(4,3),type='Float32')[...,na.NewAxis,na.NewAxis]
-        bcpt.transpose([2,1,0,3])
- 
-        # test the three types of possible notations
-        a*b
-        c*=c
-        b = b*b
- 
-        assert (a == Table(['a','b','c','d'],[2,3,4,5],acpt*bcpt) and \
-                c == Table(['a','b','c','d'],[2,3,4,5],na.arange(2*3*4*5)**2) and \
-                b == Table(['c','b'],[4,3],na.arange(12)**2)), \
-               " Multiplication does not work"
+        a = Table(['r','s','c'],[2,2,2],[1,1,1,1,1,1,1,1])
+        b = Table(['r','s','c'],[2,2,2],[2,2,2,2,2,2,2,2])
+        a*=b
+        assert(a == b), "Multiplication does not work on basic"
+    
+    def testMulAddOne(self):
+        a = Table(['r','s','c'],[2,2,2],[.4,.1,.4,.1,.1,.4,.1,.4])
+        b = Table(['s','c'],[2,2],[.5,.9,.5,.1])
+        c = Table(['r','s','c'],[2,2,2],[.2,.09,.2,.01,.05,.35999998,.05,.04])
+        a *= b
+        assert(a == c), "Multiplication does not work on AddOne"
+    
+    def testMulAddTwo(self):
+        a = Table(['r','s','c'],[2,2,2],[.4,.1,.4,.1,.1,.4,.1,.4])
+        b = Table(['s'],[2],[.2,.8])
+        c = Table(['r','s','c'],[2,2,2],[.08,.02,.32,.08,.02,.08,.08,.32])
+        a *= b
+        assert(a == c), "Multiplication does not work on AddTwo"
  
     def testDiv(self):
-        a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
-        b = Table(['c','b'],[4,3],range(12))
-        c = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+        a = Table(['r','s','c'],[2,2,2],[1,1,1,1,1,1,1,1])
+        b = Table(['r','s','c'],[2,2,2],[2,2,2,2,2,2,2,2])
+        c = Table(['r','s','c'],[2,2,2],[.5,.5,.5,.5,.5,.5,.5,.5])
+        a /= b
+        assert(a == c), "Division does not work on basic"
     
-        acpt = na.arange(2*3*4*5,shape=(2,3,4,5), type='Float32')
-        bcpt = na.arange(12,shape=(4,3),type='Float32')[...,na.NewAxis,na.NewAxis]
-        bcpt.transpose([2,1,0,3])
- 
-        # test the three types of possible notations
-        a/b
-        c/=c
-        b = b/b
- 
-        cres = na.ones(2*3*4*5)
-        cres[0] = 0
-        bres = na.ones(12)
-        bres[0] = 0
-        ares = acpt/bcpt
-        ares[getnan(ares)] = 0
-        
-        assert (a == Table(['a','b','c','d'],[2,3,4,5],ares) and \
-                c == Table(['a','b','c','d'],[2,3,4,5],cres) and \
-                b == Table(['c','b'],[4,3],bres) ), \
-               " Division does not work"
-        
+    def testDivAddOne(self):
+        a = Table(['r','s','c'],[2,2,2],[.4,.1,.4,.1,.1,.4,.1,.4])
+        b = Table(['s','c'],[2,2],[.5,.9,.5,.1])
+        c = Table(['r','s','c'],[2,2,2],[.8,.11111112,.8,1,.2,.44444448,.2,4])
+        a /= b
+        assert(a == c), "Division does not work on AddOne"
+    
+    def testDivAddTwo(self):
+        a = Table(['r','s','c'],[2,2,2],[.4,.1,.4,.1,.1,.4,.1,.4])
+        b = Table(['s'],[2],[.2,.8])
+        c = Table(['r','s','c'],[2,2,2],[2,.5,.5,.125,.5,2,.125,.5])
+        a /= b
+        assert(a == c), "Division does not work on AddTwo"
+                
     def testDelegate(self):
         assert (na.alltrue(self.a.flat == self.a.cpt.flat)), \
                " Delegation does not work check __getattr__"
@@ -401,23 +431,3 @@ if __name__ == '__main__':
     suite = unittest.makeSuite(TableTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
-
-    a = Table(['a','b'],[2,3],range(6))
-    b = Table(['b'],[3],range(3))
-    c = Table(['b','e'],[3,2],range(6))
-    d = Table(['a','b','c','d','e'],[2,2,2,2,2],range(2**5))
-    
-    print a
-    a/a
-    print a
-##    a*c
-##    print a
-##    print c
-
-    #a*b
-    #print 'mul'
-    #print a
-
-    
-
-  
