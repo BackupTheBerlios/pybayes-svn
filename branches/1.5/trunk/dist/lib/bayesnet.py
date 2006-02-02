@@ -151,27 +151,21 @@ class BNet(graph.Graph):
             v.rand()
             v.makecpt()
     
-    def Sample(self):
-        """ Generate a sample of the network
+    def Sample(self,n=1):
+        """ Generate a sample of the network, n is the number of samples to generate
         """
-        sample = {}
-        #OPTIMIZE: could make this faster
-        vertices = self.v.values()
-        lastN = len(vertices) - 1
-        while len(vertices) > 0:
-            assert(lastN < len(self.v.values())), 'No nodes have no parents'
-            for v in vertices:
-                allSet = True
-                for parent in v.in_v():
-                    if not sample.has_key(parent.name):
-                        allSet = False
-                        break
-                if allSet:
-                    sample[v.name] = v.distribution.Sample(sample)
-                    vertices -= v
-                    lastN -= 1
-        return sample
-
+        assert(len(self.v) > 0)
+        samples = []
+        topological = self.topological_sort(self.v.values()[0])
+        for i in range(n):
+            sample = {}
+            for v in topological:
+                assert(not v.distribution == None), "vertex's distribution is not initialized"
+                sample[v.name] = v.distribution.Sample(sample)
+            samples.append(sample)
+        return samples
+    
+    
 class BNetTestCase(unittest.TestCase):
     """ Basic Test Case suite for BNet
     """
@@ -257,9 +251,12 @@ if __name__=='__main__':
     print c1.potential
     print c2.potential
     JT.SetObs(['w','r'],[1,1])
-    print JT.Marginalise('s')
-    print JT.Marginalise('w')
-    print JT.Marginalise('s')
+    a = JT.Marginalise('s')
+    b = JT.Marginalise('w')
+    c = JT.Marginalise('s')
+    assert(na.allclose(a.cpt, na.array([.8055, .1945],shape=(1,2),type='Float32'),atol=.0001)) 
+    assert(na.allclose(b.cpt, na.array([0, 1],shape=(1,2),type='Float32'),atol=.0001)) 
+    assert(na.allclose(c.cpt, na.array([.8055, .1945],shape=(1,2),type='Float32'),atol=.0001)) 
     #JT.MargAll()
     #G = BNet('test')
 

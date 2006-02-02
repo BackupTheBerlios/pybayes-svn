@@ -1,6 +1,7 @@
 import delegate # no longer needed. Only RawCPT uses it, erase it when RawCPT doesn't exist anymore
 import types
 import numarray as na
+import numarray.random_array as ra
 from table import Table
 
 
@@ -34,7 +35,7 @@ class Distribution(object):
         self.order = dict((k,v) for k,v in zip(self.names_list, range(len(self.names_list))))
         
         #used for learning
-        self.isAjustable = isAdjustable
+        self.isAdjustable = isAdjustable
         
     def __str__(self):
         string = 'Distribution for node : '+ self.names_list[0]
@@ -63,10 +64,10 @@ class MultinomialDistribution(Distribution, Table):
         self.counts = None
     
     def __getitem__(self, index):
-        Table.__getitem__(self, index)
+        return Table.__getitem__(self, index)
     
     def __setitem(self, index, value):
-        Table.__getitem__(self, index, values)
+        return Table.__getitem__(self, index, values)
         
     def setCPT(self, cpt):
         ''' put values into self.cpt, delegated to Table class'''
@@ -76,11 +77,11 @@ class MultinomialDistribution(Distribution, Table):
         """ puts the cpt into canonical form : Sum(Pr(x=i|Pa(x)))=1 for each
         i in values(x)
         """
-        # add all dimensions except for the first one
-        # add a new empty dimension to keep the same rank as self.cpt
+        #Table class might have transposed away from "original" order, but family would not have been changed, only names_list
+        self.transpose(self.family)
         s = self.cpt
-        for i in range(1,self.ndimensions):
-            s = na.sum(s,axis = 1)[...,na.NewAxis]
+        for i in range(self.ndimensions):
+            s = na.sum(s,axis = 0)[...,na.NewAxis]
         self.cpt /= s
         return self.cpt
 
@@ -91,24 +92,37 @@ class MultinomialDistribution(Distribution, Table):
     #=== Learning Functions
     def initializeCounts(self):
         ''' initialize counts array to ones '''
-        self.counts = na.ones(shape=self.sizes, type='Float32')        
+        self.counts = Table(self.names_list, shape=self.shape)
+    
+    def incrCounts(self, index):
+        """ add one to given count """
+        self.counts[index] += 1
 
     def addToCounts(self, index, counts):
         self.counts[index] += counts
+    
+    def setCounts(self):
+        """ set the distributions underlying cpt equal to the counts """
+        assert(self.names == self.counts.names)
+        self.counts.transpose(self.names_list)
+        #set to copy in case we later destroy the counts or reinitialize them
+        self.cpt = self.counts.cpt.copy()
 
     def Sample(self, pvals):
         """ Return a sample of the distribution P(V | pvals)
         """
-        #FIXME: Currently assumes that all parents are set in pvals, but doesn't enforce that fact, this is important because if they are not all set, then the index of self.cpt[pvals] is not a table that sums to 1
-        dist = self[pvals]
+        #force that we are sampling over only one dim, so that a single value will be returned
+        assert(len(self.names - set(pvals.keys())) == 1), "There are too many or too few vertices set in pvals"
+        dist = self.__getitem__(pvals)
         rnum = ra.random()
-        probRange = 0
-        i = -1
-        for prob in dist:
-            probRange += prob
-            i += 1
-            if rnum <= probRange:
-                break
+        probRange = dist[0]
+        i = 0
+        if len(dist) > 1:
+            for prob in dist[1:]:
+                if rnum <= probRange:
+                    break
+                probRange += prob
+                i += 1    
         return i
     
     #===================================================

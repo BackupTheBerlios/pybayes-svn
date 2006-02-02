@@ -7,13 +7,14 @@ import types
 
 #Library Specific Modules
 import graph
+import bayesnet
 import distributions
 from potentials import DiscretePotential
 
 logging.basicConfig(level= logging.DEBUG)
 class InferenceEngine(graph.Graph):
     def __init__(self, BNet):
-        graph.Graph.__init__(self, name)
+        graph.Graph.__init__(self, self.name)
         self.BNet = BNet
         self.evidence = {}
     
@@ -33,15 +34,16 @@ class InferenceEngine(graph.Graph):
         """
         for v in self.BNet.v.values():
             if v.distribution.isAdjustable:
-                v.distribution.AllOnes()
+                v.distribution.initializeCounts()
         for case in cases:
             #CHECK: all vertices in case are set
-            assert(len(case) == len(self.BNet.v)), "Not all values of 'case' are set"
+            assert(set(case.keys()) == set(self.BNet.v.keys())), "Not all values of 'case' are set"
             for v in self.BNet.v.values():
                 if v.distribution.isAdjustable:
-                    v.distribution[case] += 1
+                    v.incrCounts(case)
         for v in self.BNet.v.values():
             if v.distribution.isAdjustable:
+                v.distribution.setCounts()
                 v.distribution.Normalize()
     
     def LearnEMParams(self, cases, iterations=10):
@@ -369,14 +371,14 @@ class Likelihood(distributions.MultinomialDistribution):
 
 #========================================================================
 
-class JoinTree(graph.Graph):
+class JoinTree(InferenceEngine):
     """ Join Tree """
     
     def __init__(self, BNet):
         """Creates an 'Optimal' JoinTree from a BNet """
         logging.info('Creating JoinTree for '+str(BNet.name))
-        graph.Graph.__init__(self, 'JT: ' + str(BNet.name))
-        self.BNet = BNet
+        self.name = 'JT: ' + str(BNet.name)
+        InferenceEngine.__init__(self, BNet)
         
         # key = variable name, value = cluster instance containing variable
         self.clusterdict = dict()
@@ -590,10 +592,9 @@ class MCMCEngine(graph.Graph):
         """ Implementation of MCMC (aka Gibbs Sampler), as described on p.517 of Russell and Norvig
         """
         def __init__(self, BNet, cut=100):
-            graph.Graph.__init__(BNet.name)
-            self.BNet = Bnet
+            self.name = 'MCMC: ' + str(BNet.name)
+            InferenceEngine.__init__(self, BNet)
             self.cut = cut
-            self.evidence = {}
         
         def SetObs(self, v, val):
             pass
@@ -652,11 +653,11 @@ class InferenceEngineTestCase(unittest.TestCase):
     """ An abstract set of inference test cases.  Basically anything that is similar between the different inference engines can be implemented here and automatically applied to lower engines.  For example, we can define the learning tests here and they shouldn't have to be redefined for different engines.
     """
     def setUp(self):
-        G = BNet('Water Sprinkler Bayesian Network')
-        c,s,r,w = [G.add_v(BVertex(nm,2,True)) for nm in 'c s r w'.split()]
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
-        G.InitCPTs()
+        G.InitDistributions()
         c.setCPT([0.5, 0.5])
         s.setCPT([0.5, 0.9, 0.5, 0.1])
         r.setCPT([0.8, 0.2, 0.2, 0.8])
@@ -670,27 +671,34 @@ class InferenceEngineTestCase(unittest.TestCase):
     def testLearning(self):
         """ Sample network and then learn parameters and check that they are relatively close to original.
         """
-        data = []
-        for i in range(1000):
-            data.append(self.engine.BNet.Sample())
-        #Remember what the old CPTs looked like
-        cCPT = self.c.cpt
-        sCPT = self.s.cpt
-        rCPT = self.r.cpt
-        wCPT = self.w.cpt
-        self.engine.LearnMLParams(data)
+        ev = self.engine.BNet.Sample(n=1000)
+        #Remember what the old CPTs looked like and keep track of original dimension order
+        cCPT = self.c.distribution.cpt.copy()
+        cdims = self.c.distribution.names_list
+        sCPT = self.s.distribution.cpt.copy()
+        sdims = self.s.distribution.names_list
+        rCPT = self.r.distribution.cpt.copy()
+        rdims = self.r.distribution.names_list
+        wCPT = self.w.distribution.cpt.copy()
+        wdims = self.w.distribution.names_list
+        self.engine.LearnMLParams(ev)
+        #reorder dims to match original
+        self.c.distribution.transpose(cdims)
+        self.s.distribution.transpose(sdims)
+        self.r.distribution.transpose(rdims)
+        self.w.distribution.transpose(wdims)
         # Check that they match original parameters
-        assert(na.allclose(cCPT,self.c.cpt,atol=.1) and \
-               na.allclose(sCPT,self.s.cpt,atol=.1) and \
-               na.allclose(rCPT,self.r.cpt,atol=.1) and \
-               na.allclose(wCPT,self.w.cpt,atol=.1)),\
-              "CPTs were more than atol apart"
+        assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
+               na.allclose(sCPT,self.s.distribution.cpt,atol=.1) and \
+               na.allclose(rCPT,self.r.distribution.cpt,atol=.1) and \
+               na.allclose(wCPT,self.w.distribution.cpt,atol=.1)),\
+              "CPTs were more than atol=.1 apart"
     
 class MCMCTestCase(InferenceEngineTestCase):
     """ MCMC unit tests.
     """
     def setUp(self):
-        InferenceEngineTestCase.setUp()
+        InferenceEngineTestCase.setUp(self)
         self.engine = MCMCEngine(self.BNet,cut=100)
         
     def testUnobserved(self):
@@ -721,4 +729,14 @@ class MCMCTestCase(InferenceEngineTestCase):
     
     def testLearning(self):
         InferenceEngineTestCase.testLearning()
+
+class JTreeTestCase(InferenceEngineTestCase):
+    def setUp(self):
+        InferenceEngineTestCase.setUp(self)
+        self.engine = JoinTree(self.BNet)
     
+    
+if __name__=='__main__':
+    suite = unittest.makeSuite(JTreeTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
