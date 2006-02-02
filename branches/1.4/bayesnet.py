@@ -107,7 +107,7 @@ class BNet(graph.Graph):
         
         # for each vertice, create a corresponding vertice
         for v in self.v.values():
-            G.add_v(BVertex(v.name, v.nvalues))
+            G.add_v(BVertex(v.name, v.discrete, v.nvalues))
 
         # create an UndirEdge for each DirEdge in current graph
         for e in self.e.values():
@@ -256,41 +256,170 @@ if __name__=='__main__':
     clusters = JT.all_v
     c1,c2 = clusters[:]
     
-    print c1.potential
+    #print c1.potential
     #print c2.potential
-    #JT.SetObs(['w','r'],[1,1])
+    #JT.SetObs(['c'],[1])
     #print JT.Marginalise('w')
+    #print 'RESULT, after Junction Tree:'
     JT.MargAll()
-##    G = BNet('test')
-##
-##    a,b = [G.add_v(BVertex(name)) for name in 'a b'.split()]
-##
-##    for ep in [(a,b)]:
-##        G.add_e(graph.DirEdge(len(G.e), *ep))
-##
-##    G.InitDistributions()
-##                
-##    a.setCPT([0.5, 0.5])
-##    b.setCPT([0.1, 0.2, 0.3, 0.4])
 
+    # verification
+    print 'VERIFICATION, Results should look like this :'
+    cp = potentials.DiscretePotential(['c'],[2],[0.5,0.5])
+    sp = potentials.DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1])
+    rp = potentials.DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])
+    wp = potentials.DiscretePotential(['w','s','r'],[2,2,2])
+    wp[:,0,0]=[0.99, 0.01]
+    wp[:,0,1]=[0.1, 0.9]
+    wp[:,1,0]=[0.1, 0.9]
+    wp[:,1,1]=[0.0, 1.0]
+
+    cr = cp*rp
+    crs = cr*sp
+    crsw = crs*wp
+
+    print 'c:', crsw.Marginalise('s r w'.split())
+    print 's:', crsw.Marginalise('c r w'.split())
+    print 'r:', crsw.Marginalise('c s w'.split())
+    print 'w:', crsw.Marginalise('c s r'.split())
+
+    #add some evidence
+    JT.SetObs(['c'],[1])
+    JT.MargAll()
+
+##    print 'DEBUGGING: performing same calculations as JunctionTree:'
+##    #create the clusters and set them to allOnes
+##    c1 = inference.Cluster([r,s,c])
+##    c2 = inference.Cluster([w,s,r])
+##    e  = inference.SepSet('c1-c2',c1,c2)
+##
+##    #assign each vertex to a cluster and initialise potentials
+##    #c,r,s -> c1, w -> c2
+##    c1.potential *= c.distribution
+##    c1.potential *= s.distribution
+##    c1.potential *= r.distribution
+##    c2.potential *= w.distribution
+##
+##    print c1.potential,c1.potential.names_list
+##    print "JT after initialisation"
+##    jtp0 = JT.all_v[1].potential
+##    print jtp0, jtp0.names_list
+##    
+##    print c2.potential,c2.potential.names_list
+##    print "JT after initialisation"
+##    jtp1 = JT.all_v[0].potential
+##    print jtp1, jtp1.names_list
+##    #up to here all is OK
+##    
+##    #start message passing, root = c1
+##    print 'collect evidence: c2-->c1'
+##    c2.MessagePass(c1)
+##    #normally c1 should contain the correct values for c,s and r
+##    print 'c:', c1.potential.Marginalise('s r'.split())
+##    print 's:', c1.potential.Marginalise('c r'.split())
+##    print 'r:', c1.potential.Marginalise('c s'.split())
+##
+##    #do the same thing for the JT
+##    jt0 = JT.all_v[1]
+##    jt1 = JT.all_v[0]
+##    jt1.MessagePass(jt0)
+##    #verify the results
+##    print 'Results for JTree:'
+##    print 'c:', jt0.potential.Marginalise('s r'.split())
+##    print 's:', jt0.potential.Marginalise('c r'.split())
+##    print 'r:', jt0.potential.Marginalise('c s'.split())
+##    
+##    print 'distribute evidence: c1-->c2'
+##    c1.MessagePass(c2)
+##    #normally c2 should contain the correct values for w
+##    print 'w:', c2.potential.Marginalise('s r'.split())
+##
+##    jt0.MessagePass(jt1)
+##    #verify the results
+##    print 'Results for JTree:'
+##    print 'w:', jt1.potential.Marginalise('s r'.split())
+
+##    #start message passing, root = c2
+##    print 'collect evidence: c1-->c2'
+##    c1.MessagePass(c2)
+##    #normally c2 should contain the correct values for w
+##    print 'w:', c2.potential.Marginalise('s r'.split())
+##
+##    print 'distribute evidence: c2-->c1'
+##    c2.MessagePass(c1)
+##    #normally c1 should contain the correct values for c,s and r
+##    print 'c:', c1.potential.Marginalise('s r'.split())
+##    print 's:', c1.potential.Marginalise('c r'.split())
+##    print 'r:', c1.potential.Marginalise('c s'.split())
+
+
+if __name__=='__mains__':
+    ''' Water Sprinkler example with more than binary nodes'''
+    #suite = unittest.makeSuite(CPTIndexTestCase, 'test')
+    #runner = unittest.TextTestRunner()
+    #runner.run(suite)
     
+    G = BNet('Water Sprinkler Bayesian Network')
+
+    print 'c:5,s:4,r:3,w:2'
+    c,s,r,w = [G.add_v(BVertex(name,True,s)) for s,name in zip([5,4,3,2],'c s r w'.split())]
+    
+    for ep in [(c,r), (c,s), (r,w), (s,w)]:
+        G.add_e(graph.DirEdge(len(G.e), *ep))
+
+    G.InitDistributions()
+    
+    c.setCPT([1.0/c.nvalues]*c.nvalues)
+    s.distribution.cpt = na.arange(5*4,shape=s.distribution.cpt.shape,type='Float32')
+    s.distribution.Normalize()
+    r.distribution.cpt = na.arange(5*3,shape=r.distribution.cpt.shape,type='Float32')
+    r.distribution.Normalize()
+    w.distribution.cpt = na.arange(2*3*4,shape=w.distribution.cpt.shape,type='Float32')
+    w.distribution.Normalize()    
+    
+    print G
+    
+    JT = inference.JoinTree(G)
+    clusters = JT.all_v
+    c1,c2 = clusters[:]
+    
+    #print c1.potential
+    #print c2.potential
+    #JT.SetObs(['c'],[1])
+    #print JT.Marginalise('w')
+    #print 'RESULT, after Junction Tree:'
+    JT.MargAll()
+
+##    # verification
+##    print 'VERIFICATION, Results should look like this :'
+##    cp = potentials.DiscretePotential(['c'],[5],c.distribution.cpt)
+##    sp = potentials.DiscretePotential(['s','c'],[4,5],s.distribution.cpt)
+##    rp = potentials.DiscretePotential(['r','c'],[3,5],r.distribution.cpt)
+##    wp = potentials.DiscretePotential(['w','s','r'],[2,4,3],w.distribution.cpt)
+##
+##
+##    cr = cp*rp
+##    crs = cr*sp
+##    crsw = crs*wp
+##
+##    print 'c:', crsw.Marginalise('s r w'.split())
+##    print 's:', crsw.Marginalise('c r w'.split())
+##    print 'r:', crsw.Marginalise('c s w'.split())
+##    print 'w:', crsw.Marginalise('c s r'.split())
 
 if __name__=='__mains__':
     G = BNet('Bnet')
     
-    a, b, c, d, e, f, g, h = [G.add_v(BVertex(nm)) for nm in 'a b c d e f g h'.split()]
-    a.nvalues = 3
-    e.nvalues = 4
-    c.nvalues = 5
-    g.nvalues = 6
+    a, b, c, d, e, f, g, h = [G.add_v(BVertex(nm,True,s+2)) for s,nm in enumerate('a b c d e f g h'.split())]
+
     for ep in [(a, b), (a,c), (b,d), (d,f), (c,e), (e,f), (c,g), (e,h), (g,h)]:
         G.add_e(graph.DirEdge(len(G.e), *ep))
         
     G.InitDistributions()
-    G.RandomizeCPTs()
+    #G.RandomizeCPTs()
     
     
-    JT = JoinTree(G)
+    JT = inference.JoinTree(G)
     
     print JT
 
@@ -306,28 +435,28 @@ if __name__=='__mains__':
     #JT.SetObs(['b'],[1])
     #print JT.Marginalise('c')
     
-    logging.basicConfig(level=logging.CRITICAL)
-    
-    def RandomObs(JT, G):
-        for N in range(100):
-            n = randint(len(G.v))
-            
-            obsn = []
-            obs = []
-            for i in range(n):
-                v = randint(len(G.v))
-                vn = G.v.values()[v].name
-                if vn not in obsn:
-                    obsn.append(vn)
-                    val = randint(G.v[vn].nvalues)
-                    obs.append(val)
-                    
-            JT.SetObs(obsn,obs)
-            
-    t = time.time()
-    RandomObs(JT,G)
-    t = time.time() - t
-    print t
+##    logging.basicConfig(level=logging.CRITICAL)
+##    
+##    def RandomObs(JT, G):
+##        for N in range(100):
+##            n = randint(len(G.v))
+##            
+##            obsn = []
+##            obs = []
+##            for i in range(n):
+##                v = randint(len(G.v))
+##                vn = G.v.values()[v].name
+##                if vn not in obsn:
+##                    obsn.append(vn)
+##                    val = randint(G.v[vn].nvalues)
+##                    obs.append(val)
+##                    
+##            JT.SetObs(obsn,obs)
+##            
+##    t = time.time()
+##    RandomObs(JT,G)
+##    t = time.time() - t
+##    print t
     
     #profile.run('''JT.GlobalPropagation()''')
                 

@@ -7,6 +7,7 @@ import types
 
 #Library Specific Modules
 import graph
+import bayesnet
 import distributions
 from potentials import DiscretePotential
 
@@ -136,17 +137,17 @@ class Cluster(graph.Vertex):
         e = e[0]    # only one edge should connect 2 clusters
         
         # Projection
-        
-        oldphiR = e.potential                           # oldphiR = phiR
+        oldphiR = copy.copy(e.potential)                # oldphiR = phiR
         newphiR = self.potential+e.potential            # phiR = sum(X/R)phiX
 
-        # we shouldn't use the .cpt attribute because continuous potentials
-        # will not have a cpt...
-        #---TODO: create an update method
-        e.potential.cpt = newphiR.copy()
+        #e.potential = newphiR
+        e.potential.Update(newphiR)
 
         # Absorption
         newphiR /= oldphiR
+
+        #print 'ABSORPTION'
+        #print newphiR
         
         c.potential *= newphiR
 
@@ -399,7 +400,7 @@ class JoinTree(graph.Graph):
     def ConstructOptimalJTree(self):
         # Moralize Graph
         Gm = self.BNet.Moralize()
-        
+
         # triangulate graph and extract clusters
         Gt, clusters = Gm.Triangulate()
         
@@ -455,10 +456,13 @@ class JoinTree(graph.Graph):
         for v in self.BNet.all_v:
             for c in self.all_v:
                 if c.ContainsVar(v.family):
+                    # assign a cluster for each variable
                     self.clusterdict[v.name] = c
                     v.parentcluster = c
+
                     # in place multiplication!
-                    c.potential * v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
+                    logging.debug('JT:initialisation '+c.name+' *= '+v.name)
+                    c.potential *= v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
 
         # set all likelihoods to ones
         for l in self.likelihoods: l.AllOnes()
@@ -650,51 +654,37 @@ class MCMCEngine(graph.Graph):
             return val
 
         
-        
 
 class InferenceEngineTestCase(unittest.TestCase):
     """ An abstract set of inference test cases.  Basically anything that is similar between the different inference engines can be implemented here and automatically applied to lower engines.  For example, we can define the learning tests here and they shouldn't have to be redefined for different engines.
     """
     def setUp(self):
-        G = BNet('Water Sprinkler Bayesian Network')
-        c,s,r,w = [G.add_v(BVertex(nm,2,True)) for nm in 'c s r w'.split()]
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
-        G.InitCPTs()
+        G.InitDistributions()
         c.setCPT([0.5, 0.5])
         s.setCPT([0.5, 0.9, 0.5, 0.1])
         r.setCPT([0.8, 0.2, 0.2, 0.8])
-        w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
+        w.distribution[:,0,0]=[0.99, 0.01]
+        w.distribution[:,0,1]=[0.1, 0.9]
+        w.distribution[:,1,0]=[0.1, 0.9]
+        w.distribution[:,1,1]=[0.0, 1.0]
+        
         self.c = c
         self.s = s
         self.r = r
         self.w = w
         self.BNet = G
     
-    def testLearning(self):
-        """ Sample network and then learn parameters and check that they are relatively close to original.
-        """
-        data = []
-        for i in range(1000):
-            data.append(self.engine.BNet.Sample())
-        #Remember what the old CPTs looked like
-        cCPT = self.c.cpt
-        sCPT = self.s.cpt
-        rCPT = self.r.cpt
-        wCPT = self.w.cpt
-        self.engine.LearnMLParams(data)
-        # Check that they match original parameters
-        assert(na.allclose(cCPT,self.c.cpt,atol=.1) and \
-               na.allclose(sCPT,self.s.cpt,atol=.1) and \
-               na.allclose(rCPT,self.r.cpt,atol=.1) and \
-               na.allclose(wCPT,self.w.cpt,atol=.1)),\
-              "CPTs were more than atol apart"
+
     
 class MCMCTestCase(InferenceEngineTestCase):
     """ MCMC unit tests.
     """
     def setUp(self):
-        InferenceEngineTestCase.setUp()
+        InferenceEngineTestCase.setUp(self)
         self.engine = MCMCEngine(self.BNet,cut=100)
         
     def testUnobserved(self):
@@ -724,5 +714,72 @@ class MCMCTestCase(InferenceEngineTestCase):
               "Either P(w=true|c=true,r=false) or P(s=false|c=false,w=true) was incorrect"
     
     def testLearning(self):
-        InferenceEngineTestCase.testLearning()
+        """ Sample network and then learn parameters and check that they are relatively close to original.
+        """
+        ev = self.engine.BNet.Sample(n=1000)
+        #Remember what the old CPTs looked like and keep track of original dimension order
+        cCPT = self.c.distribution.cpt.copy()
+        cdims = self.c.distribution.names_list
+        sCPT = self.s.distribution.cpt.copy()
+        sdims = self.s.distribution.names_list
+        rCPT = self.r.distribution.cpt.copy()
+        rdims = self.r.distribution.names_list
+        wCPT = self.w.distribution.cpt.copy()
+        wdims = self.w.distribution.names_list
+        self.engine.LearnMLParams(ev)
+        #reorder dims to match original
+        self.c.distribution.transpose(cdims)
+        self.s.distribution.transpose(sdims)
+        self.r.distribution.transpose(rdims)
+        self.w.distribution.transpose(wdims)
+        # Check that they match original parameters
+        assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
+               na.allclose(sCPT,self.s.distribution.cpt,atol=.1) and \
+               na.allclose(rCPT,self.r.distribution.cpt,atol=.1) and \
+               na.allclose(wCPT,self.w.distribution.cpt,atol=.1)),\
+              "CPTs were more than atol=.1 apart"
+        
+class JTreeTestCase(InferenceEngineTestCase):
+    def setUp(self):
+        InferenceEngineTestCase.setUp(self)
+        self.engine = JoinTree(self.BNet)
 
+    def testGeneral(self):
+        """ Check that the overall algorithm works """
+        c=self.engine.Marginalise('c')
+        r=self.engine.Marginalise('r')
+        s=self.engine.Marginalise('s')
+        w=self.engine.Marginalise('w')
+
+        assert(na.allclose(c.cpt,[0.5,0.5]) and \
+               na.allclose(r.cpt,[0.5,0.5]) and \
+               na.allclose(s.cpt,[0.7,0.3]) and \
+               na.allclose(w.cpt,[ 0.34909999, 0.65090001]) ), \
+               " Somethings wrong with JoinTree inference engine"
+
+    def testEvidence(self):
+        """ check that evidence works """
+        # evidence c=1,s=0
+        self.engine.SetObs(['c','s'],[1,0])
+        
+        c=self.engine.Marginalise('c')
+        r=self.engine.Marginalise('r')
+        s=self.engine.Marginalise('s')
+        w=self.engine.Marginalise('w')
+
+        assert(na.allclose(c.cpt,[0.0,1.0]) and \
+               na.allclose(r.cpt,[0.2,0.8]) and \
+               na.allclose(s.cpt,[1.0,0.0]) and \
+               na.allclose(w.cpt,[ 0.278, 0.722]) ), \
+               " Somethings wrong with JoinTree evidence"        
+
+    ###########################################################
+    ### SHOULD ADD A MORE GENERAL TEST:
+    ###     - not only binary nodes
+    ###     - more complex structure
+    ###     - check message passing
+    ###########################################################
+if __name__=='__main__':
+    suite = unittest.makeSuite(JTreeTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

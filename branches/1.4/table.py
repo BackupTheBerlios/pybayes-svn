@@ -40,10 +40,10 @@ class Table:
       self.names_list = list(names) # just to keep the order in an easy to use way
 
       # dict of name:dim number pairs
-      self.assocdim = dict(zip(names,range(len(names))))
+      self.assocdim = dict(zip(self.names_list,range(len(self.names_list))))
 
       # dict of dim:name pairs
-      self.assocname = dict(enumerate(names))
+      self.assocname = dict(enumerate(self.names_list))
 
     #==================================
     #Administration stuff
@@ -55,6 +55,18 @@ class Table:
         """ copy method """
         return Table(self.names_list,self.shape,self.cpt,self.cpt.type())
 
+    def Update(self, other):
+        """ updates this Table with the values contained in the other"""
+        # check that all variables in self are contained in other
+        if self.names != other.names:
+            return "error in update, all variables in other should be contained in self"
+
+        # find the correspondance vector
+        correspond = []
+        for vara in self.names_list:
+            correspond.append(other.assocdim[vara])
+
+        self.cpt = copy(na.transpose(other.cpt, axes=correspond))
     #===================================
     # Put values into the cpt
     def rand(self):
@@ -142,120 +154,237 @@ class Table:
                     and na.alltrue(a.cpt.flat == b.cpt.flat)  \
                     )
 
-    def __imul__(a,b): return a*b
-    def __idiv__(a,b): return a/b
-
-    def __mul__(a,b):
+    def __imul__(a,b):
         """
         in place multiplication
         PRE:
-            a=Pr(A); A = {'a','b','c'}
-            b=Pr(B); B = {'c','a','d','e'}
+            - B must be a subset of A!!!
+            eg.
+                a=Pr(A); A = {'a','b','c'}
+                b=Pr(B); B = {'c','a'}
 
         usage:
-        a = a*b <==> a*b <==> a*=b
+        a*=b 
 
         POST:
-            a=Pr(A U B) = Pr(a,b,c,d,e)
+            a=Pr(A)*Pr(B) = Pr(a,b,c)
+
 
         Notes :
         -   a keeps the order of its existing variables
-        -   any new variables in b (d and e) are added at the end of a in the
-            order they appear in b
         -   b is not touched during this operation
         -   operation is done in-place for a, a is not the same after the operation
         """
-        # prepare dimensions in a and b for multiplication
-        cptb = a.prepareDimensions(b)
+        # prepare dimensions in b for multiplication
+        cptb = a.prepareOther(b)
 
         # multiply in place, a's values are changed
-        #a.cpt *= cptb  # this does not work correctly for some reason...
+        a.cpt *= cptb  # this does not work correctly for some reason...
         #na.multiply(a.cpt,cptb,a.cpt) # does not work either
-        a.cpt = a.cpt * cptb    #this one works fine
+        #a.cpt = a.cpt * cptb    #this one works fine
                                 #is this a numarray BUG????
 
         return a
 
-    def __div__(a, b):
+    def __idiv__(a,b):
         """
         in place division
         PRE:
-            a=Pr(A); A = {'a','b','c'}
-            b=Pr(B); B = {'c','a','d','e'}
+            - B must be a subset of A!!!
+            eg.
+                a=Pr(A); A = {'a','b','c'}
+                b=Pr(B); B = {'c','a'}
 
         usage:
-        a = a/b <==> a/b <==> a/=b
+        a/=b 
 
         POST:
-            a=Pr(A U B) = Pr(a,b,c,d,e)
+            a=Pr(A)/Pr(B) = Pr(a,b,c)
+
 
         Notes :
         -   a keeps the order of its existing variables
-        -   any new variables in b (d and e) are added at the end of a in the
-            order they appear in b
         -   b is not touched during this operation
         -   operation is done in-place for a, a is not the same after the operation
-        -   0/0 are replaced by 0s
         """
-        cptb = a.prepareDimensions(b)
+        # prepare dimensions in b for multiplication
+        cptb = a.prepareOther(b)
 
-        # divide in place, a's values are changed
+        # multiply in place, a's values are changed
         #a.cpt /= cptb  # this does not work correctly for some reason...
-        #na.divide(a.cpt,cptb,a.cpt) #does not work either
+        #na.divide(a.cpt,cptb,a.cpt) # does not work either
         a.cpt = a.cpt / cptb    #this one works fine
                                 #is this a numarray BUG????
+
         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
         # replace INFs by 0s
         a.cpt[getnan(a.cpt)] = 0
         #---TODO: replace this very SLOW function with a ufunc
+        
+        return a 
 
-        return a
+    def __mul__(a,b):
+        """
+        multiplication
+        PRE:
+            a=Pr(A); A = {'a','b','c'}
+            b=Pr(B); B = {'c','a','d','e'}
 
-    def prepareDimensions(a,b):
-        """ Returns the correspondance vector between the variables of
-        two Tables and inserts any extra dimensions needed in both a
-        and b. the b dimensions are transposed to correspond with the ones
-        in a.
+        usage:
+        c = a*b
+        c is a NEW Table instance
+
+        POST:
+            c=Pr(A U B) = Pr(a,b,c,d,e)
+
+        Notes :
+        -   c keeps the order of the variables in a
+        -   any new variables in b (d and e) are added at the end of c in the
+            order they appear in b
+        -   a and b are not touched during this operation
+        -   return a NEW Table instance
+        """
+        # prepare dimensions in a and b for multiplication
+        new, cptb = a.union(b)
+
+        # multiply
+        #new.cpt *= cptb  # this does not work correctly for some reason...
+        #na.multiply(new.cpt,cptb,new.cpt) # does not work either
+        new.cpt = new.cpt * cptb    #this one works fine
+                                #is this a numarray BUG????        
+
+
+        return new
+
+    def __div__(a, b):
+        """
+        multiplication
+        PRE:
+            a=Pr(A); A = {'a','b','c'}
+            b=Pr(B); B = {'c','a','d','e'}
+
+        usage:
+        c = a/b
+        c is a NEW Table instance
+
+        POST:
+            c=Pr(A U B) = Pr(a,b,c,d,e)
+
+        Notes :
+        -   c keeps the order of the variables in a
+        -   any new variables in b (d and e) are added at the end of c in the
+            order they appear in b
+        -   a and b are not touched during this operation
+        -   return a NEW Table instance
+        """
+        # prepare dimensions in a and b for multiplication
+        new, cptb = a.union(b)
+
+        # multiply
+        #new.cpt /= cptb  # this does not work correctly for some reason...
+        #na.divide(new.cpt,cptb,new.cpt) # does not work either
+        new.cpt = new.cpt / cptb    #this one works fine
+                                #is this a numarray BUG????        
+
+
+        ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
+        # replace INFs by 0s
+        new.cpt[getnan(new.cpt)] = 0
+        #---TODO: replace this very SLOW function with a ufunc
+
+        return new
+    
+    def prepareOther(self, other):
+        """
+        Prepares other for inplace multiplication/division with self. Returns
+        other.cpt ready for an operation. other must contain a subset of
+        the variables of self.
+
+        eg. a= Pr(A,B,C,D)
+            b= Pr(D,B)
+            a.prepareOther(b) --> returns a numarray Pr(1,B,1,D)
+
+            a= Pr(A,B,C,D)
+            b= Pr(C,B,E)
+            a.prepareOther(b) --> ERROR (E not in {A,B,C,D})
+
+        Notes:
+        -   a and b are not altered in any way. NON-DESTRUCTIVE
+        -   b must contain a subset of a's variables
+            a=Pr(X),b=Pr(Y); Y entirely included in X
+        """
+        #self contains all variables found in other
+        if len(other.names - self.names) > 0:
+            raise "ERROR :"+str((other.names-self.names))+"not in"+str(self.names)
+
+        # add new dimensions to b
+        bcpt = other.cpt.view()
+        b_assocdim = copy(other.assocdim)
+        for var in (self.names-other.names):
+            #for all variables found in self and not in other
+            #add a new dimension to other
+            bcpt = bcpt[...,na.NewAxis]
+            b_assocdim[var] = bcpt.rank - 1
+
+        #create the transposition vector
+        trans = list()
+        for var in self.names_list:
+                trans.append(b_assocdim[var])
+
+        bcpt_trans = na.transpose(bcpt, axes=trans)
+
+        # transpose and return bcpt
+        return bcpt_trans
+        
+    def union(a,b):
+        """ Returns a new instance of same class as a that contains all
+        data contained in a but also has any new variables found in b with unary
+        dimensions. Also returns a view of b.cpt ready for an operation with
+        the returned instance.
         
         eg. a= Pr(A,B,C,D,E)
             b= Pr(C,G,A,F)
-            a.prepareDims(b) --> a = Pr(A,B,C,D,E,G,F)  (G,F added at the end)
-                                 b = Pr(A,B,C,D,E,G,F)  (B,D,E added and dimensions
-                                                         rearranged)
+            a.union(b) --> returns (Pr(A,B,C,D,E,1,1),numarray([A,1,C,1,1,G,F]))
+
+            
+            
         Notes:
-        -    the operation is destructive for a only, b remains unchanged
-        -    a and b must be Table instances
+        -    a and b remain unchanged
+        -    a and b must be Table instances (or something equivalent)
         -    a always keeps the same order of its existing variables
         -    any new variables found in b are added at the end of a in the order
              they appear in b.
         -    new dimensions are added with numarray.NewAxis
-        -    a and b have exactly the same dimensions at the end and are ready
-             for any kind of operation, *,/,...
+        -    the two numarrays objects returns have exactly the same dimensions
+             and are ready for any kind of operation, *,/,...
         """
-        bcpt = b.cpt.copy()     # don't touch b
+        # make a copy of a
+        new = copy(a)
+
         
         for varb in b.names_list:
             # varb is the name of a variable in b
-            if not a.assocdim.has_key(varb):
-                a.addDim(varb) # add new variable to a
+            if not new.assocdim.has_key(varb):
+                new.addDim(varb) # add new variable to new
 
-        # a now contains all the variables contained in b
-        # A = A U B
+        # new now contains all the variables contained in a and b
+        # new = A U B
 
         correspond = []        
-        bnames = copy(b.names_list)
-        for vara in a.names_list:
-            # vara is the name of a variable in a
-            if not b.assocdim.has_key(vara):
+        b_assocdim = copy(b.assocdim)
+        bcpt = b.cpt.view()
+        for var in new.names_list:
+            # var is the name of a variable in new
+            if not b.assocdim.has_key(var):
                 bcpt = bcpt[...,na.NewAxis]
-                bnames.append(vara)
-            correspond.append(bnames.index(vara))
+                b_assocdim[var] = bcpt.rank - 1
+            correspond.append(b_assocdim[var])
 
         # transpose dimensions in b to match those in a
         btr = na.transpose(bcpt, axes = correspond)
 
-        # btr is now ready for any operation for a
-        return btr
+        # btr is now ready for any operation with new
+        return new, btr
     
 def ones(names, shape, type='Int32'):
    return Table(names,shape,na.product(shape)*[1],type)
@@ -285,26 +414,57 @@ class TableTestCase(unittest.TestCase):
               a == d), \
                 "__eq__ does not work"
 
-   def testMul(self):
-       a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+   def testIMul(self):
+       """ test inplace multiplication """
        b = Table(['c','b','e'],[4,3,6],range(12*6))
        c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
    
-       acpt = copy(a.cpt)[...,na.NewAxis]
-       bcpt = copy(b.cpt)[...,na.NewAxis,na.NewAxis]
+       bcpt = b.cpt[...,na.NewAxis,na.NewAxis]
        bcpt.transpose([3,1,0,4,2])
+       res = bcpt*c.cpt
 
-       # test the three types of possible notations
-       a*b
-       c*=c
-       b = b*b
+       c *= b
 
-       assert (a == Table(['a','b','c','d','e'],[2,3,4,5,6],acpt*bcpt) and \
-               c == Table(['a','b','c','d','e'],[2,3,4,5,6],na.arange(2*3*4*5*6)**2) and \
-               b == Table(['c','b','e'],[4,3,6],na.arange(12*6)**2)), \
+       assert (na.all(c.cpt == res)), \
+              " InPlace Multiplication does not work"
+
+   def testIDiv(self):
+       """ test inplace division """
+       b = Table(['c','b','e'],[4,3,6],range(12*6))
+       c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
+   
+       bcpt = b.cpt[...,na.NewAxis,na.NewAxis]
+       bcpt.transpose([3,1,0,4,2])
+       res = c.cpt/bcpt
+       res[getnan(res)] = 0.0
+
+       c /= b
+
+       assert (na.all(c.cpt == res)), \
+              " InPlace Division does not work"
+       
+   def testMul(self):
+       """ test multiplication """
+       a = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+       b = Table(['c','b','e'],[4,3,6],range(12*6))
+       c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
+   
+       acpt = a.cpt[...,na.NewAxis]
+       bcpt = b.cpt[...,na.NewAxis,na.NewAxis]
+       bcpt = na.transpose(bcpt,[3,1,0,4,2])
+       resab = acpt*bcpt
+
+       ab = a*b
+       cc = c*c
+       bb = b*b
+
+       assert (ab == Table(['a','b','c','d','e'],[2,3,4,5,6],resab) and \
+               cc == Table(['a','b','c','d','e'],[2,3,4,5,6],na.arange(2*3*4*5*6)**2) and \
+               bb == Table(['c','b','e'],[4,3,6],na.arange(12*6)**2)), \
               " Multiplication does not work"
 
    def testDiv(self):
+       """ test division """
        a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
        b = Table(['c','b','e'],[4,3,6],range(12*6))
        c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
@@ -313,21 +473,20 @@ class TableTestCase(unittest.TestCase):
        bcpt = copy(b.cpt)[...,na.NewAxis,na.NewAxis]
        bcpt.transpose([3,1,0,4,2])
        
-       # test the three types of possible notations
-       a/b
-       c/=c
-       b = b/b
+       ab = a/b
+       cc = c/c
+       bb = b/b
 
        cres = na.ones(2*3*4*5*6)
        cres[0] = 0
        bres = na.ones(12*6)
        bres[0] = 0
        ares = acpt/bcpt
-       ares[getnan(ares)] = 0
+       ares[getnan(ares)] = 0.0
        
-       assert (a == Table(['a','b','c','d','e'],[2,3,4,5,6],ares) and \
-               c == Table(['a','b','c','d','e'],[2,3,4,5,6],cres) and \
-               b == Table(['c','b','e'],[4,3,6],bres) ), \
+       assert (ab == Table(['a','b','c','d','e'],[2,3,4,5,6],ares) and \
+               cc == Table(['a','b','c','d','e'],[2,3,4,5,6],cres) and \
+               bb == Table(['c','b','e'],[4,3,6],bres) ), \
               " Division does not work"
        
    def testDelegate(self):
@@ -367,18 +526,40 @@ class TableTestCase(unittest.TestCase):
                "add Dim does not work correctly..."
         
 
-   def testPrepareDimensions(self):
-        #print 'a:2,b:3,c:4,d:5,e:6,g:7,f:8'
-        a = Table('a b c d e'.split(), [2,3,4,5,6])
-        b = Table('c g a f'.split(), [4,7,2,8])
+   def testUnion(self):
+        """ test Union between two Tables """
+        a = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+        b = Table(['c','b','e'],[4,3,6],range(12*6))
 
-        bcpt = a.prepareDimensions(b)
+        ab,bb = a.union(b)
 
-        assert(bcpt.shape == tuple([2,1,4,1,1,7,8]) and \
-               a.cpt.shape == tuple([2,3,4,5,6,1,1]) and \
-               a.names_list == 'a b c d e g f'.split()), \
-               " prepareDimensions does not work..."
+        assert(ab.names_list == ['a','b','c','d','e'] and \
+               ab.shape == tuple([2,3,4,5,1]) and \
+               na.all(bb == na.transpose(b.cpt[...,na.NewAxis,na.NewAxis],axes=[3,1,0,4,2]))), \
+               """ union does not work ..."""
+               
 
+   def testPrepareOther(self):
+        c = Table(['e','b'],[2,3],range(6))
+        d = Table(['a','b','c','d','e'],[2,3,2,2,2],range(3*2**4))
+        e = Table(['e','b','f'],[2,3,4],range(6*4))
+        src = Table(['s','r','c'],[2,3,4],range(24))
+        cr = Table(['c','r'],[4,3],range(12))
+        
+        dc = d.prepareOther(c)
+        try:
+            d.prepareOther(e)
+            assert(0),""" this should produce an error..."""
+        except:
+            pass
+
+        cr_ = src.prepareOther(cr)
+
+        assert(dc.shape == tuple([1,3,1,1,2]) and \
+               na.all(dc[0,:,0,0,:] == na.transpose(c.cpt, axes=[1,0])) and \
+               cr_.shape == (1,3,4)), \
+               """ problem with prepareOther"""
+       
       
 if __name__ == '__main__':
     suite = unittest.makeSuite(TableTestCase, 'test')
@@ -387,12 +568,11 @@ if __name__ == '__main__':
 
     a = Table(['a','b'],[2,3],range(6))
     b = Table(['b'],[3],range(3))
-    c = Table(['b','e'],[3,2],range(6))
-    d = Table(['a','b','c','d','e'],[2,2,2,2,2],range(2**5))
-    
-    print a
-    a/a
-    print a
+    c = Table(['e','b'],[2,3],range(6))
+    d = Table(['a','b','c','d','e'],[2,3,2,2,2],range(3*2**4))
+
+    ac,cc = a.union(c)
+    print ac
 ##    a*c
 ##    print a
 ##    print c

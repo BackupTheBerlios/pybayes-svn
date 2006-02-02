@@ -1,4 +1,5 @@
 import numarray as na
+from copy import copy
 
 import delegate
 import table
@@ -9,10 +10,17 @@ class Potential:
     Maybe we should delegate to a type of potential, the same we did for the
     Distributions
     """
-    def __init__(self, names, shape):
+    def __init__(self, names):
         self.names = set(names)
         self.names_list = list(names)
-        self.shape = shape
+
+        #we give an order to variables to avoid manipulation errors with arrays
+##        order = [(names,k) for k,names in enumerate(names)]
+##        order.sort()
+##        self.names_list = [o[0] for o in order]
+##        
+##        # return the order of sorting
+##        return [o[1] for o in order]
         
 class DiscretePotential(Potential, table.Table):
     """ This is a basic potential to represent discrete potentials.
@@ -21,11 +29,21 @@ class DiscretePotential(Potential, table.Table):
     and Marginalise().
     """
     def __init__(self, names, shape, elements=None):
-        Potential.__init__(self, names, shape)
+        order = Potential.__init__(self, names)
+
+        # sort shape in the same way names are sorted
+        #print names, self.names_list,order
+        #shape = na.take(shape,order)
         
         if elements == None:
             elements = na.ones(shape=shape)
-        table.Table.__init__(self, names, shape, elements, 'Float32')
+        #elements = na.transpose(elements, axes=order)
+        
+        table.Table.__init__(self, self.names_list, shape=shape, \
+                             elements=elements, type='Float32')
+
+    def __copy__(self):
+        return DiscretePotential(self.names_list, self.cpt.shape, copy(self.cpt))
 
     #=========================
     # Operations
@@ -40,11 +58,17 @@ class DiscretePotential(Potential, table.Table):
         temp = self.cpt.view()
         ax = [self.assocdim[v] for v in varnames]
         ax.sort(reverse=True)  # sort and reverse list to avoid inexistent dimensions
+        newnames = copy(self.names_list)
         for a in ax:
             temp = na.sum(temp, axis = a)
-        remainingNames = self.names - set(varnames)
-        
-        return self.__class__(remainingNames, temp.shape, temp.flat)
+            newnames.pop(a)
+
+        #=================================================
+        #---ERROR : In which order ?????
+        #remainingNames = self.names - set(varnames)
+        #remainingNames_list = [name for name in self.names_list if name in remainingNames]
+
+        return self.__class__(newnames, temp.shape, temp)
 
     def __add__(self, other):
         """
@@ -68,6 +92,7 @@ class DiscretePotential(Potential, table.Table):
     def Normalise(self):
         self.cpt /= na.sum(self.cpt.flat)
 
+            
     #================================
     # Initialise
     def Uniform(self):
@@ -93,17 +118,28 @@ class DiscretePotentialTestCase(unittest.TestCase):
       self.shape = shape
    
     def testMarginalise(self):
+        def factorial(n):
+            if n==1:return 1
+            return factorial(n-1)*n
+        
         var = set('c')
         b = self.a.Marginalise(var)
         var2 = set(['c','a'])
         c = self.a.Marginalise(var2)
         d = DiscretePotential(['b','c'],[3,4],na.arange(12))
+
+        # extended test
+        a = DiscretePotential('a b c d e f'.split(), [2,3,4,5,6,7],na.arange(factorial(7)))
+        aa=a.Marginalise('c f a'.split())
       
 
         assert(b.names == self.a.names - var and \
                b[0,1] == na.sum(self.a[0,1]) and \
                c.names == self.a.names - var2 and \
-               na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2),axis=0))), \
+               na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2),axis=0)) and
+               aa.shape == (3,5,6) and \
+               aa.names_list == 'b d e'.split() and \
+               aa[2,4,3] == na.sum(a[:,2,:,4,3,:].flat)), \
                " Marginalisation doesn't work"
 
     def testAdd(self):
@@ -131,6 +167,8 @@ class DiscretePotentialTestCase(unittest.TestCase):
 
         cr = c*r        # Pr(C,R)     = Pr(R|C) * Pr(C)
         crs = cr*s      # Pr(C,S,R)   = Pr(S|C) * Pr(C,R)
+        print crs,crs.names_list
+        print crs[:,0,0]
         crsw = crs*w    # Pr(C,S,R,W) = Pr(W|S,R) * Pr(C,R,S)
 
         # this can be verified using any bayesian network software

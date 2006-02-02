@@ -29,10 +29,7 @@ class Distribution(object):
         self.ndimensions = len(self.family)
         self.parents = self.family[1:]
         self.names = [v.name for v in self.family]
-        # order = dict{ var name : index }
-        #OPTIMIZE: what is this used for outside the discrete case in which it is already defined in table class
-        self.order = dict((k,v) for k,v in zip(self.names, range(len(self.names))))
-        
+       
         #used for learning
         self.isAjustable = isAdjustable
         
