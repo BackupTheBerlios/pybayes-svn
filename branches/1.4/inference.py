@@ -4,24 +4,32 @@ import logging
 import copy
 import unittest
 import types
+import random
 
 #Library Specific Modules
 import graph
 import bayesnet
 import distributions
 from potentials import DiscretePotential
+from table import Table
 
 logging.basicConfig(level= logging.DEBUG)
-class InferenceEngine(graph.Graph):
+class InferenceEngine:
+    """ General Inference Engine class
+    Does not really implement something but creates a standard set of
+    attributes that any inference engine should implement
+    """
+    BNet = None         # The underlying bayesian network
+    evidence = dict()   # the evidence for the BNet
+    
     def __init__(self, BNet):
-        graph.Graph.__init__(self, name)
         self.BNet = BNet
         self.evidence = {}
     
     def SetObs(self, v, val):
-            """ Incorporate new evidence 
-            """
-            self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
+        """ Incorporate new evidence 
+        """
+        self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
     
     def Marginalise(self, v):
         assert 0, 'In InferenceEngine, method must not be implemented at Child level'
@@ -341,7 +349,7 @@ class MoralGraph(graph.Graph):
 #=======================================================================
 #========================================================================
 class Likelihood(distributions.MultinomialDistribution):
-    """ Likelihood class """
+    """ Discrete Likelihood class """
     def __init__(self, BVertex):
         distributions.MultinomialDistribution.__init__(self, BVertex)
         self.v = BVertex
@@ -374,20 +382,20 @@ class Likelihood(distributions.MultinomialDistribution):
 
 #========================================================================
 
-class JoinTree(graph.Graph):
-    """ Join Tree """
-    
+class JoinTree(InferenceEngine, graph.Graph):
+    """ Join Tree inference engine"""
     def __init__(self, BNet):
         """Creates an 'Optimal' JoinTree from a BNet """
-        logging.info('Creating JoinTree for '+str(BNet.name))
+        logging.info('Creating JunctionTree engine for '+str(BNet.name))
+        InferenceEngine.__init__(self, BNet)
         graph.Graph.__init__(self, 'JT: ' + str(BNet.name))
-        self.BNet = BNet
         
         # key = variable name, value = cluster instance containing variable
+        # {var.name:cluster}
         self.clusterdict = dict()
         
-        # likelihood dictionary, key = var name, value = likelihood instance
         self.likelihoods = [Likelihood(v) for v in self.BNet.observed]
+        # likelihood dictionary, key = var name, value = likelihood instance
         self.likedict = dict((v.name, l) for v,l in zip(self.BNet.observed, self.likelihoods))
         
         logging.info('Constructing Optimal Tree')
@@ -461,7 +469,7 @@ class JoinTree(graph.Graph):
                     v.parentcluster = c
 
                     # in place multiplication!
-                    logging.debug('JT:initialisation '+c.name+' *= '+v.name)
+                    #logging.debug('JT:initialisation '+c.name+' *= '+v.name)
                     c.potential *= v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
 
         # set all likelihoods to ones
@@ -504,27 +512,40 @@ class JoinTree(graph.Graph):
     def SetObs(self, v,val):
         """ Incorporate new evidence """
         logging.info('Incorporating Observations')
-        temp = dict((vi,vali) for vi,vali in zip(v,val))
-        # add any missing vales:
+        # evidence = {var.name:observed value}
+        self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
+        
+        # add any missing variables, -1 means not observed:
         for vv in self.BNet.v.values():
-            if not temp.has_key(vv.name): temp[vv.name] = -1
-            
-        self.EnterEvidence(temp)
+            if not self.evidence.has_key(vv.name):
+                self.evidence[vv.name] = -1
+
+        # evidence contains all variables and their observed value (-1 if unobserved)
+        # this is necessary to find out which variables have been retracted,
+        # unchanged or updated
+        self.PropagateEvidence()
     
-    def EnterEvidence(self, ev):
+    def PropagateEvidence(self):
+        """ propagate the evidence in the bayesian structure """
         # Check for Global Retraction, or Global Update
+        ev = self.evidence
         retraction = False
-        for vv in self.BNet.v.values():
+        for vv in self.BNet.all_v:
+            # check for retracted variables, was observed and now it's observed
+            # value has changed
             if self.likedict[vv.name].IsRetracted(ev[vv.name]):
                 retraction = True
+            # remove any observed variables that have not changed their observed
+            # value since last iteration
             elif self.likedict[vv.name].IsUnchanged(ev[vv.name]):
                 del ev[vv.name]
-                # remove any unobserved variables
-            elif ev[vv.name] == -1: del ev[vv.name]
+            # remove any unobserved variables
+            elif ev[vv.name] == -1:
+                del ev[vv.name]
             
-            # initialise
-            if retraction: self.GlobalRetraction(ev)
-            else: self.GlobalUpdate(ev)
+        # propagate evidence
+        if retraction: self.GlobalRetraction(ev)
+        else: self.GlobalUpdate(ev)
             
     def SetFinding(self, v):
         ''' v becomes True (v=1), all other observed variables are false '''
@@ -538,29 +559,33 @@ class JoinTree(graph.Graph):
         self.ObservationEntry(temp.keys(),temp.values())
         self.GlobalPropagation()
         
-    def GlobalUpdate(self, d):
+    def GlobalUpdate(self, evidence):
+        """ perform message passing to update netwrok according to evidence """
+        # evidence = {var.name:value} ; -1=unobserved
+        print evidence
         logging.info('Global Update')
-        self.ObservationEntry(d.keys(),d.values())
+        self.ObservationEntry(evidence.keys(),evidence.values())
         
-        # check if only one Cluster is updated. If true, only DistributeEvidence
+        # check if only one Cluster is updated.
+        # If true, only DistributeEvidence
         startcluster = set()
-        for v in d.keys():
+        for v in evidence.keys():
             startcluster.add(self.BNet.v[v].parentcluster)
             
-            if len(startcluster) == 1:
-                # all variables that have changed are in the same cluster
-                # perform DistributeEvidence only
-                logging.info('distribute only')
-                self.UnmarkAllClusters()
-                startcluster.pop().DistributeEvidence()
-            else:
-                # perform global propagation
-                self.GlobalPropagation()
+        if len(startcluster) == 1:
+            # all variables that have changed are in the same cluster
+            # perform DistributeEvidence only
+            logging.info('distribute only')
+            self.UnmarkAllClusters()
+            startcluster.pop().DistributeEvidence()
+        else:
+            # perform global propagation
+            self.GlobalPropagation()
     
-    def GlobalRetraction(self,d ):
+    def GlobalRetraction(self, evidence ):
         logging.info('Global Retraction')
         self.Initialization()
-        self.ObservationEntry(d.keys(),d.values())
+        self.ObservationEntry(evidence.keys(),evidence.values())
         self.GlobalPropagation()
         
     def ObservationEntry(self, v, val):
@@ -593,66 +618,103 @@ class JoinTree(graph.Graph):
 
 
 
-class MCMCEngine(graph.Graph):
-    
+class MCMCEngine(InferenceEngine):
         """ Implementation of MCMC (aka Gibbs Sampler), as described on p.517 of Russell and Norvig
         """
+        cut = 100
         def __init__(self, BNet, cut=100):
-            graph.Graph.__init__(BNet.name)
-            self.BNet = Bnet
+            """ creates an MCMC inference Engine ofr the BNet specified
+            cut = maximum number of iterations allowd for the sampler
+            """
+            InferenceEngine.__init__(self, BNet)
             self.cut = cut
-            self.evidence = {}
-        
+            
         def SetObs(self, v, val):
             pass
                 
         def Marginalise(self, v, N):
-            """ Compute the Pr(v) where v is a variable name, N is the number of iterations of MCMC to perform.
+            """ Compute the Pr(v) where v is a variable name,
+            N is the number of iterations of MCMC to perform.
             """
             # the return distribution
-            vDist = RawCPT(v, (self.BNet.v[v].nvalues,1))
+            ###########################################################
+            #vDist = RawCPT(v, (self.BNet.v[v].nvalues,1))
+            # vDist should be a potential instance. What do you think?
+            ###########################################################
+            vDist = Table(v, shape=self.BNet.v[v].nvalues)
             nonEvidence = []
             # find out which values are not specified in evidence
             for vv in self.BNet.v.values():
                 if not self.evidence.has_key(vv.name): nonEvidence.append(vv.name)
-            # CHECK: this copy is deep enough
+
+            # state is first selected at random            
             state = copy.copy(self.evidence)
             for vname in nonEvidence:
-                # CHECK: legal values are 0 - nvalues-1
+                # CHECK: legal values are 0 - nvalues-1: checked OK
                 state[vname] = random.randint(0, self.BNet.v[vname].nvalues-1)
+
             for i in range(N):
                 if i > self.cut:
-                        # RESEARCH: how to index into CPT
+                        #########################################
+                        # What is this line for ????
+                        # shouldn't we stop iteration here?
+                        # what is cut for?
+                        ##################################
                         vDist[state[v]] += 1
                 for vname in nonEvidence:
                         state[vname] = self.sampleGivenMB(self.BNet.v[vname], state)
-            # CHECK: how do i normalize? for now assume that RawCPT now has a makecpt() method
-            vDist.makecpt()
+                        ################################################
+                        # added this line: did you forget it, or i didn't understand
+                        # anything in your code
+                        #################################################
+                        vDist[state[v]] += 1
+
+            # added a normalize() function in Table
+            vDist.normalize()
             return vDist
         
         def sampleGivenMB(self, v, state):
-            MBval = RawCPT(v.name, (v.nvalues,1))
-            children = v.out_v()
+            MBval = Table(v.name, shape=v.nvalues)
+            children = v.out_v
             index = {}
-            for vert in [v,v.in_v()]:
+            for vert in v.family:       # replaced [v]+list(v.in_v)
                     index[vert.name] = state[vert.name]
+            # index = {var.name:state}    for var in v.family
+            
             childrenAndIndex = []
             for child in children:
                 cindex = {}
-                for cvert in [child,child.in_v()]:
+                # family = a node and all its parents
+                for cvert in child.family: # replaced [child]+list(child.in_v)
+                    # cvert is either a child or an uncle(parent of child) of v
+                    # cindex contains the state of all variables in the family
+                    # of a child of v
                     cindex[cvert.name] = state[cvert.name]       
                 childrenAndIndex.append((child,cindex))
+
             #OPTIMIZE: could vectorize this code
             for value in range(v.nvalues):
                 index[v.name] = value
-                cindex[v.name] = value
-                MBval[value] = v[index]
+                # initialise each element of the distribution with the
+                # conditional probability table values of the variable
+                # Pr(v=i)=Pr(v=i|Pa(v)=index)
+                # index is randomly selected at each iteration
+                MBval[value] = v.distribution[index]
+                ##################################################
+                # this could be replaced by Table multiplication instead
+                # of an element-wise multiplication
+                # in that case we don't need all those index dictionnaries
+                ##################################################
                 for child,cindex in childrenAndIndex:
-                    MBval[value] *= child[cindex]
-            MBval.makecpt()                
-            val = MBval.sample()
-            return val
+                    cindex[v.name] = value
+                    MBval[value] *= child.distribution[cindex]
 
+            MBval.normalize()
+
+            #######################################
+            # added a sample() function in Table
+            #######################################
+            return MBval.sample()
         
 
 class InferenceEngineTestCase(unittest.TestCase):
@@ -691,12 +753,23 @@ class MCMCTestCase(InferenceEngineTestCase):
         """ Compute and check the probability of c=true and r=true given no evidence
         """
         N=1000
-        cprob = self.engine.Marginalise(self.c.name, N)
-        rprob = self.engine.Marginalise(self.r.name, N)
+        cprob = self.engine.Marginalise('c', N)
+        sprob = self.engine.Marginalise('s', N)
+        wprob = self.engine.Marginalise('w', N)
         #FIX: fill in actual value
-        assert(cprob[True] == 'value' and \
-               rprob[True] == 'value'), \
-              "Incorrect probability of Cloudy or Rain being true"
+        error = 0.05
+        #print cprob[True] <= (0.5 + error)and cprob[True] >= (0.5-error)
+        #print wprob[True] <= (0.65090001 + 2*error) and wprob[True] >= (0.65090001 - 2*error)
+        #print sprob[True] <= (0.3 + error) and sprob[True] >= (0.3 - error)
+        
+        assert(cprob[True] <= (0.5 + error) and \
+               cprob[True] >= (0.5-error) and \
+               # wprob has a bigger error generally...
+               wprob[True] <= (0.65090001 + 2*error) and \
+               wprob[True] >= (0.65090001 - 2*error) and \
+               sprob[True] <= (0.3 + error) and \
+               sprob[True] >= (0.3 - error)), \
+              "Incorrect probability with unobserved water-sprinkler network"
     
     def testObserved(self):
         """ Compute and check the probability of w=true|r=false,c=true and s=false|w=true,c=false
@@ -713,7 +786,7 @@ class MCMCTestCase(InferenceEngineTestCase):
                sprob[False] == 'value'), \
               "Either P(w=true|c=true,r=false) or P(s=false|c=false,w=true) was incorrect"
     
-    def testLearning(self):
+    def _testLearning(self):
         """ Sample network and then learn parameters and check that they are relatively close to original.
         """
         ev = self.engine.BNet.Sample(n=1000)
@@ -759,7 +832,7 @@ class JTreeTestCase(InferenceEngineTestCase):
 
     def testEvidence(self):
         """ check that evidence works """
-        # evidence c=1,s=0
+        print 'evidence c=1,s=0'
         self.engine.SetObs(['c','s'],[1,0])
         
         c=self.engine.Marginalise('c')
@@ -780,6 +853,30 @@ class JTreeTestCase(InferenceEngineTestCase):
     ###     - check message passing
     ###########################################################
 if __name__=='__main__':
-    suite = unittest.makeSuite(JTreeTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+        suite = unittest.makeSuite(MCMCTestCase, 'test')
+        runner = unittest.TextTestRunner()
+        runner.run(suite)
+##    
+##    suite = unittest.makeSuite(JTreeTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
+        G.InitDistributions()
+        c.setCPT([0.5, 0.5])
+        s.setCPT([0.5, 0.9, 0.5, 0.1])
+        r.setCPT([0.8, 0.2, 0.2, 0.8])
+        w.distribution[:,0,0]=[0.99, 0.01]
+        w.distribution[:,0,1]=[0.1, 0.9]
+        w.distribution[:,1,0]=[0.1, 0.9]
+        w.distribution[:,1,1]=[0.0, 1.0]
+
+        print G
+        engine = MCMCEngine(G,cut=100)
+        engine.SetObs(['c','s'],[1,0])
+        print engine.Marginalise('c',1000)
+        print engine.Marginalise('s',1000)
+        print engine.Marginalise('r',1000)
+        print engine.Marginalise('w',1000)

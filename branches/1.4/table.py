@@ -12,6 +12,7 @@ file for further legal information.
 __version__ = '0.1'
 __author__ = 'Kosta Gaitanis & Elliot Cohen'
 __author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
+import random
 import unittest
 import types
 import numarray as na
@@ -385,6 +386,35 @@ class Table:
 
         # btr is now ready for any operation with new
         return new, btr
+
+    def sample(self):
+        """ returns the index of the sampled value
+        eg. a=Pr(A)=[0.5 0.3 0.0 0.2]
+            a.sample() -->  5/10 times will return 0
+                            3/10 times will return 1
+                            2/10 times will return 3
+                            2 will never be returned
+
+            - returns an integer
+            - only works for one variable tables
+              eg. a=Pr(A,B); a.sample() --> ERROR
+        """
+        if len(self.names)>1:
+            raise "Sample only works for one variable tables"
+        
+        # csum is the cumulative sum of the distribution
+        # csum[i] = na.sum(self.cpt[0:i])
+        # csum[-1] = na.sum(self.cpt)
+        csum = [na.sum(self.cpt.flat[0:end+1]) for end in range(self.cpt.shape[0])]
+        
+        # sample in this distribution
+        r = random.random()
+        for i,cs in enumerate(csum):
+            if r < cs: return i
+        return i
+
+    def normalize(self):
+        na.divide(self.cpt, na.sum(self.cpt.flat), self.cpt)
     
 def ones(names, shape, type='Int32'):
    return Table(names,shape,na.product(shape)*[1],type)
@@ -572,7 +602,12 @@ if __name__ == '__main__':
     d = Table(['a','b','c','d','e'],[2,3,2,2,2],range(3*2**4))
 
     ac,cc = a.union(c)
-    print ac
+    #print ac
+
+    a=Table('a',5,[0.5, 0.2, 0.1, 0.0, 0.5])
+    a.normalize()
+    print a
+    print a.sample()
 ##    a*c
 ##    print a
 ##    print c

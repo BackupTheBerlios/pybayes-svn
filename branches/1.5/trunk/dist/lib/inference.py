@@ -737,6 +737,6 @@ class JTreeTestCase(InferenceEngineTestCase):
     
     
 if __name__=='__main__':
-    suite = unittest.makeSuite(JTreeTestCase, 'test')
+    suite = unittest.makeSuite(MCMCTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
