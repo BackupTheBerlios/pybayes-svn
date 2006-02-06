@@ -62,21 +62,30 @@ class BVertex(graph.Vertex):
         self.observed = observed
         self.family = [self] + list(self.in_v)
 
-    def InitDistribution(self, cpt=None):
+    def InitDistribution(self, *args, **kwargs):
         """ Initialise the distribution, all edges must be added"""
-        #first decide which type of Distribution (if all nodes are discrete, then Multinomial)
-        if na.alltrue([v.discrete for v in self.in_v]):
-            self.distribution = distributions.MultinomialDistribution(self, cpt=cpt) 
+        #first decide which type of Distribution
+        #if all nodes are discrete, then Multinomial)
+        if na.alltrue([v.discrete for v in self.family]):
+            #print self.name,'Multinomial'
+            self.distribution = distributions.MultinomialDistribution(self, *args, **kwargs) 
+            return
+
+        #gaussian distribution
+        if not self.discrete:
+            #print self.name,'Gaussian'
+            self.distribution = distributions.Gaussian_Distribution(self, *args, **kwargs)
             return
         
         #other cases go here
     
-    def setCPT(self, cpt):
-        self.distribution.setCPT(cpt)
+    def setDistributionParameters(self, *args, **kwargs):
+        # sets any parameters for the distribution of this node
+        self.distribution.setParameters(*args, **kwargs)
         
     def __str__(self):
         if self.discrete:
-            return graph.Vertex.__str__(self)+'    (discrete)'
+            return graph.Vertex.__str__(self)+'    (discrete, %d)' %self.nvalues
         else:
             return graph.Vertex.__str__(self)+'    (continuous)'
 
@@ -242,9 +251,9 @@ if __name__=='__main__':
         
     G.InitDistributions()
     
-    c.setCPT([0.5, 0.5])
-    s.setCPT([0.5, 0.9, 0.5, 0.1])
-    r.setCPT([0.8, 0.2, 0.2, 0.8])
+    c.setDistributionParameters([0.5, 0.5])
+    s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+    r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
     w.distribution[:,0,0]=[0.99, 0.01]
     w.distribution[:,0,1]=[0.1, 0.9]
     w.distribution[:,1,0]=[0.1, 0.9]

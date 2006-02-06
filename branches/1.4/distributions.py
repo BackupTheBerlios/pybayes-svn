@@ -25,17 +25,21 @@ class Distribution(object):
 
     """
     def __init__(self, v, isAdjustable = False):
+        self.vertex = v     # the node to which this distribution is attached
         self.family = [v] + [parent for parent in v.in_v]
         self.ndimensions = len(self.family)
         self.parents = self.family[1:]
-        self.names = [v.name for v in self.family]
+        self.names_list = [v.name for v in self.family]
+
+        # the type of distribution
+        self.distribution_type = None
        
         #used for learning
         self.isAjustable = isAdjustable
         
     def __str__(self):
-        string = 'Distribution for node : '+ self.names[0]
-        if len(names)>1: string += '\nParents : ' + str(self.names[1:])
+        string = 'Distribution for node : '+ self.names_list[0]
+        if len(self.names_list)>1: string += '\nParents : ' + str(self.names_list[1:])
 
         return string
 
@@ -48,21 +52,23 @@ class MultinomialDistribution(Distribution, Table):
     """
     def __init__(self, v, cpt = None, isAdjustable=False):
         Distribution.__init__(self, v, isAdjustable=isAdjustable)
+        self.distribution_type = "Multinomial"
+        
         assert(na.alltrue([v.discrete for v in self.family])), \
-              'All nodes in family '+ str(self.names)+ ' must be discrete !!!'
+              'All nodes in family '+ str(self.names_list)+ ' must be discrete !!!'
         
         self.sizes = [v.nvalues for v in self.family]
 
         # initialize the cpt
-        Table.__init__(self, self.names, self.sizes, cpt)
+        Table.__init__(self, self.names_list, self.sizes, cpt)
 
         #Used for Learning
         self.counts = None
     
     
-    def setCPT(self, cpt):
+    def setParameters(self, *args, **kwargs):
         ''' put values into self.cpt, delegated to Table class'''
-        Table.setValues(self, cpt)
+        Table.setValues(self, *args, **kwargs)
 
     def Normalize(self):
         """ puts the cpt into canonical form : Sum(Pr(x=i|Pa(x)))=1 for each
@@ -107,7 +113,7 @@ class MultinomialDistribution(Distribution, Table):
     #=== printing functions
     def __str__(self):
         string = 'Multinomial ' + Distribution.__str__(self)
-        string += 'Conditional Probability Table (CPT) :\n'
+        string += '\nConditional Probability Table (CPT) :\n'
         #---TODO: should find a nice neat way to represent numarrays
         #         only 3 decimals are sufficient... any ideas?
         string += repr(self.cpt)
@@ -116,7 +122,7 @@ class MultinomialDistribution(Distribution, Table):
 
 #=================================================================
 #=================================================================
-class Gaussian_Distribution(object):
+class Gaussian_Distribution(Distribution):
     """ Gaussian Continuous Distribution
     
     parents can be either discrete or continuous.
@@ -142,12 +148,14 @@ class Gaussian_Distribution(object):
      cov_type   - if 'diag', Sigma[:,:,i] is diagonal [ 'full' ]
      tied_cov   - if True, we constrain Sigma[:,:,i] to be the same for all i [False]
  """
-    def __init__(self, parent_dist, mu = None, sigma = None, wi = None, cov_type = 'full', tied_cov = False):
-        self.parent_dist = parent_dist
-        parent_dist.distribution_type = 'Gaussian'
+    def __init__(self, v, mu = None, sigma = None, wi = None, \
+                 cov_type = 'full', tied_cov = False, isAdjustable = True):
+        
+        Distribution.__init__(self, v, isAdjustable = isAdjustable)
+        self.distribution_type = 'Gaussian'
 
         # check that current node is continuous
-        if BVertex.discrete:
+        if v.discrete:
             raise 'Node must be continuous'
 
         self.discrete_parents = [parent for parent in self.parents if parent.discrete]
@@ -156,7 +164,13 @@ class Gaussian_Distribution(object):
         self.discrete_parents_shape = [dp.nvalues for dp in self.discrete_parents]
                 
         # set the parameters : mean, cov, weights
-        # set the mean : self.mean[:
+        self.setParameters(mu=mu, sigma=sigma, wi=wi, cov_type=cov_type, \
+                           tied_cov=tied_cov, isAdjustable=isAdjustable)
+        
+    def setParameters(self, mu = None, sigma = None, wi = None, cov_type = 'full', \
+                      tied_cov = False, isAdjustable = False):
+        
+        # set the mean : 
         if mu == None:
             # set all mu to zeros
             mu = na.zeros(shape=self.discrete_parents_shape, type='Float32')
@@ -167,21 +181,50 @@ class Gaussian_Distribution(object):
                                                                                             str([dp.name for dp in self.discrete_parents]))
         self.mean = mu
 
-        
         # set the covariance
-        
-    def __getattr__(self, name):
-        # always delegate to parent_dist
-        # if it is not found there, an error will occur
-        return getattr(self.parent_dist, name)        
-        
-        
+        #---TODO:
+
+        # set the wi
+        #---TODO:
+
     def __str__(self):
         string = 'Gaussian ' + Distribution.__str__(self)
-        string += 'Discrete Parents :' + str([p.name for p in self.discrete_parents])
-        string += 'Continuous Parents :' + str([p.name for p in self.continuous_parents])
+        string += '\nDiscrete Parents :' + str([p.name for p in self.discrete_parents])
+        string += '\nContinuous Parents :' + str([p.name for p in self.continuous_parents])
 
         return string
+#=================================================================
+#   Test case for Gaussian_Distribution class
+#=================================================================
+class GaussianTestCase(unittest.TestCase):
+    """ Unit tests for general distribution class
+    """
+    def setUp(self):
+        from bayesnet import BNet, BVertex, graph
+        # create a small BayesNet, Water-Sprinkler
+        G = BNet('Test')
+        
+        a,b,c,d = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('a b c d'.split(),[2,3,4,2])]
+        ad,bd,cd,dd = a.distribution, b.distribution, c.distribution, d.distribution
+        
+        # sizes = (2,3,4,2)
+        # a has 3 parents, b,c and d
+        for ep in [(b,a), (c,a), (d,a)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
+
+        G.InitDistributions()
+
+        a.setCPT(na.arange(48))
+        
+        self.G = G
+        self.a = a
+        #print G
+
+    def testSizes(self):
+        assert (self.a.distribution.sizes == [2,3,4,2]), "Error with self.sizes"
+
+
+
 #=================================================================
 #   Test case for Distribution class
 #=================================================================
@@ -318,18 +361,21 @@ class MultinomialTestCase(unittest.TestCase):
 if __name__ == '__main__':
     from bayesnet import *
 
-    suite = unittest.makeSuite(DistributionTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-
-    suite = unittest.makeSuite(MultinomialTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+##    suite = unittest.makeSuite(DistributionTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
+##
+##    suite = unittest.makeSuite(MultinomialTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
     
     # create a small BayesNet
     G = BNet('Water Sprinkler Bayesian Network')
     
-    c,s,r,w = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('c s r w'.split(),[2,3,4,5])]
+    c,s,r,w = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('c s r w'.split(),[2,2,2,0])]
+    w.discrete = False
+    w.nvalues = 0
+    
     
     for ep in [(c,r), (c,s), (r,w), (s,w)]:
         G.add_e(graph.DirEdge(len(G.e), *ep))
@@ -337,14 +383,13 @@ if __name__ == '__main__':
     print G
 
     G.InitDistributions()
-
-   
-    #ds = s.SetDistribution(Multinomial_Distribution)
-    #ds.Normalize()
-    #print ds.cpt
-
-    #dw = w.SetDistribution(Gaussian_Distribution,mu=[0,1])
-    #print dw
-
-    
+    c.setDistributionParameters([0.5, 0.5])
+    s.distribution.setParameters([0.5, 0.9, 0.5, 0.1])
+    r.distribution.cpt=na.array([0.8, 0.2, 0.2, 0.8])
+##    w.distribution[:,0,0]=[0.99, 0.01]
+##    w.distribution[:,0,1]=[0.1, 0.9]
+##    w.distribution[:,1,0]=[0.1, 0.9]
+##    w.distribution[:,1,1]=[0.0, 1.0]
+    wd = w.distribution
+    print wd.mean
     
