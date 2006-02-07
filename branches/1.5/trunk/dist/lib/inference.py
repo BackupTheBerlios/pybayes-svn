@@ -36,7 +36,6 @@ class InferenceEngine(graph.Graph):
             if v.distribution.isAdjustable:
                 v.distribution.initializeCounts()
         for case in cases:
-            #CHECK: all vertices in case are set
             assert(set(case.keys()) == set(self.BNet.v.keys())), "Not all values of 'case' are set"
             for v in self.BNet.v.values():
                 if v.distribution.isAdjustable:

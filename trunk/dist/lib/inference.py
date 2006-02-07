@@ -42,15 +42,15 @@ class InferenceEngine:
         """
         for v in self.BNet.v.values():
             if v.distribution.isAdjustable:
-                v.distribution.AllOnes()
+                v.distribution.initializeCounts()
         for case in cases:
-            #CHECK: all vertices in case are set
-            assert(len(case) == len(self.BNet.v)), "Not all values of 'case' are set"
+            assert(set(case.keys()) == set(self.BNet.v.keys())), "Not all values of 'case' are set"
             for v in self.BNet.v.values():
                 if v.distribution.isAdjustable:
-                    v.distribution[case] += 1
+                    v.incrCounts(case)
         for v in self.BNet.v.values():
             if v.distribution.isAdjustable:
+                v.distribution.setCounts()
                 v.distribution.Normalize()
     
     def LearnEMParams(self, cases, iterations=10):

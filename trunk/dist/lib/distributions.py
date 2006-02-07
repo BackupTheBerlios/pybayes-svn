@@ -66,9 +66,9 @@ class MultinomialDistribution(Distribution, Table):
         self.counts = None
     
     
-    def setParameters(self, *args, **kwargs):
+    def setParameters(self, values):
         ''' put values into self.cpt, delegated to Table class'''
-        Table.setValues(self, *args, **kwargs)
+        Table.setValues(self, values)
 
     def Normalize(self):
         """ puts the cpt into canonical form : Sum(Pr(x=i|Pa(x)))=1 for each
@@ -76,9 +76,10 @@ class MultinomialDistribution(Distribution, Table):
         """
         # add all dimensions except for the first one
         # add a new empty dimension to keep the same rank as self.cpt
+        assert(self.names_list[0] == self.vertex.name), "self has been transposed and key vertex is no longer 0 dimension"
         s = self.cpt
-        for i in range(1,self.ndimensions):
-            s = na.sum(s,axis = 1)[...,na.NewAxis]
+        for i in range(self.ndimensions):
+            s = na.sum(s,axis = 0)[...,na.NewAxis]
         self.cpt /= s
         return self.cpt
 
@@ -89,24 +90,37 @@ class MultinomialDistribution(Distribution, Table):
     #=== Learning Functions
     def initializeCounts(self):
         ''' initialize counts array to ones '''
-        self.counts = na.ones(shape=self.sizes, type='Float32')        
+        self.counts = na.ones(shape=self.sizes, type='Float32')      
+        
+    def incrCounts(self, index):
+        """ add one to given count """
+        self.counts[index] += 1
 
     def addToCounts(self, index, counts):
         self.counts[index] += counts
+    
+    def setCounts(self):
+        """ set the distributions underlying cpt equal to the counts """
+        assert(self.names == self.counts.names)
+        self.counts.transpose(self.names_list)
+        #set to copy in case we later destroy the counts or reinitialize them
+        self.cpt = self.counts.cpt.copy()
 
     def Sample(self, pvals):
         """ Return a sample of the distribution P(V | pvals)
         """
-        #FIXME: Currently assumes that all parents are set in pvals, but doesn't enforce that fact, this is important because if they are not all set, then the index of self.cpt[pvals] is not a table that sums to 1
-        dist = self[pvals]
+        #force that we are sampling over only one dim, so that a single value will be returned
+        assert(len(self.names - set(pvals.keys())) == 1), "There are too many or too few vertices set in pvals"
+        dist = self.__getitem__(pvals)
         rnum = ra.random()
-        probRange = 0
-        i = -1
-        for prob in dist:
-            probRange += prob
-            i += 1
-            if rnum <= probRange:
-                break
+        probRange = dist[0]
+        i = 0
+        if len(dist) > 1:
+            for prob in dist[1:]:
+                if rnum <= probRange:
+                    break
+                probRange += prob
+                i += 1    
         return i
     
     #===================================================
@@ -289,13 +303,15 @@ class MultinomialTestCase(unittest.TestCase):
             G.add_e(graph.DirEdge(len(G.e), *ep))
 
         G.InitDistributions()
-
-        a.setCPT(na.arange(48))
         
         self.G = G
-        self.a = a
         #print G
 
+    def testNormalize(self):
+        a = MultinomialDistribution(self.G.v['a'])
+        a.setParameters(range(48))
+        a.Normalize()
+        
     def testSizes(self):
         assert (self.a.distribution.sizes == [2,3,4,2]), "Error with self.sizes"
 
@@ -365,9 +381,10 @@ if __name__ == '__main__':
 ##    runner = unittest.TextTestRunner()
 ##    runner.run(suite)
 ##
-##    suite = unittest.makeSuite(MultinomialTestCase, 'test')
-##    runner = unittest.TextTestRunner()
-##    runner.run(suite)
+
+    suite = unittest.makeSuite(MultinomialTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
     
     # create a small BayesNet
     G = BNet('Water Sprinkler Bayesian Network')
