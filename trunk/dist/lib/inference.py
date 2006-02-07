@@ -47,11 +47,11 @@ class InferenceEngine:
             assert(set(case.keys()) == set(self.BNet.v.keys())), "Not all values of 'case' are set"
             for v in self.BNet.v.values():
                 if v.distribution.isAdjustable:
-                    v.incrCounts(case)
+                    v.distribution.incrCounts(case)
         for v in self.BNet.v.values():
             if v.distribution.isAdjustable:
                 v.distribution.setCounts()
-                v.distribution.Normalize()
+                v.distribution.normalize(dim=v.name)
     
     def LearnEMParams(self, cases, iterations=10):
         isConverged = False
@@ -726,9 +726,9 @@ class InferenceEngineTestCase(unittest.TestCase):
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
         G.InitDistributions()
-        c.setCPT([0.5, 0.5])
-        s.setCPT([0.5, 0.9, 0.5, 0.1])
-        r.setCPT([0.8, 0.2, 0.2, 0.8])
+        c.setDistributionParameters([0.5, 0.5])
+        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
         w.distribution[:,0,0]=[0.99, 0.01]
         w.distribution[:,0,1]=[0.1, 0.9]
         w.distribution[:,1,0]=[0.1, 0.9]
@@ -749,7 +749,7 @@ class MCMCTestCase(InferenceEngineTestCase):
         InferenceEngineTestCase.setUp(self)
         self.engine = MCMCEngine(self.BNet,cut=100)
         
-    def testUnobserved(self):
+    def _testUnobserved(self):
         """ Compute and check the probability of c=true and r=true given no evidence
         """
         N=1000
@@ -771,7 +771,7 @@ class MCMCTestCase(InferenceEngineTestCase):
                sprob[True] >= (0.3 - error)), \
               "Incorrect probability with unobserved water-sprinkler network"
     
-    def testObserved(self):
+    def _testObserved(self):
         """ Compute and check the probability of w=true|r=false,c=true and s=false|w=true,c=false
         """
         N=1000
@@ -786,25 +786,24 @@ class MCMCTestCase(InferenceEngineTestCase):
                sprob[False] == 'value'), \
               "Either P(w=true|c=true,r=false) or P(s=false|c=false,w=true) was incorrect"
     
-    def _testLearning(self):
+    def testLearning(self):
         """ Sample network and then learn parameters and check that they are relatively close to original.
         """
-        ev = self.engine.BNet.Sample(n=1000)
+        ev = self.engine.BNet.Sample(n=10000)
         #Remember what the old CPTs looked like and keep track of original dimension order
         cCPT = self.c.distribution.cpt.copy()
-        cdims = self.c.distribution.names_list
+        self.c.distribution.isAdjustable=True
+        self.c.setDistributionParameters([0, 1])
         sCPT = self.s.distribution.cpt.copy()
-        sdims = self.s.distribution.names_list
+        self.s.distribution.isAdjustable=True
+        self.s.setDistributionParameters([.5,.5,.5,.5])
         rCPT = self.r.distribution.cpt.copy()
-        rdims = self.r.distribution.names_list
+        self.r.distribution.isAdjustable=True
+        self.r.setDistributionParameters([.5,.5,.5,.5])
         wCPT = self.w.distribution.cpt.copy()
-        wdims = self.w.distribution.names_list
+        self.w.distribution.isAdjustable=True
+        self.w.setDistributionParameters([.5,.5,.5,.5,0,0,0,0])
         self.engine.LearnMLParams(ev)
-        #reorder dims to match original
-        self.c.distribution.transpose(cdims)
-        self.s.distribution.transpose(sdims)
-        self.r.distribution.transpose(rdims)
-        self.w.distribution.transpose(wdims)
         # Check that they match original parameters
         assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
                na.allclose(sCPT,self.s.distribution.cpt,atol=.1) and \
@@ -853,30 +852,30 @@ class JTreeTestCase(InferenceEngineTestCase):
     ###     - check message passing
     ###########################################################
 if __name__=='__main__':
-        suite = unittest.makeSuite(MCMCTestCase, 'test')
-        runner = unittest.TextTestRunner()
-        runner.run(suite)
-##    
-##    suite = unittest.makeSuite(JTreeTestCase, 'test')
-##    runner = unittest.TextTestRunner()
-##    runner.run(suite)
-        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
-        for ep in [(c,r), (c,s), (r,w), (s,w)]:
-            G.add_e(graph.DirEdge(len(G.e), *ep))
-        G.InitDistributions()
-        c.setCPT([0.5, 0.5])
-        s.setCPT([0.5, 0.9, 0.5, 0.1])
-        r.setCPT([0.8, 0.2, 0.2, 0.8])
-        w.distribution[:,0,0]=[0.99, 0.01]
-        w.distribution[:,0,1]=[0.1, 0.9]
-        w.distribution[:,1,0]=[0.1, 0.9]
-        w.distribution[:,1,1]=[0.0, 1.0]
+    suite = unittest.makeSuite(MCMCTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+   
+    suite = unittest.makeSuite(JTreeTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+    G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+    c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+    for ep in [(c,r), (c,s), (r,w), (s,w)]:
+        G.add_e(graph.DirEdge(len(G.e), *ep))
+    G.InitDistributions()
+    c.setDistributionParameters([0.5, 0.5])
+    s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+    r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+    w.distribution[:,0,0]=[0.99, 0.01]
+    w.distribution[:,0,1]=[0.1, 0.9]
+    w.distribution[:,1,0]=[0.1, 0.9]
+    w.distribution[:,1,1]=[0.0, 1.0]
 
-        print G
-        engine = MCMCEngine(G,cut=100)
-        engine.SetObs(['c','s'],[1,0])
-        print engine.Marginalise('c',1000)
-        print engine.Marginalise('s',1000)
-        print engine.Marginalise('r',1000)
-        print engine.Marginalise('w',1000)
+    print G
+    engine = MCMCEngine(G,cut=100)
+    engine.SetObs(['c','s'],[1,0])
+    print engine.Marginalise('c',1000)
+    print engine.Marginalise('s',1000)
+    print engine.Marginalise('r',1000)
+    print engine.Marginalise('w',1000)

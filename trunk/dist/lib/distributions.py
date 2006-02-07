@@ -1,6 +1,7 @@
 import delegate # no longer needed. Only RawCPT uses it, erase it when RawCPT doesn't exist anymore
 import types
 import numarray as na
+import numarray.random_array as ra
 from table import Table
 
 
@@ -35,7 +36,7 @@ class Distribution(object):
         self.distribution_type = None
        
         #used for learning
-        self.isAjustable = isAdjustable
+        self.isAdjustable = isAdjustable
         
     def __str__(self):
         string = 'Distribution for node : '+ self.names_list[0]
@@ -66,23 +67,10 @@ class MultinomialDistribution(Distribution, Table):
         self.counts = None
     
     
-    def setParameters(self, values):
+    def setParameters(self, *args, **kwargs):
         ''' put values into self.cpt, delegated to Table class'''
-        Table.setValues(self, values)
-
-    def Normalize(self):
-        """ puts the cpt into canonical form : Sum(Pr(x=i|Pa(x)))=1 for each
-        i in values(x)
-        """
-        # add all dimensions except for the first one
-        # add a new empty dimension to keep the same rank as self.cpt
-        assert(self.names_list[0] == self.vertex.name), "self has been transposed and key vertex is no longer 0 dimension"
-        s = self.cpt
-        for i in range(self.ndimensions):
-            s = na.sum(s,axis = 0)[...,na.NewAxis]
-        self.cpt /= s
-        return self.cpt
-
+        Table.setValues(self, *args, **kwargs)
+    
     def Convert_to_CPT(self):
         return self.cpt
 
@@ -90,7 +78,7 @@ class MultinomialDistribution(Distribution, Table):
     #=== Learning Functions
     def initializeCounts(self):
         ''' initialize counts array to ones '''
-        self.counts = na.ones(shape=self.sizes, type='Float32')      
+        self.counts = Table(self.names_list, shape=self.shape)
         
     def incrCounts(self, index):
         """ add one to given count """
@@ -101,27 +89,9 @@ class MultinomialDistribution(Distribution, Table):
     
     def setCounts(self):
         """ set the distributions underlying cpt equal to the counts """
-        assert(self.names == self.counts.names)
-        self.counts.transpose(self.names_list)
+        assert(self.names_list == self.counts.names_list)
         #set to copy in case we later destroy the counts or reinitialize them
         self.cpt = self.counts.cpt.copy()
-
-    def Sample(self, pvals):
-        """ Return a sample of the distribution P(V | pvals)
-        """
-        #force that we are sampling over only one dim, so that a single value will be returned
-        assert(len(self.names - set(pvals.keys())) == 1), "There are too many or too few vertices set in pvals"
-        dist = self.__getitem__(pvals)
-        rnum = ra.random()
-        probRange = dist[0]
-        i = 0
-        if len(dist) > 1:
-            for prob in dist[1:]:
-                if rnum <= probRange:
-                    break
-                probRange += prob
-                i += 1    
-        return i
     
     #===================================================
     #=== printing functions
@@ -310,7 +280,7 @@ class MultinomialTestCase(unittest.TestCase):
     def testNormalize(self):
         a = MultinomialDistribution(self.G.v['a'])
         a.setParameters(range(48))
-        a.Normalize()
+        a.normalize()
         
     def testSizes(self):
         assert (self.a.distribution.sizes == [2,3,4,2]), "Error with self.sizes"

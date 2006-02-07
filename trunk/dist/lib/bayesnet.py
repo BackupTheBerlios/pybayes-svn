@@ -68,6 +68,7 @@ class BVertex(graph.Vertex):
         #if all nodes are discrete, then Multinomial)
         if na.alltrue([v.discrete for v in self.family]):
             #print self.name,'Multinomial'
+            #FIX: should be able to pass through 'isAdjustable=True' and it work
             self.distribution = distributions.MultinomialDistribution(self, *args, **kwargs) 
             return
 
@@ -159,26 +160,20 @@ class BNet(graph.Graph):
             v.rand()
             v.makecpt()
     
-    def Sample(self):
-        """ Generate a sample of the network
+    def Sample(self,n=1):
+        """ Generate a sample of the network, n is the number of samples to generate
         """
-        sample = {}
-        #OPTIMIZE: could make this faster
-        vertices = self.v.values()
-        lastN = len(vertices) - 1
-        while len(vertices) > 0:
-            assert(lastN < len(self.v.values())), 'No nodes have no parents'
-            for v in vertices:
-                allSet = True
-                for parent in v.in_v():
-                    if not sample.has_key(parent.name):
-                        allSet = False
-                        break
-                if allSet:
-                    sample[v.name] = v.distribution.Sample(sample)
-                    vertices -= v
-                    lastN -= 1
-        return sample
+        assert(len(self.v) > 0)
+        samples = []
+        topological = self.topological_sort(self.v.values()[0])
+        for i in range(n):
+            sample = {}
+            for v in topological:
+                assert(not v.distribution == None), "vertex's distribution is not initialized"
+                sample[v.name] = v.distribution.sample(sample)
+            samples.append(sample)
+        return samples
+    
 
 class BNetTestCase(unittest.TestCase):
     """ Basic Test Case suite for BNet
@@ -380,11 +375,11 @@ if __name__=='__mains__':
     
     c.setCPT([1.0/c.nvalues]*c.nvalues)
     s.distribution.cpt = na.arange(5*4,shape=s.distribution.cpt.shape,type='Float32')
-    s.distribution.Normalize()
+    s.distribution.normalize()
     r.distribution.cpt = na.arange(5*3,shape=r.distribution.cpt.shape,type='Float32')
-    r.distribution.Normalize()
+    r.distribution.normalize()
     w.distribution.cpt = na.arange(2*3*4,shape=w.distribution.cpt.shape,type='Float32')
-    w.distribution.Normalize()    
+    w.distribution.normalize()    
     
     print G
     

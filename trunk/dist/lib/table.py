@@ -391,7 +391,7 @@ class Table:
         # btr is now ready for any operation with new
         return new, btr
 
-    def sample(self):
+    def sample(self, index={}):
         """ returns the index of the sampled value
         eg. a=Pr(A)=[0.5 0.3 0.0 0.2]
             a.sample() -->  5/10 times will return 0
@@ -403,13 +403,16 @@ class Table:
             - only works for one variable tables
               eg. a=Pr(A,B); a.sample() --> ERROR
         """
-        if len(self.names)>1:
-            raise "Sample only works for one variable tables"
-        
+        assert(len(self.names) == 1 or len(self.names - set(index.keys())) == 1),\
+              "Sample only works for one variable tables"
+        if not index == {}:
+            tcpt = self.__getitem__(index)
+        else:
+            tcpt = self.cpt
         # csum is the cumulative sum of the distribution
         # csum[i] = na.sum(self.cpt[0:i])
         # csum[-1] = na.sum(self.cpt)
-        csum = [na.sum(self.cpt.flat[0:end+1]) for end in range(self.cpt.shape[0])]
+        csum = [na.sum(tcpt.flat[0:end+1]) for end in range(tcpt.shape[0])]
         
         # sample in this distribution
         r = random.random()
@@ -417,8 +420,27 @@ class Table:
             if r < cs: return i
         return i
 
-    def normalize(self):
-        na.divide(self.cpt, na.sum(self.cpt.flat), self.cpt)
+    def normalize(self, dim=-1):
+        """ If dim=-1 all elements sum to 1.  Otherwise sum to specific dimension, such that 
+        sum(Pr(x=i|Pa(x))) = 1 for all values of i and a specific set of values for Pa(x)
+        """
+        if dim == -1 or len(self.cpt.shape) == 1:
+            self.cpt /= self.cpt.sum()            
+        else:
+            ndim = self.assocdim[dim]
+            order = range(len(self.names_list))
+            order[0] = ndim
+            order[ndim] = 0
+            tcpt = na.transpose(self.cpt, order)
+            t1cpt = na.sum(tcpt, axis=0)
+            t1cpt = na.resize(t1cpt,tcpt.shape)
+            tcpt = tcpt/t1cpt
+            self.cpt = na.transpose(tcpt, order)
+            
+            
+            
+            
+            
     
 def ones(names, shape, type='Int32'):
    return Table(names,shape,na.product(shape)*[1],type)
