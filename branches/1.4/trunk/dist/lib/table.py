@@ -51,6 +51,10 @@ class Table:
     def __getattr__(self, name):
         """ delegate to self.cpt """
         return getattr(self.cpt,name)
+    
+    def __coerce__(self, other):
+        assert(isinstance(other, Table))
+        return (self,other)
 
     def __copy__(self):
         """ copy method """

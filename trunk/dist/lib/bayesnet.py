@@ -227,59 +227,59 @@ if __name__=='__main__':
     JT.SetObs(['w','r'],[1,1])
     JT.MargAll()
 
-if __name__=='__mains__':
-    G = BNet('Bnet')
+#if __name__=='__mains__':
+    #G = BNet('Bnet')
     
-    a, b, c, d, e, f, g, h = [G.add_v(BVertex(nm)) for nm in 'a b c d e f g h'.split()]
-    a.nvalues = 3
-    e.nvalues = 4
-    c.nvalues = 5
-    g.nvalues = 6
-    for ep in [(a, b), (a,c), (b,d), (d,f), (c,e), (e,f), (c,g), (e,h), (g,h)]:
-        G.add_e(graph.DirEdge(len(G.e), *ep))
+    #a, b, c, d, e, f, g, h = [G.add_v(BVertex(nm)) for nm in 'a b c d e f g h'.split()]
+    #a.nvalues = 3
+    #e.nvalues = 4
+    #c.nvalues = 5
+    #g.nvalues = 6
+    #for ep in [(a, b), (a,c), (b,d), (d,f), (c,e), (e,f), (c,g), (e,h), (g,h)]:
+        #G.add_e(graph.DirEdge(len(G.e), *ep))
         
-    G.InitDistributions()
-    G.RandomizeCPTs()
+    #G.InitDistributions()
+    #G.RandomizeCPTs()
     
     
-    JT = JoinTree(G)
+    #JT = JoinTree(G)
     
-    print JT
+    #print JT
 
     
-    print JT.Marginalise('c')
-    
-    JT.SetObs(['b'],[1])
-    print JT.Marginalise('c')
-    
-    #JT.SetObs(['b','a'],[1,2])
     #print JT.Marginalise('c')
     
     #JT.SetObs(['b'],[1])
     #print JT.Marginalise('c')
     
-    logging.basicConfig(level=logging.CRITICAL)
+    ##JT.SetObs(['b','a'],[1,2])
+    ##print JT.Marginalise('c')
     
-    def RandomObs(JT, G):
-        for N in range(100):
-            n = randint(len(G.v))
+    ##JT.SetObs(['b'],[1])
+    ##print JT.Marginalise('c')
+    
+    #logging.basicConfig(level=logging.CRITICAL)
+    
+    #def RandomObs(JT, G):
+        #for N in range(100):
+            #n = randint(len(G.v))
             
-            obsn = []
-            obs = []
-            for i in range(n):
-                v = randint(len(G.v))
-                vn = G.v.values()[v].name
-                if vn not in obsn:
-                    obsn.append(vn)
-                    val = randint(G.v[vn].nvalues)
-                    obs.append(val)
+            #obsn = []
+            #obs = []
+            #for i in range(n):
+                #v = randint(len(G.v))
+                #vn = G.v.values()[v].name
+                #if vn not in obsn:
+                    #obsn.append(vn)
+                    #val = randint(G.v[vn].nvalues)
+                    #obs.append(val)
                     
-            JT.SetObs(obsn,obs)
+            #JT.SetObs(obsn,obs)
             
-    t = time.time()
-    RandomObs(JT,G)
-    t = time.time() - t
-    print t
+    #t = time.time()
+    #RandomObs(JT,G)
+    #t = time.time() - t
+    #print t
     
-    #profile.run('''JT.GlobalPropagation()''')
+    ##profile.run('''JT.GlobalPropagation()''')
                 

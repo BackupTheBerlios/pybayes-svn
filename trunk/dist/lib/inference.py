@@ -294,14 +294,14 @@ class MoralGraph(graph.Graph):
         Procedure for triangulating a graph :
         
         1. Make a copy of G, call it Gt
-        2. while there are still nodes left in Gt:
-        a) Select a node V from Gt according to the criterion
+        2. while there are still nodes left in G:
+        a) Select a node V from G according to the criterion
         described below
-        b) The node V and its neighbours in Gt form a cluster.
-        Connect of the nodes in the cluster. For each edge added
-        to Gt, add the same corresponding edge t G
-        c) Remove V from Gt
-        3. G, modified by the additional arcs introduces in previous
+        b) The node V and its neighbours in G form a cluster.
+        Connect the nodes in the cluster. For each edge added
+        to G, add the same corresponding edge to Gt
+        c) Remove V from G
+        3. Gt, modified by the additional arcs introduced in previous
         steps is now triangulated.
         
         The WEIGHT of a node V is the nmber of values V can take (BVertex.nvalues)
@@ -316,12 +316,14 @@ class MoralGraph(graph.Graph):
         """
         logging.info('Triangulating Tree and extracting Clusters')
         # don't touch this graph, create a copy of it
-        Gt = copy.deepcopy(self)
-        Gt.name = 'Triangulised ' + str(Gt.name)
+        G2 = copy.deepcopy(self)
+        G2.name = 'ToBeDeleted ' + str(G2.name)
+        self.name = 'Triangulised ' + str(self.name)
         
+        #DELETE: We shouldn't need 2 copies, we are already triangulating a graph that can be deleted
         # make a copy of Gt
-        G2 = copy.deepcopy(Gt)
-        G2.name = 'Copy of '+ Gt.name
+        #G2 = copy.deepcopy(Gt)
+        #G2.name = 'Copy of '+ Gt.name
     
         clusters = []
     
@@ -673,11 +675,12 @@ class InferenceEngineTestCase(unittest.TestCase):
     """ An abstract set of inference test cases.  Basically anything that is similar between the different inference engines can be implemented here and automatically applied to lower engines.  For example, we can define the learning tests here and they shouldn't have to be redefined for different engines.
     """
     def setUp(self):
-        G = BNet('Water Sprinkler Bayesian Network')
-        c,s,r,w = [G.add_v(BVertex(nm,2,True)) for nm in 'c s r w'.split()]
+        import bayesnet
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
-        G.InitCPTs()
+        G.InitDistributions()
         c.setCPT([0.5, 0.5])
         s.setCPT([0.5, 0.9, 0.5, 0.1])
         r.setCPT([0.8, 0.2, 0.2, 0.8])
@@ -706,7 +709,36 @@ class InferenceEngineTestCase(unittest.TestCase):
                na.allclose(rCPT,self.r.cpt,atol=.1) and \
                na.allclose(wCPT,self.w.cpt,atol=.1)),\
               "CPTs were more than atol apart"
+
+class JoinTreeTestCase(unittest.TestCase):
+    """ Join Tree unit tests
+    """
+    def setUp(self):
+        import bayesnet
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
+        G.InitDistributions()
+        c.setCPT([0.5, 0.5])
+        s.setCPT([0.5, 0.9, 0.5, 0.1])
+        r.setCPT([0.8, 0.2, 0.2, 0.8])
+        w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
+        self.c = c
+        self.s = s
+        self.r = r
+        self.w = w
+        self.BNet = G
     
+    def testCopyInTriangulate(self):
+        try:
+            Gm = self.BNet.Moralize()
+            Gt, clusters = Gm.Triangulate()
+        except RuntimeError:
+            #If runtime error was caught, assume from maximum recursion depth and cause and assertion error
+            self.fail("Copy did not work")
+                
+        
 class MCMCTestCase(InferenceEngineTestCase):
     """ MCMC unit tests.
     """
@@ -743,3 +775,7 @@ class MCMCTestCase(InferenceEngineTestCase):
     def testLearning(self):
         InferenceEngineTestCase.testLearning()
     
+if __name__=='__main__':
+    suite = unittest.makeSuite(JoinTreeTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
