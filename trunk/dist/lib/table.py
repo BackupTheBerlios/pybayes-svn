@@ -12,7 +12,7 @@ file for further legal information.
 __version__ = '0.1'
 __author__ = 'Kosta Gaitanis & Elliot Cohen'
 __author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
-import random
+#import random
 import unittest
 import types
 import numarray as na
@@ -146,18 +146,36 @@ class Table:
     def __eq__(a,b):
         """ True if a and b have same elements, size and names """
         if b.__class__ == na.NumArray:
+        # in case b is a just a numarray and not a Table instance
+        # in this case, variable should absoltely be at the same order
+        # otherwise the Table and numArray are considered as different
             return (na.alltrue(a.cpt.flat == b.flat) \
                     and a.shape == b.shape)
-        elif b == None: 
+            
+        
+        elif b == None:
+        # in case b is None type
             return False
+        
         elif isinstance(b, (int, float, long)):
+        # b is just a number, int, float, long
             return a.cpt == b
+        
         else:
-            # the b class should better be a Table or something like that
-            return (a.shape == b.shape \
-                    and a.names_list == b.names_list \
-                    and na.alltrue(a.cpt.flat == b.cpt.flat)  \
-                    )
+        # the b class should better be a Table or something like that
+        # order of variables is not important
+            # put the variables in the same order
+            # first must get the correspondance vector :
+            bcpt = a.prepareOther(b)
+            return (a.names == b.names and \
+                    bcpt.shape == a.shape and \
+                    na.allclose(bcpt, a.cpt))
+        
+## This code checks that order is the same
+##            return (a.shape == b.shape \
+##                    and a.names_list == b.names_list \
+##                    and na.alltrue(a.cpt.flat == b.cpt.flat)  \
+##                    )
 
     def __imul__(a,b):
         """
@@ -302,8 +320,8 @@ class Table:
     def prepareOther(self, other):
         """
         Prepares other for inplace multiplication/division with self. Returns
-        other.cpt ready for an operation. other must contain a subset of
-        the variables of self.
+        a *view* of other.cpt ready for an operation. other must contain a
+        subset of the variables of self. NON-DESTRUCTIVE!
 
         eg. a= Pr(A,B,C,D)
             b= Pr(D,B)
@@ -391,56 +409,6 @@ class Table:
         # btr is now ready for any operation with new
         return new, btr
 
-    def sample(self, index={}):
-        """ returns the index of the sampled value
-        eg. a=Pr(A)=[0.5 0.3 0.0 0.2]
-            a.sample() -->  5/10 times will return 0
-                            3/10 times will return 1
-                            2/10 times will return 3
-                            2 will never be returned
-
-            - returns an integer
-            - only works for one variable tables
-              eg. a=Pr(A,B); a.sample() --> ERROR
-        """
-        assert(len(self.names) == 1 or len(self.names - set(index.keys())) == 1),\
-              "Sample only works for one variable tables"
-        if not index == {}:
-            tcpt = self.__getitem__(index)
-        else:
-            tcpt = self.cpt
-        # csum is the cumulative sum of the distribution
-        # csum[i] = na.sum(self.cpt[0:i])
-        # csum[-1] = na.sum(self.cpt)
-        csum = [na.sum(tcpt.flat[0:end+1]) for end in range(tcpt.shape[0])]
-        
-        # sample in this distribution
-        r = random.random()
-        for i,cs in enumerate(csum):
-            if r < cs: return i
-        return i
-
-    def normalize(self, dim=-1):
-        """ If dim=-1 all elements sum to 1.  Otherwise sum to specific dimension, such that 
-        sum(Pr(x=i|Pa(x))) = 1 for all values of i and a specific set of values for Pa(x)
-        """
-        if dim == -1 or len(self.cpt.shape) == 1:
-            self.cpt /= self.cpt.sum()            
-        else:
-            ndim = self.assocdim[dim]
-            order = range(len(self.names_list))
-            order[0] = ndim
-            order[ndim] = 0
-            tcpt = na.transpose(self.cpt, order)
-            t1cpt = na.sum(tcpt, axis=0)
-            t1cpt = na.resize(t1cpt,tcpt.shape)
-            tcpt = tcpt/t1cpt
-            self.cpt = na.transpose(tcpt, order)
-            
-            
-            
-            
-            
     
 def ones(names, shape, type='Int32'):
    return Table(names,shape,na.product(shape)*[1],type)
@@ -465,9 +433,11 @@ class TableTestCase(unittest.TestCase):
        b = Table(['a','b'],[2,3],range(6),'Float32')
        c = Table(['a'],[6],range(6),'Float32')
        d = na.arange(6,shape=(2,3))
+       e = Table(['b','a'],[3,2], na.transpose(a.cpt))
        assert(a == b and \
               not a == c and \
-              a == d), \
+              a == d and \
+              a == e and e == a), \
                 "__eq__ does not work"
 
    def testIMul(self):
@@ -539,7 +509,7 @@ class TableTestCase(unittest.TestCase):
        bres[0] = 0
        ares = acpt/bcpt
        ares[getnan(ares)] = 0.0
-       
+
        assert (ab == Table(['a','b','c','d','e'],[2,3,4,5,6],ares) and \
                cc == Table(['a','b','c','d','e'],[2,3,4,5,6],cres) and \
                bb == Table(['c','b','e'],[4,3,6],bres) ), \
@@ -628,12 +598,8 @@ if __name__ == '__main__':
     d = Table(['a','b','c','d','e'],[2,3,2,2,2],range(3*2**4))
 
     ac,cc = a.union(c)
-    #print ac
 
-    a=Table('a',5,[0.5, 0.2, 0.1, 0.0, 0.5])
-    a.normalize()
-    print a
-    print a.sample()
+
 ##    a*c
 ##    print a
 ##    print c

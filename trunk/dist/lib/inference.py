@@ -32,13 +32,19 @@ class InferenceEngine:
         self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
     
     def Marginalise(self, v):
-        assert 0, 'In InferenceEngine, method must not be implemented at Child level'
+        assert 0, 'In InferenceEngine, method must not be implemented at \
+                   Child level'
     
     def MarinaliseFamily(self, v):
-        assert 0, 'In InferenceEngine, method must not be implemented at appropriate level'
+        assert 0, 'In InferenceEngine, method must not be implemented at \
+                   appropriate level'
     
     def LearnMLParams(self, cases):
-        """ Learn and set the parameters of the network to the ML estimate contained in cases.  Warning: this is destructive, it does not take any prior parameters into account. Assumes that all evidence is specified.
+        """ Learn and set the parameters of the network to the ML estimate
+        contained in cases.
+        
+        Warning: this is destructive, it does not take any prior parameters
+                 into account. Assumes that all evidence is specified.
         """
         for v in self.BNet.v.values():
             if v.distribution.isAdjustable:
@@ -712,7 +718,7 @@ class MCMCEngine(InferenceEngine):
             MBval.normalize()
 
             #######################################
-            # added a sample() function in Table
+            # added a sample() function in Distribution
             #######################################
             return MBval.sample()
         
@@ -749,7 +755,7 @@ class MCMCTestCase(InferenceEngineTestCase):
         InferenceEngineTestCase.setUp(self)
         self.engine = MCMCEngine(self.BNet,cut=100)
         
-    def _testUnobserved(self):
+    def testUnobserved(self):
         """ Compute and check the probability of c=true and r=true given no evidence
         """
         N=1000
@@ -790,20 +796,24 @@ class MCMCTestCase(InferenceEngineTestCase):
         """ Sample network and then learn parameters and check that they are relatively close to original.
         """
         ev = self.engine.BNet.Sample(n=10000)
+        
         #Remember what the old CPTs looked like and keep track of original dimension order
         cCPT = self.c.distribution.cpt.copy()
         self.c.distribution.isAdjustable=True
-        self.c.setDistributionParameters([0, 1])
+        self.c.distribution.uniform()
         sCPT = self.s.distribution.cpt.copy()
         self.s.distribution.isAdjustable=True
-        self.s.setDistributionParameters([.5,.5,.5,.5])
+        self.s.distribution.uniform()
         rCPT = self.r.distribution.cpt.copy()
         self.r.distribution.isAdjustable=True
-        self.r.setDistributionParameters([.5,.5,.5,.5])
+        self.r.distribution.uniform()
         wCPT = self.w.distribution.cpt.copy()
         self.w.distribution.isAdjustable=True
-        self.w.setDistributionParameters([.5,.5,.5,.5,0,0,0,0])
+        self.w.distribution.uniform()
+
+        # Learn parameters
         self.engine.LearnMLParams(ev)
+        
         # Check that they match original parameters
         assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
                na.allclose(sCPT,self.s.distribution.cpt,atol=.1) and \
@@ -852,13 +862,13 @@ class JTreeTestCase(InferenceEngineTestCase):
     ###     - check message passing
     ###########################################################
 if __name__=='__main__':
-    suite = unittest.makeSuite(MCMCTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-   
-    suite = unittest.makeSuite(JTreeTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+##    suite = unittest.makeSuite(MCMCTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
+##   
+##    suite = unittest.makeSuite(JTreeTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
     G = bayesnet.BNet('Water Sprinkler Bayesian Network')
     c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
     for ep in [(c,r), (c,s), (r,w), (s,w)]:
@@ -873,9 +883,37 @@ if __name__=='__main__':
     w.distribution[:,1,1]=[0.0, 1.0]
 
     print G
-    engine = MCMCEngine(G,cut=100)
-    engine.SetObs(['c','s'],[1,0])
-    print engine.Marginalise('c',1000)
-    print engine.Marginalise('s',1000)
-    print engine.Marginalise('r',1000)
-    print engine.Marginalise('w',1000)
+##    engine = MCMCEngine(G,cut=100)
+##    engine.SetObs(['c','s'],[1,0])
+##    print engine.Marginalise('c',1000)
+##    print engine.Marginalise('s',1000)
+##    print engine.Marginalise('r',1000)
+##    print engine.Marginalise('w',1000)
+
+    ev = G.Sample(100)
+    #for e in ev:print e
+
+    print 'real parameters'
+    print c.distribution
+
+    cCPT = c.distribution.cpt.copy()
+    c.distribution.isAdjustable=True
+    c.distribution.uniform()
+    sCPT = s.distribution.cpt.copy()
+    s.distribution.isAdjustable=True
+    s.distribution.uniform()
+    rCPT = r.distribution.cpt.copy()
+    r.distribution.isAdjustable=True
+    r.distribution.uniform()
+    wCPT = w.distribution.cpt.copy()
+    w.distribution.isAdjustable=True
+    w.distribution.uniform()
+
+    print 'initialization parameters'
+    print c.distribution
+    
+    engine = JoinTree(G)
+    engine.LearnMLParams(ev)
+
+    print 'Learned parameters'
+    print c.distribution

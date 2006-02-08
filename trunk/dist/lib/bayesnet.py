@@ -34,9 +34,6 @@ import inference
 seed()
 #logging.basicConfig(level= logging.INFO)
 
-# removed CPT and placed Distriution
-# also removed delegate.Delegate, delaegation is now performed by distributions
-# we can put it back if we really need it, but for the moment i think it's ok
 class BVertex(graph.Vertex):
     def __init__(self, name, discrete = True, nvalues = 2, observed = True):
         '''
@@ -424,6 +421,7 @@ if __name__=='__mains__':
     
     
     JT = inference.JoinTree(G)
+    JT2 = inference.MCMCEngine(G,1000)
     
     print JT
 
@@ -432,6 +430,8 @@ if __name__=='__mains__':
     
     JT.SetObs(['b'],[1])
     print JT.Marginalise('c')
+
+    print JT2.Marginalise('c')
     
     #JT.SetObs(['b','a'],[1,2])
     #print JT.Marginalise('c')

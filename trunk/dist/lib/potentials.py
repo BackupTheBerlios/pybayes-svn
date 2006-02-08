@@ -48,9 +48,9 @@ class DiscretePotential(Potential, table.Table):
     #=========================
     # Operations
     def Marginalise(self, varnames):
-        """ sum(varnames) self.arr
+        """ Marginalises the variables specified in varnames.
         eg. a = Pr(A,B,C,D)
-        a.Marginalise(['A','C']) --> Pr(B,D)
+            a.Marginalise(['A','C']) --> Pr(B,D) = Sum(A,C)(Pr(A,B,C,D))
 
         returns a new DiscretePotential instance
         the variables keep their relative order
@@ -70,6 +70,16 @@ class DiscretePotential(Potential, table.Table):
 
         return self.__class__(newnames, temp.shape, temp)
 
+    def Retrieve(self, varnames):
+        """ Retrieves the dimensions specified in varnames.
+        To do this, we marginalise all the variables EXCEPT those specified
+        in varnames.
+        E.g.    a = Pr(A,B,C,D)
+                a.Retrieve(['A','C']) --> Pr(A,C) = Sum(B,D)(Pr(A,B,C,D))
+        """
+        marginals = self.names - set(varnames)
+        return self.Marginalise(marginals)
+    
     def __add__(self, other):
         """
         sum(X\S)phiX

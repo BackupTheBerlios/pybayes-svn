@@ -2,6 +2,7 @@ import delegate # no longer needed. Only RawCPT uses it, erase it when RawCPT do
 import types
 import numarray as na
 import numarray.random_array as ra
+import random
 from table import Table
 
 
@@ -16,24 +17,56 @@ class Distribution(object):
 
     variables :
     -------------
-        - self.family = [x, Pa(x)1, Pa(x)2,...,Pa(x)N)]
+        - vertex =      a reference to the BVertex instance containing the
+                        variable quantified in this distribution
+                        
+        - family =      [x, Pa(x)1, Pa(x)2,...,Pa(x)N)]
                         references to the nodes
-        - self.names  = [name of x, name of Pa(x)1,..., name of Pa(x)N]
-                        strings : the names of the nodes
+                   
+        - names =       set(name of x, name of Pa(x)1,..., name of Pa(x)N)
+                        set of strings : the names of the nodes
+                        this is a set, no order is specified!
+                   
+        - names_list =  [name of x, name of Pa(x)1,..., name of Pa(x)N]
+                        list of strings : the names of the nodes
+                        this is a list, order is specified!
 
-        - self.order  = dict{var name : index}
-                        the order in which the variables are stored
+        - parents =     [name of Pa(x)1,...,name of Pa(x)N]
+                        list of strings : the names of the node's parents
+                        this is a list, order is the same as family[1:]
+
+        - ndimensions = number of variables contained in this distribution
+                        = len(self.family)
+
+        - distribution_type = a string the type of the distribution
+                              e.g. 'Multinomial', 'Gaussian', ...
+
+        - isAdjustable = if True: the parameters of this distribution can
+                         be learned.
 
     """
+    vertex = None 
+    family = list()
+    ndimensions = 0
+    parents = list()
+    names_list = list()
+    #names = set()
+    distribution_type = 'None'
+    isAdjustable = False
+    
     def __init__(self, v, isAdjustable = False):
+        """ Creates a new distribution for the given variable.
+        v is a BVertex instance
+        """
         self.vertex = v     # the node to which this distribution is attached
         self.family = [v] + [parent for parent in v.in_v]
         self.ndimensions = len(self.family)
         self.parents = self.family[1:]
         self.names_list = [v.name for v in self.family]
+        #self.names = set(self.names_list)
 
         # the type of distribution
-        self.distribution_type = None
+        self.distribution_type = 'None'
        
         #used for learning
         self.isAdjustable = isAdjustable
@@ -73,6 +106,82 @@ class MultinomialDistribution(Distribution, Table):
     
     def Convert_to_CPT(self):
         return self.cpt
+
+    #======================================================
+    #=== Operations on CPT
+    def normalize(self, dim=-1):
+        """ If dim=-1 all elements sum to 1.  Otherwise sum to specific dimension, such that 
+        sum(Pr(x=i|Pa(x))) = 1 for all values of i and a specific set of values for Pa(x)
+        """
+        if dim == -1 or len(self.cpt.shape) == 1:
+            self.cpt /= self.cpt.sum()            
+        else:
+            ndim = self.assocdim[dim]
+            order = range(len(self.names_list))
+            order[0] = ndim
+            order[ndim] = 0
+            tcpt = na.transpose(self.cpt, order)
+            t1cpt = na.sum(tcpt, axis=0)
+            t1cpt = na.resize(t1cpt,tcpt.shape)
+            tcpt = tcpt/t1cpt
+            self.cpt = na.transpose(tcpt, order)
+
+    def ones(self):
+        """ All CPT elements are set to 1 """
+        self.cpt = na.ones(self.cpt.shape, type=self.cpt.type())
+
+    def zeros(self):
+        """ All CPT elements are set to 0 """
+        self.cpt = na.zeros(self.cpt.shape, type=self.cpt.type())
+
+    def uniform(self):
+        """ All CPT elements have equal probability :
+            a = Pr(A|B,C,D)
+            a.uniform()
+            Pr(A=0)=Pr(A=1)=...=Pr(A=N)
+
+            the result is a normalized CPT
+            calls self.ones() and then self.normalize()
+        """
+        self.ones()
+        self.normalize()
+        
+    ######################################################
+    #---TODO: Should add some initialisation functions:
+    #           all ones, uniform, zeros
+    #           gaussian, ...
+    ######################################################
+    
+    #======================================================
+    #=== Sampling
+    def sample(self, index={}):
+        """ returns the index of the sampled value
+        eg. a=Pr(A)=[0.5 0.3 0.0 0.2]
+            a.sample() -->  5/10 times will return 0
+                            3/10 times will return 1
+                            2/10 times will return 3
+                            2 will never be returned
+
+            - returns an integer
+            - only works for one variable tables
+              eg. a=Pr(A,B); a.sample() --> ERROR
+        """
+        assert(len(self.names) == 1 or len(self.names - set(index.keys())) == 1),\
+              "Sample only works for one variable tables"
+        if not index == {}:
+            tcpt = self.__getitem__(index)
+        else:
+            tcpt = self.cpt
+        # csum is the cumulative sum of the distribution
+        # csum[i] = na.sum(self.cpt[0:i])
+        # csum[-1] = na.sum(self.cpt)
+        csum = [na.sum(tcpt.flat[0:end+1]) for end in range(tcpt.shape[0])]
+        
+        # sample in this distribution
+        r = random.random()
+        for i,cs in enumerate(csum):
+            if r < cs: return i
+        return i
 
     #==================================================
     #=== Learning Functions
@@ -249,9 +358,9 @@ class DistributionTestCase(unittest.TestCase):
                set(w.distribution.family) == set([w,r,s])), \
                "Error with family"
 
-        assert(c.distribution.order['c'] == 0 and \
-               set([w.distribution.order['w'],w.distribution.order['s'], w.distribution.order['r']]) == set([0,1,2])), \
-               "Error with order"
+##        assert(c.distribution.order['c'] == 0 and \
+##               set([w.distribution.order['w'],w.distribution.order['s'], w.distribution.order['r']]) == set([0,1,2])), \
+##               "Error with order"
  
 #=================================================================
 #   Test case for Multinomial_Distribution class
@@ -275,6 +384,7 @@ class MultinomialTestCase(unittest.TestCase):
         G.InitDistributions()
         
         self.G = G
+        self.a, self.b, self.c, self.d = a,b,c,d
         #print G
 
     def testNormalize(self):
@@ -290,8 +400,8 @@ class MultinomialTestCase(unittest.TestCase):
     def testGetCPT(self):
         """ Violate abstraction and check that setCPT actually worked correctly, by getting things out of the matrix
         """
-        assert(na.all(self.a.distribution[0,0,0,:] == na.array([0,1])) and \
-               na.all(self.a.distribution[1,0,0,:] == na.array([24,25]))), \
+        assert(na.all(self.a.distribution[0,0,0,:] == self.a.distribution.cpt[0,0,0,:]) and \
+               na.all(self.a.distribution[1,0,0,:] == self.a.distribution.cpt[1,0,0,:])), \
               "Error getting raw cpt"
     
     def testSetCPT(self):
@@ -347,9 +457,9 @@ class MultinomialTestCase(unittest.TestCase):
 if __name__ == '__main__':
     from bayesnet import *
 
-##    suite = unittest.makeSuite(DistributionTestCase, 'test')
-##    runner = unittest.TextTestRunner()
-##    runner.run(suite)
+    suite = unittest.makeSuite(DistributionTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
 ##
 
     suite = unittest.makeSuite(MultinomialTestCase, 'test')
