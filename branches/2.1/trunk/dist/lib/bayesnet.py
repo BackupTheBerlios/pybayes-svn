@@ -259,13 +259,6 @@ if __name__=='__main__':
     JT = inference.JoinTree(G)
     clusters = JT.all_v
     c1,c2 = clusters[:]
-    
-    #print c1.potential
-    #print c2.potential
-    #JT.SetObs(['c'],[1])
-    #print JT.Marginalise('w')
-    #print 'RESULT, after Junction Tree:'
-    JT.MargAll()
 
     # verification
     print 'VERIFICATION, Results should look like this :'
@@ -288,8 +281,12 @@ if __name__=='__main__':
     print 'w:', crsw.Marginalise('c s r'.split())
 
     #add some evidence
-    JT.SetObs(['c'],[1])
-    JT.MargAll()
+    JT.SetObs(['w','r'],[1, 1])
+    print JT.Marginalise('s')
+    print JT.Marginalise('w')
+    print JT.Marginalise('c')
+    print JT.Marginalise('r')
+    print JT.Marginalise('s')
 
 ##    print 'DEBUGGING: performing same calculations as JunctionTree:'
 ##    #create the clusters and set them to allOnes

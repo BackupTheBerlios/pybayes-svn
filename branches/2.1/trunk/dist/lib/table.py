@@ -159,6 +159,28 @@ class Table:
                     and na.alltrue(a.cpt.flat == b.cpt.flat)  \
                     )
 
+    def __iadd__(a,b):
+        """
+        in place addition
+        b must be a subset of a!!!
+        usage:
+        a+=b
+        Adds corresponding entries as in numarray.  However, transposes 
+        temp copy of b to match a's dimension order
+        
+        Notes :
+        -   a keeps the order of its existing variables
+        -   b is not touched during this operation
+        -   operation is done in-place for a, a is not the same after the operation
+        """
+        # prepare dimensions in b for multiplication
+        cptb = a.prepareOther(b)
+
+        #Add in place, changes a
+        a.cpt += cptb
+        
+        return a
+    
     def __imul__(a,b):
         """
         in place multiplication
@@ -425,22 +447,20 @@ class Table:
         sum(Pr(x=i|Pa(x))) = 1 for all values of i and a specific set of values for Pa(x)
         """
         if dim == -1 or len(self.cpt.shape) == 1:
-            self.cpt /= self.cpt.sum()            
+            c = self.cpt.sum()
+            self.cpt /= c
         else:
             ndim = self.assocdim[dim]
             order = range(len(self.names_list))
             order[0] = ndim
             order[ndim] = 0
             tcpt = na.transpose(self.cpt, order)
-            t1cpt = na.sum(tcpt, axis=0)
-            t1cpt = na.resize(t1cpt,tcpt.shape)
-            tcpt = tcpt/t1cpt
-            self.cpt = na.transpose(tcpt, order)
-            
-            
-            
-            
-            
+            #CHECK: c might not be correct because of transposing
+            c = na.sum(tcpt, axis=0)
+            t2cpt = na.resize(c,tcpt.shape)
+            tcpt = tcpt/t2cpt
+            self.cpt = na.transpose(tcpt, order)        
+        return c
     
 def ones(names, shape, type='Int32'):
    return Table(names,shape,na.product(shape)*[1],type)

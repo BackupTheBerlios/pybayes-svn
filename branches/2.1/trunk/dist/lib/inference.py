@@ -53,24 +53,34 @@ class InferenceEngine:
                 v.distribution.setCounts()
                 v.distribution.normalize(dim=v.name)
     
-    def LearnEMParams(self, cases, iterations=10):
+    def LearnEMParams(self, cases, iterations=10, thresh=0):
+        assert(iterations > 0), "must have more than 0 iterations"
+        assert(thresh >= 0), "thresh must be positive"
         isConverged = False
         iter = 0
+        prevLL = 0
+        LL = self.EMStep(cases)
         while not isConverged and iter < iterations:
+            prevLL = LL
             LL = self.EMStep(cases)
+            isConverged = abs(LL - prevLL) < thresh
             iter += 1
-            isConverged = EMConverged(LL, prevLL, thresh)
     
     def EMStep(self, cases):
+        LL = 0
         for v in self.BNet.v.values():
-            v.distribution.initializeCounts()
+            if v.distribution.isAdjustable:
+                v.distribution.initializeCounts()
         for case in cases:
-            self.SetObs(case)
+            LL += self.SetObs(case.keys(),case.values())
             for v in self.BNet.v.values():
                 if v.distribution.isAdjustable:
-                    v.counts += self.MarginaliseFamily(v.name)
+                    v.distribution.counts += self.MarginaliseFamily(v.name)
         for v in self.BNet.v.values():
-            v.ResetParameters()
+            if v.distribution.isAdjustable:
+                v.distribution.setCounts()
+                v.distribution.normalize(dim=v.name)
+        return LL
         
 class Cluster(graph.Vertex):
     """
@@ -158,7 +168,6 @@ class Cluster(graph.Vertex):
         #print newphiR
         
         c.potential *= newphiR
-
 
     def CollectEvidence(self, X=None):
         """
@@ -492,6 +501,9 @@ class JoinTree(InferenceEngine, graph.Graph):
         self.UnmarkAllClusters()
         start.DistributeEvidence()
         
+        LL = self.clusterdict.values()[0].potential.sum()
+        return LL
+            
     def Marginalise(self, v):
         """ returns Pr(v), v is a variable name"""
         
@@ -499,22 +511,24 @@ class JoinTree(InferenceEngine, graph.Graph):
         # v.parentcluster is a convenient choice, can make better...
         c = self.clusterdict[v]
         res = c.potential.Marginalise(c.other(v))
-        res.Normalise()
+        res.normalize()
         return res
     
     def MarginaliseFamily(self, v):
         """ returns Pr(fam(v)), v is a variable name
         """
         c = self.clusterdict[v]
-        res = c.Marginalise(c.other(self.BNet.v[v].family))
-        return res.Normalise()
+        fnames = [f.name for f in self.BNet.v[v].family]
+        res = c.potential.Marginalise(c.other(fnames))
+        #No need to normalize because not Pr(v|x)
+        return res
     
-    def SetObs(self, v,val):
+    def SetObs(self,v,val):
         """ Incorporate new evidence """
         logging.info('Incorporating Observations')
         # evidence = {var.name:observed value}
         self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
-        
+  
         # add any missing variables, -1 means not observed:
         for vv in self.BNet.v.values():
             if not self.evidence.has_key(vv.name):
@@ -523,7 +537,8 @@ class JoinTree(InferenceEngine, graph.Graph):
         # evidence contains all variables and their observed value (-1 if unobserved)
         # this is necessary to find out which variables have been retracted,
         # unchanged or updated
-        self.PropagateEvidence()
+        LL = self.PropagateEvidence()
+        return LL
     
     def PropagateEvidence(self):
         """ propagate the evidence in the bayesian structure """
@@ -544,9 +559,13 @@ class JoinTree(InferenceEngine, graph.Graph):
                 del ev[vv.name]
             
         # propagate evidence
-        if retraction: self.GlobalRetraction(ev)
-        else: self.GlobalUpdate(ev)
-            
+        LL = 0
+        if retraction: 
+            LL = self.GlobalRetraction(ev)
+        else: 
+            LL = self.GlobalUpdate(ev)
+        return LL
+    
     def SetFinding(self, v):
         ''' v becomes True (v=1), all other observed variables are false '''
         logging.info('Set finding, '+ str(v))
@@ -572,21 +591,26 @@ class JoinTree(InferenceEngine, graph.Graph):
         for v in evidence.keys():
             startcluster.add(self.BNet.v[v].parentcluster)
             
+        LL = 0
         if len(startcluster) == 1:
             # all variables that have changed are in the same cluster
             # perform DistributeEvidence only
             logging.info('distribute only')
             self.UnmarkAllClusters()
-            startcluster.pop().DistributeEvidence()
+            c = startcluster.pop()
+            c.DistributeEvidence()
+            LL = c.potential.sum()
         else:
             # perform global propagation
-            self.GlobalPropagation()
+            LL = self.GlobalPropagation()
+        return LL
     
     def GlobalRetraction(self, evidence ):
         logging.info('Global Retraction')
         self.Initialization()
         self.ObservationEntry(evidence.keys(),evidence.values())
-        self.GlobalPropagation()
+        LL = self.GlobalPropagation()
+        return LL
         
     def ObservationEntry(self, v, val):
         logging.info('Observation Entry')
@@ -601,7 +625,12 @@ class JoinTree(InferenceEngine, graph.Graph):
             if not v.observed: print v, self.Marginalise(v.name)
         for v in self.BNet.observed:
             print v, self.Marginalise(v.name)
-                
+    
+    """ Overload learning functions from parent class InferenceEngine """
+    def EMStep(self, cases):
+        self.Initialization()
+        InferenceEngine.EMStep(self, cases)
+    
     def Print(self):
         for c in self.v.values():
             print c
@@ -793,16 +822,16 @@ class MCMCTestCase(InferenceEngineTestCase):
         #Remember what the old CPTs looked like and keep track of original dimension order
         cCPT = self.c.distribution.cpt.copy()
         self.c.distribution.isAdjustable=True
-        self.c.setDistributionParameters([0, 1])
+        #self.c.setDistributionParameters([0, 1])
         sCPT = self.s.distribution.cpt.copy()
         self.s.distribution.isAdjustable=True
-        self.s.setDistributionParameters([.5,.5,.5,.5])
+        #self.s.setDistributionParameters([.5,.5,.5,.5])
         rCPT = self.r.distribution.cpt.copy()
         self.r.distribution.isAdjustable=True
-        self.r.setDistributionParameters([.5,.5,.5,.5])
+        #self.r.setDistributionParameters([.5,.5,.5,.5])
         wCPT = self.w.distribution.cpt.copy()
         self.w.distribution.isAdjustable=True
-        self.w.setDistributionParameters([.5,.5,.5,.5,0,0,0,0])
+        #self.w.setDistributionParameters([.5,.5,.5,.5,0,0,0,0])
         self.engine.LearnMLParams(ev)
         # Check that they match original parameters
         assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
@@ -843,7 +872,40 @@ class JTreeTestCase(InferenceEngineTestCase):
                na.allclose(r.cpt,[0.2,0.8]) and \
                na.allclose(s.cpt,[1.0,0.0]) and \
                na.allclose(w.cpt,[ 0.278, 0.722]) ), \
-               " Somethings wrong with JoinTree evidence"        
+               " Somethings wrong with JoinTree evidence"     
+    
+    def testEMLearning(self):
+        vars = ['c','s','r','w']
+        #create evidence by sampling network
+        ev = self.engine.BNet.Sample(n=100)
+        #make some evidence hidden
+        for case in ev:
+            r = random.randint(0,3)
+            del case[vars[r]]
+        cCPT = self.c.distribution.cpt.copy()
+        self.c.distribution.isAdjustable=True
+        self.c.setDistributionParameters([0, 1])
+        self.c.distribution.normalize(dim='c')
+        sCPT = self.s.distribution.cpt.copy()
+        self.s.distribution.isAdjustable=True
+        self.s.setDistributionParameters([.5,.5,.5,.5])
+        self.s.distribution.normalize(dim='s')
+        rCPT = self.r.distribution.cpt.copy()
+        self.r.distribution.isAdjustable=True
+        self.r.setDistributionParameters([.5,.5,.5,.5])
+        self.r.distribution.normalize(dim='r')
+        wCPT = self.w.distribution.cpt.copy()
+        self.w.distribution.isAdjustable=True
+        self.w.setDistributionParameters([.5,.5,.5,.5,0,0,0,0])
+        self.w.distribution.normalize(dim='w')
+        self.engine.LearnEMParams(ev)
+        # Check that they match original parameters
+        assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
+               na.allclose(sCPT,self.s.distribution.cpt,atol=.1) and \
+               na.allclose(rCPT,self.r.distribution.cpt,atol=.1) and \
+               na.allclose(wCPT,self.w.distribution.cpt,atol=.1)),\
+              "CPTs were more than atol=.1 apart"
+        
 
     ###########################################################
     ### SHOULD ADD A MORE GENERAL TEST:
@@ -852,13 +914,14 @@ class JTreeTestCase(InferenceEngineTestCase):
     ###     - check message passing
     ###########################################################
 if __name__=='__main__':
-    suite = unittest.makeSuite(MCMCTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-   
     suite = unittest.makeSuite(JTreeTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
+    
+    suite = unittest.makeSuite(MCMCTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+
     G = bayesnet.BNet('Water Sprinkler Bayesian Network')
     c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
     for ep in [(c,r), (c,s), (r,w), (s,w)]:
