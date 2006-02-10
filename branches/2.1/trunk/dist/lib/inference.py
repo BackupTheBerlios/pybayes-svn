@@ -629,7 +629,9 @@ class JoinTree(InferenceEngine, graph.Graph):
     """ Overload learning functions from parent class InferenceEngine """
     def EMStep(self, cases):
         self.Initialization()
-        InferenceEngine.EMStep(self, cases)
+        self.GlobalPropagation()
+        LL = InferenceEngine.EMStep(self, cases)
+        return LL
     
     def Print(self):
         for c in self.v.values():
@@ -818,20 +820,20 @@ class MCMCTestCase(InferenceEngineTestCase):
     def testLearning(self):
         """ Sample network and then learn parameters and check that they are relatively close to original.
         """
-        ev = self.engine.BNet.Sample(n=10000)
+        ev = self.engine.BNet.Sample(n=100)
         #Remember what the old CPTs looked like and keep track of original dimension order
         cCPT = self.c.distribution.cpt.copy()
         self.c.distribution.isAdjustable=True
-        #self.c.setDistributionParameters([0, 1])
+        self.c.distribution.uniform()
         sCPT = self.s.distribution.cpt.copy()
         self.s.distribution.isAdjustable=True
-        #self.s.setDistributionParameters([.5,.5,.5,.5])
+        self.s.distribution.uniform()
         rCPT = self.r.distribution.cpt.copy()
         self.r.distribution.isAdjustable=True
-        #self.r.setDistributionParameters([.5,.5,.5,.5])
+        self.r.distribution.uniform()
         wCPT = self.w.distribution.cpt.copy()
         self.w.distribution.isAdjustable=True
-        #self.w.setDistributionParameters([.5,.5,.5,.5,0,0,0,0])
+        self.w.distribution.uniform()
         self.engine.LearnMLParams(ev)
         # Check that they match original parameters
         assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
@@ -882,22 +884,19 @@ class JTreeTestCase(InferenceEngineTestCase):
         for case in ev:
             r = random.randint(0,3)
             del case[vars[r]]
+        #Remember what the old CPTs looked like and keep track of original dimension order
         cCPT = self.c.distribution.cpt.copy()
         self.c.distribution.isAdjustable=True
-        self.c.setDistributionParameters([0, 1])
-        self.c.distribution.normalize(dim='c')
+        self.c.distribution.uniform()
         sCPT = self.s.distribution.cpt.copy()
         self.s.distribution.isAdjustable=True
-        self.s.setDistributionParameters([.5,.5,.5,.5])
-        self.s.distribution.normalize(dim='s')
+        self.s.distribution.uniform()
         rCPT = self.r.distribution.cpt.copy()
         self.r.distribution.isAdjustable=True
-        self.r.setDistributionParameters([.5,.5,.5,.5])
-        self.r.distribution.normalize(dim='r')
+        self.r.distribution.uniform()
         wCPT = self.w.distribution.cpt.copy()
         self.w.distribution.isAdjustable=True
-        self.w.setDistributionParameters([.5,.5,.5,.5,0,0,0,0])
-        self.w.distribution.normalize(dim='w')
+        self.w.distribution.uniform()
         self.engine.LearnEMParams(ev)
         # Check that they match original parameters
         assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \

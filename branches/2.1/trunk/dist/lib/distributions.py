@@ -93,6 +93,26 @@ class MultinomialDistribution(Distribution, Table):
         #set to copy in case we later destroy the counts or reinitialize them
         self.cpt = self.counts.cpt.copy()
     
+    def uniform(self):
+        """ All CPT elements have equal probability :
+            a = Pr(A|B,C,D)
+            a.uniform()
+            Pr(A=0)=Pr(A=1)=...=Pr(A=N)
+
+            the result is a normalized CPT
+            calls self.ones() and then self.normalize()
+        """
+        self.ones()
+        self.normalize()
+    
+    def ones(self):
+        """ All CPT elements are set to 1 """
+        self.cpt = na.ones(self.cpt.shape, type=self.cpt.type())
+
+    def zeros(self):
+        """ All CPT elements are set to 0 """
+        self.cpt = na.zeros(self.cpt.shape, type=self.cpt.type())
+    
     #===================================================
     #=== printing functions
     def __str__(self):

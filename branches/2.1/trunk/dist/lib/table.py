@@ -455,8 +455,11 @@ class Table:
             order[0] = ndim
             order[ndim] = 0
             tcpt = na.transpose(self.cpt, order)
-            #CHECK: c might not be correct because of transposing
+            
+            #CHECK: c might not be correct because of transposing, 
+            #but for purposes of LL, should always use if case
             c = na.sum(tcpt, axis=0)
+            
             t2cpt = na.resize(c,tcpt.shape)
             tcpt = tcpt/t2cpt
             self.cpt = na.transpose(tcpt, order)        

@@ -114,17 +114,23 @@ class MultinomialDistribution(Distribution, Table):
         sum(Pr(x=i|Pa(x))) = 1 for all values of i and a specific set of values for Pa(x)
         """
         if dim == -1 or len(self.cpt.shape) == 1:
-            self.cpt /= self.cpt.sum()            
+            c = self.cpt.sum()
+            self.cpt /= c
         else:
             ndim = self.assocdim[dim]
             order = range(len(self.names_list))
             order[0] = ndim
             order[ndim] = 0
             tcpt = na.transpose(self.cpt, order)
-            t1cpt = na.sum(tcpt, axis=0)
-            t1cpt = na.resize(t1cpt,tcpt.shape)
-            tcpt = tcpt/t1cpt
-            self.cpt = na.transpose(tcpt, order)
+            
+            #CHECK: c might not be correct because of transposing, 
+            #but for purposes of LL, should always use if case
+            c = na.sum(tcpt, axis=0)
+            
+            t2cpt = na.resize(c,tcpt.shape)
+            tcpt = tcpt/t2cpt
+            self.cpt = na.transpose(tcpt, order)        
+        return c
 
     def ones(self):
         """ All CPT elements are set to 1 """

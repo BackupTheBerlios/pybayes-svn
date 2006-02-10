@@ -177,6 +177,28 @@ class Table:
 ##                    and na.alltrue(a.cpt.flat == b.cpt.flat)  \
 ##                    )
 
+    def __iadd__(a,b):
+        """
+        in place addition
+        b must be a subset of a!!!
+        usage:
+        a+=b
+        Adds corresponding entries as in numarray.  However, transposes 
+        temp copy of b to match a's dimension order
+        
+        Notes :
+        -   a keeps the order of its existing variables
+        -   b is not touched during this operation
+        -   operation is done in-place for a, a is not the same after the operation
+        """
+        # prepare dimensions in b for multiplication
+        cptb = a.prepareOther(b)
+
+        #Add in place, changes a
+        a.cpt += cptb
+        
+        return a
+    
     def __imul__(a,b):
         """
         in place multiplication
