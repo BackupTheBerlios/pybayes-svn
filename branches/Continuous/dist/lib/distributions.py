@@ -44,6 +44,11 @@ class Distribution(object):
         - isAdjustable = if True: the parameters of this distribution can
                          be learned.
 
+        - nvalues =     the dimension of the distribution
+                        discrete : corresponds to number of states
+                        continuous : corresponds to number of dimensions
+                        (e.g. 2D gaussian,...)
+
     """
     vertex = None 
     family = list()
@@ -53,6 +58,7 @@ class Distribution(object):
     #names = set()
     distribution_type = 'None'
     isAdjustable = False
+    nvalues = 0
     
     def __init__(self, v, isAdjustable = False):
         """ Creates a new distribution for the given variable.
@@ -64,6 +70,7 @@ class Distribution(object):
         self.parents = self.family[1:]
         self.names_list = [v.name for v in self.family]
         #self.names = set(self.names_list)
+        self.nvalues = v.nvalues
 
         # the type of distribution
         self.distribution_type = 'None'
@@ -217,14 +224,17 @@ class MultinomialDistribution(Distribution, Table):
 #=================================================================
 class Gaussian_Distribution(Distribution):
     """ Gaussian Continuous Distribution
-    
+
+    Note: this can be a scalar gaussian or multidimensional gaussian
+          depending on the value of nvalues of the parent vertex
+          
     parents can be either discrete or continuous.
     continuous parents (if any) : X
     discrete parents (if any) : Q
     this node : Y
 
     Pr(Y|X,Q) =
-         - no parents: Y ~ N(mu, Sigma)
+         - no parents: Y ~ N(mu(i), Sigma(i,j))     0 <= i,j < self.nvalues
          - cts parents : Y|X=x ~ N(mu + W x, Sigma)
          - discrete parents: Y|Q=i ~ N(mu(i), Sigma(i))
          - cts and discrete parents: Y|X=x,Q=i ~ N(mu(i) + W(i) x, Sigma(i))
@@ -232,17 +242,17 @@ class Gaussian_Distribution(Distribution):
     
      The list below gives optional arguments [default value in brackets].
     
-     mean       - numarray(shape=(len(Q1),len(Q2),...len(Qn))
-                  the mean for each combination of parents
+     mean       - numarray(shape=(len(Y),len(Q1),len(Q2),...len(Qn))
+                  the mean for each combination of DISCRETE parents
                   mean[i1,i2,...,in]
                   
-     cov        - Sigma[:,:,i] is the covariance given Q=i [ repmat(100*eye(Y,Y), [1 1 Q]) ]
+     sigma        - Sigma[:,:,i] is the sigmaariance given Q=i [ repmat(100*eye(Y,Y), [1 1 Q]) ]
      weights    - W[:,:,i] is the regression matrix given Q=i [ randn(Y,X,Q) ]
-     cov_type   - if 'diag', Sigma[:,:,i] is diagonal [ 'full' ]
-     tied_cov   - if True, we constrain Sigma[:,:,i] to be the same for all i [False]
+     sigma_type   - if 'diag', Sigma[:,:,i] is diagonal [ 'full' ]
+     tied_sigma   - if True, we constrain Sigma[:,:,i] to be the same for all i [False]
  """
     def __init__(self, v, mu = None, sigma = None, wi = None, \
-                 cov_type = 'full', tied_cov = False, isAdjustable = True):
+                 sigma_type = 'full', tied_sigma = False, isAdjustable = True):
         
         Distribution.__init__(self, v, isAdjustable = isAdjustable)
         self.distribution_type = 'Gaussian'
@@ -256,34 +266,58 @@ class Gaussian_Distribution(Distribution):
 
         self.discrete_parents_shape = [dp.nvalues for dp in self.discrete_parents]
                 
-        # set the parameters : mean, cov, weights
-        self.setParameters(mu=mu, sigma=sigma, wi=wi, cov_type=cov_type, \
-                           tied_cov=tied_cov, isAdjustable=isAdjustable)
+        # set the parameters : mean, sigma, weights
+        self.setParameters(mu=mu, sigma=sigma, wi=wi, sigma_type=sigma_type, \
+                           tied_sigma=tied_sigma, isAdjustable=isAdjustable)
         
-    def setParameters(self, mu = None, sigma = None, wi = None, cov_type = 'full', \
-                      tied_cov = False, isAdjustable = False):
-        
-        # set the mean : 
+    def setParameters(self, mu = None, sigma = None, wi = None, sigma_type = 'full', \
+                      tied_sigma = False, isAdjustable = False):
+        #============================================================
+        # set the mean :
+        # self.mean[i] = the mean for dimension i
         if mu == None:
             # set all mu to zeros
-            mu = na.zeros(shape=self.discrete_parents_shape, type='Float32')
+            mu = na.zeros(shape=([self.nvalues]+self.discrete_parents_shape), \
+                          type='Float32')
         try:
-            mu = na.array(shape=self.discrete_parents_shape,type='Float32')
+            mu = na.array(shape=[self.nvalues]+self.discrete_parents_shape, \
+                          type='Float32')
         except:
             raise 'Could not convert mu to numarray of shape : %s, discrete parents = %s' %(str(self.discrete_parents_shape),
                                                                                             str([dp.name for dp in self.discrete_parents]))
         self.mean = mu
 
-        # set the covariance
-        #---TODO:
+        #============================================================
+        # set the covariance :
+        # self.sigma[i,j] = the covariance between dimension i and j
+        #---TODO: add dimensions for each value of each discrete parent
+        if sigma == None:
+            sigma = na.identity(self.nvalues, type = 'Float32')
+        try:
+            sigma = na.array(sigma, shape=(self.nvalues,self.nvalues), type='Float32')
+        except:
+            raise 'Not a valid covariance matrix'
+        self.sigma = sigma
 
-        # set the wi
-        #---TODO:
+        #============================================================
+        # set the weights :
+        # self.weights[i,j] = the regression for dimension i and continuous parent j
+        #---TODO: add dimensions for each value of each continuous parent
+        if weights == None:
+            weights = na.identity(self.nvalues, type = 'Float32')
+        try:
+            weights = na.array(sigma, shape=(self.nvalues,self.nvalues), type='Float32')
+        except:
+            raise 'Not a valid weight'
+        self.weights = weights
+        
 
     def __str__(self):
         string = 'Gaussian ' + Distribution.__str__(self)
         string += '\nDiscrete Parents :' + str([p.name for p in self.discrete_parents])
         string += '\nContinuous Parents :' + str([p.name for p in self.continuous_parents])
+        string += '\nMu : ' + str(self.mean)
+        string += '\nSigma : ' + str(self.sigma)
 
         return string
 #=================================================================
@@ -294,27 +328,27 @@ class GaussianTestCase(unittest.TestCase):
     """
     def setUp(self):
         from bayesnet import BNet, BVertex, graph
-        # create a small BayesNet, Water-Sprinkler
-        G = BNet('Test')
+        # create a small BayesNet
+        self.G = G = BNet('Test')
         
-        a,b,c,d = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('a b c d'.split(),[2,3,4,2])]
-        ad,bd,cd,dd = a.distribution, b.distribution, c.distribution, d.distribution
+        self.a = a = G.add_v(BVertex('a',discrete=False,nvalues=1))
+        self.b = b = G.add_v(BVertex('b',discrete=False,nvalues=2))
         
-        # sizes = (2,3,4,2)
-        # a has 3 parents, b,c and d
-        for ep in [(b,a), (c,a), (d,a)]:
-            G.add_e(graph.DirEdge(len(G.e), *ep))
+##        # sizes = (2,3,4,2)
+##        # a has 3 parents, b,c and d
+##        for ep in [(b,a), (c,a), (d,a)]:
+##            G.add_e(graph.DirEdge(len(G.e), *ep))
 
+       
         G.InitDistributions()
+        self.ad = ad = a.distribution
+        self.bd = bd = b.distribution
+        print bd
+        print ad
 
-        a.setCPT(na.arange(48))
-        
-        self.G = G
-        self.a = a
-        #print G
+    def testGeneral(self):
+        print self.G
 
-    def testSizes(self):
-        assert (self.a.distribution.sizes == [2,3,4,2]), "Error with self.sizes"
 
 
 
@@ -357,6 +391,9 @@ class DistributionTestCase(unittest.TestCase):
                set(r.distribution.family) == set([r,c]) and \
                set(w.distribution.family) == set([w,r,s])), \
                "Error with family"
+
+        assert(c.distribution.nvalues == c.nvalues), \
+                "nvalues not set properly"
 
 ##        assert(c.distribution.order['c'] == 0 and \
 ##               set([w.distribution.order['w'],w.distribution.order['s'], w.distribution.order['r']]) == set([0,1,2])), \
@@ -455,38 +492,41 @@ class MultinomialTestCase(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    from bayesnet import *
-
-    suite = unittest.makeSuite(DistributionTestCase, 'test')
+    suite = unittest.makeSuite(GaussianTestCase, 'test')
     runner = unittest.TextTestRunner()
-    runner.run(suite)
+    runner.run(suite)    
+##    from bayesnet import *
 ##
-
-    suite = unittest.makeSuite(MultinomialTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-    
-    # create a small BayesNet
-    G = BNet('Water Sprinkler Bayesian Network')
-    
-    c,s,r,w = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('c s r w'.split(),[2,2,2,0])]
-    w.discrete = False
-    w.nvalues = 0
-    
-    
-    for ep in [(c,r), (c,s), (r,w), (s,w)]:
-        G.add_e(graph.DirEdge(len(G.e), *ep))
-
-    print G
-
-    G.InitDistributions()
-    c.setDistributionParameters([0.5, 0.5])
-    s.distribution.setParameters([0.5, 0.9, 0.5, 0.1])
-    r.distribution.cpt=na.array([0.8, 0.2, 0.2, 0.8])
-##    w.distribution[:,0,0]=[0.99, 0.01]
-##    w.distribution[:,0,1]=[0.1, 0.9]
-##    w.distribution[:,1,0]=[0.1, 0.9]
-##    w.distribution[:,1,1]=[0.0, 1.0]
-    wd = w.distribution
-    print wd.mean
+##    suite = unittest.makeSuite(DistributionTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
+####
+##
+##    suite = unittest.makeSuite(MultinomialTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
+##    
+##    # create a small BayesNet
+##    G = BNet('Water Sprinkler Bayesian Network')
+##    
+##    c,s,r,w = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('c s r w'.split(),[2,2,2,0])]
+##    w.discrete = False
+##    w.nvalues = 0
+##    
+##    
+##    for ep in [(c,r), (c,s), (r,w), (s,w)]:
+##        G.add_e(graph.DirEdge(len(G.e), *ep))
+##
+##    print G
+##
+##    G.InitDistributions()
+##    c.setDistributionParameters([0.5, 0.5])
+##    s.distribution.setParameters([0.5, 0.9, 0.5, 0.1])
+##    r.distribution.cpt=na.array([0.8, 0.2, 0.2, 0.8])
+####    w.distribution[:,0,0]=[0.99, 0.01]
+####    w.distribution[:,0,1]=[0.1, 0.9]
+####    w.distribution[:,1,0]=[0.1, 0.9]
+####    w.distribution[:,1,1]=[0.0, 1.0]
+##    wd = w.distribution
+##    print wd.mean
     
