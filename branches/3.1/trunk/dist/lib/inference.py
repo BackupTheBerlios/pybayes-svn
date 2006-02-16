@@ -760,7 +760,11 @@ class MCMCEngine(InferenceEngine):
         
 
 class InferenceEngineTestCase(unittest.TestCase):
-    """ An abstract set of inference test cases.  Basically anything that is similar between the different inference engines can be implemented here and automatically applied to lower engines.  For example, we can define the learning tests here and they shouldn't have to be redefined for different engines.
+    """ An abstract set of inference test cases.
+    Basically anything that is similar between the different inference
+    engines can be implemented here and automatically applied to lower
+    engines.  For example, we can define the learning tests here and they
+    shouldn't have to be redefined for different engines.
     """
     def setUp(self):
         G = bayesnet.BNet('Water Sprinkler Bayesian Network')
