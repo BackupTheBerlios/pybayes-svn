@@ -94,9 +94,6 @@ class Cluster(graph.Vertex):
         shape = [v.nvalues for v in self.vertices]
         #---TODO: Continuous....
         self.potential = DiscretePotential(names, shape)
-        #### Debug ####
-        if not len(names) == len(self.vertices):
-            lkj = 1
         
         # weight
         self.weight = reduce(lambda x,y: x*y, [v.nvalues for v in self.vertices])

@@ -227,8 +227,10 @@ class MultinomialDistribution(Distribution, Table):
 class Gaussian_Distribution(Distribution):
     """ Gaussian Continuous Distribution
 
-    Note: this can be a scalar gaussian or multidimensional gaussian
-          depending on the value of nvalues of the parent vertex
+    Notes: - this can be a scalar gaussian or multidimensional gaussian
+             depending on the value of nvalues of the parent vertex
+           - The domain is always defined as ]-inf,+inf[
+             TODO: Maybe we should add a somain variable...
           
     parents can be either discrete or continuous.
     continuous parents (if any) : X
@@ -252,7 +254,9 @@ class Gaussian_Distribution(Distribution):
      weights      - W[:,:,i] is the regression matrix given Q=i [ randn(Y,X,Q) ]
      sigma_type   - if 'diag', Sigma[:,:,i] is diagonal [ 'full' ]
      tied_sigma   - if True, we constrain Sigma[:,:,i] to be the same for all i [False]
- """
+     """
+     
+    #---TODO: Maybe we should add a domain variable...
     def __init__(self, v, mu = None, sigma = None, wi = None, \
                  sigma_type = 'full', tied_sigma = False, isAdjustable = True):
         

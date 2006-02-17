@@ -21,8 +21,40 @@ class Potential:
 ##        
 ##        # return the order of sorting
 ##        return [o[1] for o in order]
-        
-class DiscretePotential(Potential, table.Table):
+
+    #=====================================================================
+    # All potentials should implement all of these functions!!!
+    #=====================================================================
+    def Marginalise(self, varnames):
+        """ Marginalises out some variables and keeps the rest """
+        raise "Method is not yet implemented at child level"
+    
+    def Retrieve(self, varnames):
+        """ Retrieves and returns some variables """
+        raise "Method is not yet implemented at child level"
+    
+    def Normalise(self):
+        """ normalizes the distribution """
+        raise "Method is not yet implemented at child level"
+    
+    def __mul__(a,b):
+        """ multiplication, returns a new potential """
+        raise "Method is not yet implemented at child level"
+
+    def __imul__(a,b):
+        """ in-place multiplication, destructive for a """
+        raise "Method is not yet implemented at child level"
+    
+    def __div__(a,b):
+        """ division, returns a new potential """
+        raise "Method is not yet implemented at child level"
+    
+    def __idiv__(a,b):
+        """ in-place division, destructive for a """
+        raise "Method is not yet implemented at child level"   
+    #===================================================================== 
+    
+class DiscretePotential(table.Table, Potential):
     """ This is a basic potential to represent discrete potentials.
     It is very similar to a MultinomialDistribution except that 
     it defines several operations such as __mult__, __add__, 
@@ -122,11 +154,78 @@ class GaussianPotential(Potential):
     """ A Canonical Gaussian Potential 
     Only gaussian variables can be contained in this potential
     
-    parameters : - g
-                 - h
-                 - K
-    """
+    Reference: "A technique for painless derivation of Kalman Filtering Recursions"
+                Ali Taylan Cemgril
+                SNN, University of Nijmegen, the netherlands
+                June 7, 2001
     
+    parameters : - g : scalar
+                 - h : (n)    row vector where n = sum(sizes of all variables)
+                 - K : (n,n)  square matrix
+     
+     How to derive these parameters :
+         phi(x) = a*N(m,S)    # a general multivariate gaussian potential
+                              # a is the normalisation factor, 
+                              # m = mean, S = covariance matrix
+         
+     we can prove that :
+         phi(x) = exp(g +h'*x - 1/2*x'*K*x)        #' means transposed
+     
+     where :
+         K = S^-1            # the inverse of the covariance matrix
+         h = S^-1*m
+         g = log(a) + 1/2log(det(K/2pi)) - 1/2*h'*K^-1*h        #det is the determinant
+         
+     and the inverse formulae :
+         S = K^-1
+         m = K^-1*h
+         a = exp(g - 1/2log(det(K/2pi)) + 1/2*h'*K^-1*h
+    """
+    def __init__(self, names, shape, g=None, h=None, K=None):
+        Potential.__init__(self, names)
+        self.shape = shape
+        
+        # set parameters to 0s
+        self.n = na.sum(shape)
+        if not g: self.g = 0.0
+        else: self.g = float(g)
+        if not h: self.h = na.zeros(shape=(self.n), type='Float32')     
+        else: self.h = na.array(h,shape=(self.n), type='Float32')
+        if not K: self.K = na.zeros(shape=(self.n,self.n), type='Float32')
+        else: self.K = na.array(K,shape=(self.n,self.n), type='Float32')
+
+    def __str__(self):
+        string = 'Gaussian Potential over variables ' + str(self.names)
+        string += '\ng = ' + str(self.g)
+        string += '\nh = ' + str(self.h)
+        string += '\nK = ' + str(self.K)
+        
+        return string
+
+class GaussianPotentialTestCase(unittest.TestCase):
+    def setUp(self):
+        names = ('a','b')
+        shape = (1,2)
+        self.a = GaussianPotential(names,shape) 
+        
+        g=2
+        h=[1,2,3]
+        K=range(9)
+        self.b = GaussianPotential(names,shape,g,h,K)
+    
+    def testInit(self):
+        a = self.a
+        b = self.b
+        assert(a.g == 0.0 and \
+               na.allclose(a.h, na.zeros(3)) and \
+               na.allclose(a.K, na.zeros(shape=(3,3)))), \
+               " Error with standard initialization "
+
+        assert(b.g == 2.0 and \
+               na.allclose(b.h, na.array([1,2,3],type='Float32')) and \
+               na.allclose(b.K, na.arange(9,shape=(3,3),type='Float32'))), \
+               " Error with standard initialization with parameter setting"    
+        
     
 
 class DiscretePotentialTestCase(unittest.TestCase):
@@ -205,29 +304,34 @@ if __name__ == '__main__':
     suite = unittest.makeSuite(DiscretePotentialTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
-    names = ('a','b','c')
-    shape = (2,3,4)
-    a = DiscretePotential(names,shape,na.arange(24))
 
-    names = ('a','d','b')
-    shape = (2,5,3)
-    b = DiscretePotential(names,shape,na.arange(2*5*3))
-
-    c = DiscretePotential(['c'],[2],[0.5,0.5])
-    s = DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1])
-    r = DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])
-    w = DiscretePotential(['w','s','r'],[2,2,2])
-    w[:,0,0]=[0.99, 0.01]
-    w[:,0,1]=[0.1, 0.9]
-    w[:,1,0]=[0.1, 0.9]
-    w[:,1,1]=[0.0, 1.0]
-
-    cr = c*r
-    crs = cr*s
-    crsw = crs*w
-
-    print 'c:', crsw.Marginalise('s r w'.split())
-    print 's:', crsw.Marginalise('c r w'.split())
-    print 'r:', crsw.Marginalise('c s w'.split())
-    print 'w:', crsw.Marginalise('c s r'.split())
+    suite = unittest.makeSuite(GaussianPotentialTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+    
+#    names = ('a','b','c')
+#    shape = (2,3,4)
+#    a = DiscretePotential(names,shape,na.arange(24))
+#
+#    names = ('a','d','b')
+#    shape = (2,5,3)
+#    b = DiscretePotential(names,shape,na.arange(2*5*3))
+#
+#    c = DiscretePotential(['c'],[2],[0.5,0.5])
+#    s = DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1])
+#    r = DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])
+#    w = DiscretePotential(['w','s','r'],[2,2,2])
+#    w[:,0,0]=[0.99, 0.01]
+#    w[:,0,1]=[0.1, 0.9]
+#    w[:,1,0]=[0.1, 0.9]
+#    w[:,1,1]=[0.0, 1.0]
+#
+#    cr = c*r
+#    crs = cr*s
+#    crsw = crs*w
+#
+#    print 'c:', crsw.Marginalise('s r w'.split())
+#    print 's:', crsw.Marginalise('c r w'.split())
+#    print 'r:', crsw.Marginalise('c s w'.split())
+#    print 'w:', crsw.Marginalise('c s r'.split())
 
