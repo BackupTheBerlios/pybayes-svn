@@ -118,6 +118,16 @@ class DiscretePotential(Potential, table.Table):
         string =  str(self.cpt) + '\nshape:'+str(self.cpt.shape)+'\nnames:'+str(self.names)+'\nsum : ' +str(na.sum(self.cpt.flat))
         print string
 
+class GaussianPotential(Potential):
+    """ A Canonical Gaussian Potential 
+    Only gaussian variables can be contained in this potential
+    
+    parameters : - g
+                 - h
+                 - K
+    """
+    
+    
 
 class DiscretePotentialTestCase(unittest.TestCase):
     def setUp(self):

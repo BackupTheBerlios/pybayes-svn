@@ -46,14 +46,9 @@ class BVertex(graph.Vertex):
         '''
         graph.Vertex.__init__(self, name)
         self.distribution = None
-        self.nvalues =  int(nvalues)
+        self.nvalues = int(nvalues)
         
-        if discrete:
-            # discrete node
-            self.discrete = True
-        else:
-            # continuous node
-            self.discrete = False
+        self.discrete = discrete
             # a continuous node can be scalar (self.nvalues=1)
             # or vectorial (self.nvalues=n)
             # n=2 is equivalent to 2D gaussian for example

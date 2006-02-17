@@ -1,4 +1,3 @@
-import delegate # no longer needed. Only RawCPT uses it, erase it when RawCPT doesn't exist anymore
 import types
 import numarray as na
 import numarray.random_array as ra
@@ -64,13 +63,16 @@ class Distribution(object):
         """ Creates a new distribution for the given variable.
         v is a BVertex instance
         """
+        ###################################################
+        #---TODO: Should give an order to the variables, sort them by name for example...
+        ###################################################
         self.vertex = v     # the node to which this distribution is attached
         self.family = [v] + [parent for parent in v.in_v]
         self.ndimensions = len(self.family)
         self.parents = self.family[1:]
         self.names_list = [v.name for v in self.family]
         #self.names = set(self.names_list)
-        self.nvalues = v.nvalues
+        self.nvalues = self.vertex.nvalues
 
         # the type of distribution
         self.distribution_type = 'None'
@@ -247,7 +249,7 @@ class Gaussian_Distribution(Distribution):
                   mean[i1,i2,...,in]
                   
      sigma        - Sigma[:,:,i] is the sigmaariance given Q=i [ repmat(100*eye(Y,Y), [1 1 Q]) ]
-     weights    - W[:,:,i] is the regression matrix given Q=i [ randn(Y,X,Q) ]
+     weights      - W[:,:,i] is the regression matrix given Q=i [ randn(Y,X,Q) ]
      sigma_type   - if 'diag', Sigma[:,:,i] is diagonal [ 'full' ]
      tied_sigma   - if True, we constrain Sigma[:,:,i] to be the same for all i [False]
  """
@@ -265,16 +267,23 @@ class Gaussian_Distribution(Distribution):
         self.continuous_parents = [parent for parent in self.parents if not parent.discrete]
 
         self.discrete_parents_shape = [dp.nvalues for dp in self.discrete_parents]
+        self.parents_shape = [p.nvalues for p in self.parents]
+        if not self.parents_shape:self.parents_shape = [0]
                 
         # set the parameters : mean, sigma, weights
         self.setParameters(mu=mu, sigma=sigma, wi=wi, sigma_type=sigma_type, \
                            tied_sigma=tied_sigma, isAdjustable=isAdjustable)
+                           
+       #---TODO: add support for sigma_type, tied_sigma
+       #---TODO: add learning functions
         
     def setParameters(self, mu = None, sigma = None, wi = None, sigma_type = 'full', \
                       tied_sigma = False, isAdjustable = False):
         #============================================================
         # set the mean :
         # self.mean[i] = the mean for dimension i
+        # self.mean.shape = (self.nvalues, q1,q2,...,qn)
+        #        where qi is the size of discrete parent i
         if mu == None:
             # set all mu to zeros
             mu = na.zeros(shape=([self.nvalues]+self.discrete_parents_shape), \
@@ -290,11 +299,16 @@ class Gaussian_Distribution(Distribution):
         #============================================================
         # set the covariance :
         # self.sigma[i,j] = the covariance between dimension i and j
-        #---TODO: add dimensions for each value of each discrete parent
+        # self.sigma.shape = (nvalues,nvalues,q1,q2,...,qn)
+        #        where qi is the size of discrete parent i
         if sigma == None:
-            sigma = na.identity(self.nvalues, type = 'Float32')
+            eye = na.identity(self.nvalues, type = 'Float32')[...,na.NewAxis]
+            if len(self.discrete_parents) > 0:
+                q = reduce(lambda a,b:a*b,self.discrete_parents_shape) # number of different configurations for the parents
+                sigma = na.concatenate([eye]*q, axis=2)
+                sigma = na.array(sigma,shape=[self.nvalues,self.nvalues]+self.discrete_parents_shape) 
         try:
-            sigma = na.array(sigma, shape=(self.nvalues,self.nvalues), type='Float32')
+            sigma = na.array(sigma, shape=[self.nvalues,self.nvalues]+self.discrete_parents_shape, type='Float32')
         except:
             raise 'Not a valid covariance matrix'
         self.sigma = sigma
@@ -302,24 +316,54 @@ class Gaussian_Distribution(Distribution):
         #============================================================
         # set the weights :
         # self.weights[i,j] = the regression for dimension i and continuous parent j
-        #---TODO: add dimensions for each value of each continuous parent
-        if weights == None:
-            weights = na.identity(self.nvalues, type = 'Float32')
+        # self.weights.shape = (nvalues,x1,x2,...,xn,q1,q2,...,qn)
+        #        where xi is the size of continuous parent i)
+        #        and qi is the size of discrete parent i
+        
+        if wi == None:
+            wi = na.ones(shape=[self.nvalues]+self.parents_shape, type='Float32') 
         try:
-            weights = na.array(sigma, shape=(self.nvalues,self.nvalues), type='Float32')
+            wi = na.array(wi, shape=[self.nvalues]+self.parents_shape, type='Float32')
         except:
             raise 'Not a valid weight'
-        self.weights = weights
+        self.weights = wi
         
+    #======================================================
+    #=== Sampling
+    def sample(self, index={}):
+        raise "Not Implemented yet!!!"
 
+    #==================================================
+    #=== Learning Functions
+    def initializeCounts(self):
+        ''' initialize counts array to ones '''
+        raise "Not Implemented yet!!!"
+        
+    def incrCounts(self, index):
+        """ add one to given count """
+        raise "Not Implemented yet!!!"
+
+    def addToCounts(self, index, counts):
+        raise "Not Implemented yet!!!"
+    
+    def setCounts(self):
+        """ set the distributions underlying cpt equal to the counts """
+        raise "Not Implemented yet!!!"
+
+    #==================================================
+    #=== Printing Functions    
     def __str__(self):
         string = 'Gaussian ' + Distribution.__str__(self)
+        string += '\nDimensionality : ' + str(self.nvalues)
         string += '\nDiscrete Parents :' + str([p.name for p in self.discrete_parents])
         string += '\nContinuous Parents :' + str([p.name for p in self.continuous_parents])
         string += '\nMu : ' + str(self.mean)
         string += '\nSigma : ' + str(self.sigma)
+        string += '\nWeights: ' + str(self.weights)
 
         return string
+    
+    
 #=================================================================
 #   Test case for Gaussian_Distribution class
 #=================================================================
@@ -333,21 +377,76 @@ class GaussianTestCase(unittest.TestCase):
         
         self.a = a = G.add_v(BVertex('a',discrete=False,nvalues=1))
         self.b = b = G.add_v(BVertex('b',discrete=False,nvalues=2))
-        
-##        # sizes = (2,3,4,2)
-##        # a has 3 parents, b,c and d
-##        for ep in [(b,a), (c,a), (d,a)]:
-##            G.add_e(graph.DirEdge(len(G.e), *ep))
+        self.c = c = G.add_v(BVertex('c',discrete=False,nvalues=3))
+        self.d = d = G.add_v(BVertex('d',discrete=True,nvalues=2))
+        self.e = e = G.add_v(BVertex('e',discrete=True,nvalues=3))
+        self.f = f = G.add_v(BVertex('f',discrete=False,nvalues=1))
+        self.g = g = G.add_v(BVertex('g',discrete=False,nvalues=1))
 
-       
+        for ep in [(a,c),(b,c),(d,f),(e,f),(a,g),(b,g),(d,g),(e,g)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
+
+        #a,b : continuous(2,3), no parents
+        #c   : continuous(3), 2 continuous parents (a,b)
+        #d,e : discrete(2,3), no parents
+        #f   : continuous(1), 2 discrete parents (d,e)
+        #g   : continuous(1), 2 discrete parents (d,e) & 2 continuous parents (a,b)
+   
         G.InitDistributions()
+
         self.ad = ad = a.distribution
         self.bd = bd = b.distribution
-        print bd
-        print ad
+        self.cd = cd = c.distribution
+        self.fd = fd = f.distribution
+        self.gd = gd = g.distribution
+        
+    def testNoParents(self):
+        ad = self.ad
+        bd = self.bd
+        # a and b have no parents, test basic parameters
+        assert(ad.mean.shape == (1,) and \
+               bd.mean.shape == (2,) ), \
+               " Mean does not have the correct shape for no parents "
 
-    def testGeneral(self):
-        print self.G
+        assert(ad.sigma.shape == (1,1) and \
+               bd.sigma.shape == (2,2) ), \
+               " Sigma does not have the correct shape for no parents "
+
+        assert(ad.weights.shape == (1,0) and \
+               bd.weights.shape == (2,0)), \
+               " Wi does not have the correct shape for no parents "
+ 
+    def testContinuousParents(self):
+		 """ test a gaussian with continuous parents """
+		 cd = self.cd
+		 #c has two continuous parents
+		 assert(cd.mean.shape == (3,)), \
+				"mean does not have correct shape for continous parents"
+		 assert(cd.sigma.shape == (3,3)), \
+				"sigma does not have correct shape for continous parents"
+		 assert(cd.weights.shape == tuple([cd.nvalues]+cd.parents_shape)), \
+				"weights does not have correct shape for continous parents"
+
+    def testDiscreteParents(self):
+        """ test a gaussian with discrete parents """
+        fd = self.fd
+        assert(fd.mean.shape == tuple([fd.nvalues]+fd.discrete_parents_shape)), \
+                "mean does not have correct shape for discrete parents"
+        assert(fd.sigma.shape == tuple([fd.nvalues,fd.nvalues]+fd.discrete_parents_shape)), \
+                "sigma does not have correct shape for discrete parents"
+        assert(fd.weights.shape == tuple([fd.nvalues]+fd.discrete_parents_shape)), \
+                "weights does not have correct shape for discrete parents"        
+
+    def testDiscrete_and_Continuous_Parents(self):
+        """ test a gaussian with discrete and continuous parents """
+        gd = self.gd
+        assert(gd.mean.shape == tuple([gd.nvalues]+gd.discrete_parents_shape)), \
+                "mean does not have correct shape for discrete & continuous parents"
+        assert(gd.sigma.shape == tuple([gd.nvalues,gd.nvalues]+gd.discrete_parents_shape)), \
+                "sigma does not have correct shape for discrete & continuous parents"
+        assert(gd.weights.shape == tuple([gd.nvalues]+gd.parents_shape)), \
+                "weights does not have correct shape for discrete & continuous parents"          
+         
 
 
 
