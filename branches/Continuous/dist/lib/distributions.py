@@ -59,7 +59,7 @@ class Distribution(object):
     isAdjustable = False
     nvalues = 0
     
-    def __init__(self, v, isAdjustable = False):
+    def __init__(self, v, isAdjustable = False, ignoreFamily = False):
         """ Creates a new distribution for the given variable.
         v is a BVertex instance
         """
@@ -67,7 +67,13 @@ class Distribution(object):
         #---TODO: Should give an order to the variables, sort them by name for example...
         ###################################################
         self.vertex = v     # the node to which this distribution is attached
-        self.family = [v] + [parent for parent in v.in_v]
+        if not ignoreFamily:
+            self.family = [v] + [parent for parent in v.in_v]
+        else:
+            # ignore the family of the node, simply return a distribution for this node only
+            # used in the MCMC inference engine to create empty distributions
+            self.family = [v]
+            
         self.ndimensions = len(self.family)
         self.parents = self.family[1:]
         self.names_list = [v.name for v in self.family]
@@ -93,8 +99,8 @@ class MultinomialDistribution(Distribution, Table):
     a Conditional Probability Table (CPT)
     This class now inherits from Distribution and Table.
     """
-    def __init__(self, v, cpt = None, isAdjustable=False):
-        Distribution.__init__(self, v, isAdjustable=isAdjustable)
+    def __init__(self, v, cpt = None, isAdjustable=False, ignoreFamily = False):
+        Distribution.__init__(self, v, isAdjustable=isAdjustable, ignoreFamily = ignoreFamily)
         self.distribution_type = "Multinomial"
         
         assert(na.alltrue([v.discrete for v in self.family])), \
@@ -192,6 +198,11 @@ class MultinomialDistribution(Distribution, Table):
             if r < cs: return i
         return i
 
+    def random(self):
+        """ Returns a random state of this distribution """
+        # CHECK: legal values are 0 - nvalues-1: checked OK
+        return random.randint(0, self.nvalues-1)
+
     #==================================================
     #=== Learning Functions
     def initializeCounts(self):
@@ -258,9 +269,10 @@ class Gaussian_Distribution(Distribution):
      
     #---TODO: Maybe we should add a domain variable...
     def __init__(self, v, mu = None, sigma = None, wi = None, \
-                 sigma_type = 'full', tied_sigma = False, isAdjustable = True):
+                 sigma_type = 'full', tied_sigma = False, \
+                 isAdjustable = True, ignoreFamily = False):
         
-        Distribution.__init__(self, v, isAdjustable = isAdjustable)
+        Distribution.__init__(self, v, isAdjustable = isAdjustable, ignoreFamily = ignoreFamily)
         self.distribution_type = 'Gaussian'
 
         # check that current node is continuous
@@ -272,8 +284,23 @@ class Gaussian_Distribution(Distribution):
 
         self.discrete_parents_shape = [dp.nvalues for dp in self.discrete_parents]
         self.parents_shape = [p.nvalues for p in self.parents]
-        if not self.parents_shape:self.parents_shape = [0]
-                
+        if not self.parents_shape:
+            self.parents_shape = [0]
+
+        # set defaults
+        # set all mu to zeros
+        self.mean = na.zeros(shape=([self.nvalues]+self.discrete_parents_shape), type='Float32')
+        
+        # set sigma to ones along the diagonal  
+        eye = na.identity(self.nvalues, type = 'Float32')[...,na.NewAxis]
+        if len(self.discrete_parents) > 0:
+			q = reduce(lambda a,b:a*b,self.discrete_parents_shape) # number of different configurations for the parents
+			sigma = na.concatenate([eye]*q, axis=2)
+			self.sigma = na.array(sigma,shape=[self.nvalues,self.nvalues]+self.discrete_parents_shape) 
+
+        # set weights to 
+        self.weights = na.ones(shape=[self.nvalues]+self.parents_shape, type='Float32')
+        
         # set the parameters : mean, sigma, weights
         self.setParameters(mu=mu, sigma=sigma, wi=wi, sigma_type=sigma_type, \
                            tied_sigma=tied_sigma, isAdjustable=isAdjustable)
@@ -288,34 +315,20 @@ class Gaussian_Distribution(Distribution):
         # self.mean[i] = the mean for dimension i
         # self.mean.shape = (self.nvalues, q1,q2,...,qn)
         #        where qi is the size of discrete parent i
-        if mu == None:
-            # set all mu to zeros
-            mu = na.zeros(shape=([self.nvalues]+self.discrete_parents_shape), \
-                          type='Float32')
         try:
-            mu = na.array(shape=[self.nvalues]+self.discrete_parents_shape, \
-                          type='Float32')
+            self.mean = na.array(mu, shape=[self.nvalues]+self.discrete_parents_shape, type='Float32')
         except:
-            raise 'Could not convert mu to numarray of shape : %s, discrete parents = %s' %(str(self.discrete_parents_shape),
-                                                                                            str([dp.name for dp in self.discrete_parents]))
-        self.mean = mu
+            raise 'Could not convert mu to numarray of shape : %s, discrete parents = %s' %(str(self.discrete_parents_shape), str(self.discrete_parents))
 
         #============================================================
         # set the covariance :
         # self.sigma[i,j] = the covariance between dimension i and j
         # self.sigma.shape = (nvalues,nvalues,q1,q2,...,qn)
         #        where qi is the size of discrete parent i
-        if sigma == None:
-            eye = na.identity(self.nvalues, type = 'Float32')[...,na.NewAxis]
-            if len(self.discrete_parents) > 0:
-                q = reduce(lambda a,b:a*b,self.discrete_parents_shape) # number of different configurations for the parents
-                sigma = na.concatenate([eye]*q, axis=2)
-                sigma = na.array(sigma,shape=[self.nvalues,self.nvalues]+self.discrete_parents_shape) 
         try:
-            sigma = na.array(sigma, shape=[self.nvalues,self.nvalues]+self.discrete_parents_shape, type='Float32')
+            self.sigma = na.array(sigma, shape=[self.nvalues,self.nvalues]+self.discrete_parents_shape, type='Float32')
         except:
             raise 'Not a valid covariance matrix'
-        self.sigma = sigma
 
         #============================================================
         # set the weights :
@@ -323,20 +336,22 @@ class Gaussian_Distribution(Distribution):
         # self.weights.shape = (nvalues,x1,x2,...,xn,q1,q2,...,qn)
         #        where xi is the size of continuous parent i)
         #        and qi is the size of discrete parent i
-        
-        if wi == None:
-            wi = na.ones(shape=[self.nvalues]+self.parents_shape, type='Float32') 
         try:
-            wi = na.array(wi, shape=[self.nvalues]+self.parents_shape, type='Float32')
+            self.weights = na.array(wi, shape=[self.nvalues]+self.parents_shape, type='Float32')
         except:
             raise 'Not a valid weight'
-        self.weights = wi
         
     #======================================================
     #=== Sampling
     def sample(self, index={}):
         raise "Not Implemented yet!!!"
 
+    def random(self):
+        """ Returns a random state of this distribution """
+        # legal values are from -inf to + inf
+        # we restrain to mu-5*s --> mu+5*s
+        return [(5*sigma*(random.random() - 0.5) + mu) for mu,sigma in zip(self.mean, self.sigma.diagonal())]
+    
     #==================================================
     #=== Learning Functions
     def initializeCounts(self):
@@ -390,7 +405,7 @@ class GaussianTestCase(unittest.TestCase):
         for ep in [(a,c),(b,c),(d,f),(e,f),(a,g),(b,g),(d,g),(e,g)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
 
-        #a,b : continuous(2,3), no parents
+        #a,b : continuous(1,2), no parents
         #c   : continuous(3), 2 continuous parents (a,b)
         #d,e : discrete(2,3), no parents
         #f   : continuous(1), 2 discrete parents (d,e)
@@ -404,6 +419,24 @@ class GaussianTestCase(unittest.TestCase):
         self.fd = fd = f.distribution
         self.gd = gd = g.distribution
         
+    def testRandom(self):
+        """ tests that the random number generator is correct """
+        self.ad.setParameters(sigma = 0.1, mu = 1.0)
+        for i in range(1000):
+            r = self.ad.random()
+            assert(r[0] >= float(self.ad.mean[0] - 5*self.ad.sigma[0]) and \
+                   r[0] <= float(self.ad.mean[0] + 5*self.ad.sigma[0])), \
+                   """ random generation is out of borders """
+    
+        self.bd.setParameters(sigma = [0.1, 0.0, 0, 1], mu = [1, -1])
+
+        for i in range(1000):
+            r = self.bd.random()
+            assert(r[0] >= float(self.bd.mean[0] - 5*self.bd.sigma.flat[0]) and \
+                   r[0] <= float(self.bd.mean[0] + 5*self.bd.sigma.flat[0]) and \
+                   r[1] >= float(self.bd.mean[1] - 5*self.bd.sigma.flat[-1]) and \
+                   r[1] <= float(self.bd.mean[1] + 5*self.bd.sigma.flat[-1])), \
+                   """ random generation is out of borders """        
     def testNoParents(self):
         ad = self.ad
         bd = self.bd
@@ -592,6 +625,8 @@ class MultinomialTestCase(unittest.TestCase):
                na.all(self.a.distribution[1,0,0,:] == na.array([100, 100])) and \
                na.all(self.a.distribution[1,1,0,:] == na.array([-2, -3]))), \
               "Error Setting cpt with num indices"
+              
+  
 
 
 if __name__ == '__main__':

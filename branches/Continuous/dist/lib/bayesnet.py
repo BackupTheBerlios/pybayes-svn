@@ -7,7 +7,7 @@ license file for legal information.
 """
 
 __version__ = '0.1'
-__author__ = 'Kosta Gaitanis & Elliot Cohen'
+__author__ = 'Kosta Gaitanis  & Elliot Cohen'
 __author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
 #Python Standard Distribution Packages
 import sys
@@ -85,6 +85,19 @@ class BVertex(graph.Vertex):
         else:
             return graph.Vertex.__str__(self)+'    (continuous)'
 
+    #============================================================
+    # This is used for the MCMC engine
+    # returns a new distributions of the correct type, containing only
+    # the current without its family
+    def GetSamplingDistribution(self):
+        if self.discrete:
+            d = distributions.MultinomialDistribution(self, ignoreFamily = True)
+        else:
+            d = distributions.Gaussian_Distribution(self, ignoreFamily = True)
+        
+        return d
+            
+    
     # This function is necessary for correct Message Pass
     # we fix the order of variables, by using a cmp function
     def __cmp__(a,b):
