@@ -348,6 +348,10 @@ class Table:
         -   a and b are not touched during this operation
         -   return a NEW Table instance
         """
+        #########################################
+        #---TODO: add division with a number
+        #########################################
+        
         # prepare dimensions in a and b for multiplication
         new, cptb = a.union(b)
 
@@ -457,16 +461,17 @@ class Table:
         # btr is now ready for any operation with new
         return new, btr
 
-    
-def ones(names, shape, type='Int32'):
-   return Table(names,shape,na.product(shape)*[1],type)
+    def ones(self):
+        """ All CPT elements are set to 1 """
+        self.cpt = na.ones(self.cpt.shape, type=self.cpt.type())
 
-def zeros(names, shape, type='Int32'):
-   return Table(names,shape,na.product(shape)*[0],type)      
-
-def array(names, shape, type='Int32'):
-   return Table(names,shape,range(na.product(shape)),type)
-
+    def zeros(self):
+        """ All CPT elements are set to 0 """
+        self.cpt = na.zeros(self.cpt.shape, type=self.cpt.type())
+        
+#=====================================================================
+#=====================================================================
+       
 class TableTestCase(unittest.TestCase):
    def setUp(self):
       names = ('a','b','c')

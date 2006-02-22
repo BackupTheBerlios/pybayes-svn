@@ -92,6 +92,21 @@ class Distribution(object):
 
         return string
 
+    #==================================================
+    #=== Learning & Sampling Functions
+    def initializeCounts(self):
+        raise "Must be implemented in child class !!!"
+        
+    def incrCounts(self, index):
+        """ add one to given count """
+        raise "Must be implemented in child class !!!"
+
+    def addToCounts(self, index, counts):
+        raise "Must be implemented in child class !!!"
+    
+    def setCounts(self):
+        """ set the distributions underlying cpt equal to the counts """
+        raise "Must be implemented in child class !!!"
 
 class MultinomialDistribution(Distribution, Table):
     """     Multinomial/Discrete Distribution
@@ -140,14 +155,6 @@ class MultinomialDistribution(Distribution, Table):
             t1cpt = na.resize(t1cpt,tcpt.shape)
             tcpt = tcpt/t1cpt
             self.cpt = na.transpose(tcpt, order)
-
-    def ones(self):
-        """ All CPT elements are set to 1 """
-        self.cpt = na.ones(self.cpt.shape, type=self.cpt.type())
-
-    def zeros(self):
-        """ All CPT elements are set to 0 """
-        self.cpt = na.zeros(self.cpt.shape, type=self.cpt.type())
 
     def uniform(self):
         """ All CPT elements have equal probability :
@@ -199,15 +206,19 @@ class MultinomialDistribution(Distribution, Table):
         return i
 
     def random(self):
-        """ Returns a random state of this distribution """
+        """ Returns a random state of this distribution, 
+        chosen completely at random, it does not take account of the 
+        underlying distribution """
+        
         # CHECK: legal values are 0 - nvalues-1: checked OK
         return random.randint(0, self.nvalues-1)
 
     #==================================================
-    #=== Learning Functions
+    #=== Learning & Sampling Functions
     def initializeCounts(self):
         ''' initialize counts array to ones '''
         self.counts = Table(self.names_list, shape=self.shape)
+        self.counts.zeros()
         
     def incrCounts(self, index):
         """ add one to given count """
@@ -268,6 +279,7 @@ class Gaussian_Distribution(Distribution):
      """
      
     #---TODO: Maybe we should add a domain variable...
+    #---TODO: ADD 'set attribute' for private variables mu, sigma, weights: they muist always be a numarray!!!!
     def __init__(self, v, mu = None, sigma = None, wi = None, \
                  sigma_type = 'full', tied_sigma = False, \
                  isAdjustable = True, ignoreFamily = False):
@@ -344,10 +356,19 @@ class Gaussian_Distribution(Distribution):
     #======================================================
     #=== Sampling
     def sample(self, index={}):
-        raise "Not Implemented yet!!!"
+        mean = self.mean.copy()
+        sigma = self.sigma.copy()
+#        if index:
+#            for v in reversed(self.discrete_parents):
+#                if index.has_key(v): 
+#                    mean = na.take(mean, index[v], axis=self.discrete_parents.index(v))
+#                    sigma = na.take(sigma, index[v], axis=self.discrete_parents.index(v))
+
+        
+        return ra.multivariate_normal(self.mean, self.sigma)
 
     def random(self):
-        """ Returns a random state of this distribution """
+        """ Returns a random state of this distribution using a uniform distribution """
         # legal values are from -inf to + inf
         # we restrain to mu-5*s --> mu+5*s
         return [(5*sigma*(random.random() - 0.5) + mu) for mu,sigma in zip(self.mean, self.sigma.diagonal())]
@@ -355,19 +376,35 @@ class Gaussian_Distribution(Distribution):
     #==================================================
     #=== Learning Functions
     def initializeCounts(self):
-        ''' initialize counts array to ones '''
-        raise "Not Implemented yet!!!"
+        ''' initialize counts array to empty '''
+        self.samples = list()
+        # this list will contain all the sampled values
         
-    def incrCounts(self, index):
-        """ add one to given count """
-        raise "Not Implemented yet!!!"
+    def incrCounts(self, value):
+        """ add the vlue to list of counts """
+        if value.__class__.__name__ == 'list':
+            self.samples.extend(value)
+        elif value.__class__.__name__ == 'dict':
+            raise "not implemented yet"
+        else:
+            self.samples.append(value)
 
     def addToCounts(self, index, counts):
-        raise "Not Implemented yet!!!"
+        raise "What's the meaning of this for a gaussian distribution ???"
     
     def setCounts(self):
-        """ set the distributions underlying cpt equal to the counts """
-        raise "Not Implemented yet!!!"
+        """ set the distributions underlying parameters (mu, sigma) to match the samples """
+        assert(self.samples), "No samples given..."
+        
+        samples = na.array(self.samples, type='Float32')
+
+        self.mean = na.sum(samples) / len(samples)
+        
+        deviation = samples - self.mean
+        squared_deviation = deviation*deviation
+        sum_squared_deviation = na.sum(squared_deviation)
+        
+        self.sigma = (sum_squared_deviation / (len(samples)-1.0)) ** 0.5
 
     #==================================================
     #=== Printing Functions    
@@ -484,7 +521,47 @@ class GaussianTestCase(unittest.TestCase):
         assert(gd.weights.shape == tuple([gd.nvalues]+gd.parents_shape)), \
                 "weights does not have correct shape for discrete & continuous parents"          
          
+    def testCounting(self):
+        " test counting of samples"
+        a = self.a.distribution
+        a.initializeCounts()
+        
+        assert(a.samples == list()), \
+        "Samples list not initialized correctly"
+        
+        a.incrCounts(range(10))
+        a.incrCounts(5)
 
+        assert(a.samples == range(10) + [5]), \
+        "Elements are not added correctly to Samples list"
+        
+        a.setCounts()
+        error = 0.0001
+        assert(na.allclose([a.mean,a.sigma], [4.545454, 2.876324], atol = error)), \
+        "Mu and sigma doesn't seem to be calculated correctly..."
+
+    def testSampling(self):
+        " Test the sample() function "
+        a = self.a.distribution
+        
+        a.setParameters(mu=5, sigma=1)
+        
+        # take 1000 samples from distribution
+        samples = [a.sample() for i in range(1000)]
+        
+        # verify values
+        b = self.a.GetSamplingDistribution()
+        b.initializeCounts()
+        b.incrCounts(samples)
+        b.setCounts()
+        
+        error=0.05
+        assert(na.allclose(b.mean, a.mean, atol = error) and \
+               na.allclose(b.sigma,a.sigma,atol=error)), \
+        "Sampling does not seem to produce a gaussian distribution"
+        
+        gd = self.g.distribution    #2 discrete parents, 2 continuous parents
+        
 
 
 

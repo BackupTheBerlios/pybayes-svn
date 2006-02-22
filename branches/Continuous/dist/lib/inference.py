@@ -620,13 +620,53 @@ class JoinTree(InferenceEngine, graph.Graph):
             
 
 
-
+class MCMCEngine_Kostas(InferenceEngine):
+        """ MCMC in the way described in the presentation by Rina Rechter """
+        def __init__(self, BNet, Nsamples = 1000):
+            InferenceEngine.__init__(self, BNet)
+            self.N = Nsamples
+        
+        def SetObs(self, evidence = dict()):
+            self.evidence = dict(evidence)
+        
+        def MarginaliseAll(self):
+            samples = self.BNet.Sample(self.N)
+            res = []
+            for v in self.BNet.all_v:
+                res.append(self.Marginalise(v.name, samples = samples))
+           
+            return res
+            
+        def Marginalise(self, vname, samples = None):
+            # 1.Sample the network N times
+            if not samples:
+                # if no samples are given, get them
+                samples = self.BNet.Sample(self.N)
+            
+            # 2. Create the distribution that will be returned
+            v = self.BNet.v[vname]        # the variable
+            vDist = v.GetSamplingDistribution()
+            vDist.initializeCounts()                 # set all 0s
+            
+            # 3.Count number of occurences of vname = i
+            #    for each possible value of i, that respects the evidence
+            for s in samples:
+                if na.alltrue([s[e] == i for e,i in self.evidence.items()]): 
+                    # this samples respects the evidence
+                    # add one to the corresponding instance of the variable
+                    vDist.incrCounts(s)
+            
+            vDist.setCounts()    #apply the counts as the distribution
+            vDist.normalize()    #normalize to obtain a probability
+            
+            return vDist
+            
 class MCMCEngine(InferenceEngine):
         """ Implementation of MCMC (aka Gibbs Sampler), as described on p.517 of Russell and Norvig
         """
         cut = 100
         def __init__(self, BNet, cut=100):
-            """ creates an MCMC inference Engine ofr the BNet specified
+            """ creates an MCMC inference Engine for the BNet specified
             cut = maximum number of iterations allowd for the sampler
             """
             InferenceEngine.__init__(self, BNet)
@@ -666,7 +706,7 @@ class MCMCEngine(InferenceEngine):
                         vDist[state[v]] += 1
                         pass
                         
-                # sample variables again for next iteration
+                # sample non-evidence variables again for next iteration
                 for vname in nonEvidence:
                         state[vname] = self.sampleGivenMB(self.BNet.v[vname], state)
 
@@ -758,7 +798,40 @@ class InferenceEngineTestCase(unittest.TestCase):
         self.G2 = G2
     
 
+class MCMCKostaTestCase(InferenceEngineTestCase):
+    """ MCMC Kosta unit tests.
+    """
+    def setUp(self):
+        InferenceEngineTestCase.setUp(self)
+        self.engine = MCMCEngine_Kostas(self.BNet,2000)
+        self.engine2 = MCMCEngine_Kostas(self.G2,2000)
     
+    def testUnobservedDiscrete(self):
+        """ DISCRETE: Compute and check the probability of water-sprinkler given no evidence
+        """
+        cprob, rprob, sprob, wprob = self.engine.MarginaliseAll()
+
+        error = 0.05
+        #print cprob[True] <= (0.5 + error)and cprob[True] >= (0.5-error)
+        #print wprob[True] <= (0.65090001 + 2*error) and wprob[True] >= (0.65090001 - 2*error)
+        #print sprob[True] <= (0.3 + error) and sprob[True] >= (0.3 - error)
+        
+        assert(na.allclose(cprob[True], 0.5, atol = error) and \
+               na.allclose(sprob[True], 0.3, atol = error) and \
+               na.allclose(rprob[True], 0.5, atol = error) and \
+               na.allclose(wprob[True], 0.6509, atol = error)), \
+        "Incorrect probability with unobserved water-sprinkler network"
+
+    def testUnobservedGaussian(self):
+        """ GAUSSIAN: Compute and check the marginals of a simple gaussian network """
+        G = self.G2
+        a,b = self.a, self.b
+        engine = self.engine2
+        
+        res = engine.MarginaliseAll()
+        for r in res:print r
+              
+
 class MCMCTestCase(InferenceEngineTestCase):
     """ MCMC unit tests.
     """
@@ -887,6 +960,55 @@ class JTreeTestCase(InferenceEngineTestCase):
     ###     - check message passing
     ###########################################################
 if __name__=='__main__':
+    suite = unittest.makeSuite(MCMCKostaTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)    
+#    G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+#    c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+#    for ep in [(c,r), (c,s), (r,w), (s,w)]:
+#        G.add_e(graph.DirEdge(len(G.e), *ep))
+#    G.InitDistributions()
+#    c.setDistributionParameters([0.5, 0.5])
+#    s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+#    r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+#    w.distribution[:,0,0]=[0.99, 0.01]
+#    w.distribution[:,0,1]=[0.1, 0.9]
+#    w.distribution[:,1,0]=[0.1, 0.9]
+#    w.distribution[:,1,1]=[0.0, 1.0]
+#    
+#
+#    print G
+#    engine = MCMCEngine_Kostas(G,1000)
+#    
+#    d = c.GetSamplingDistribution()
+#    d.initializeCounts()
+#    d.incrCounts(range(10))
+#    d.setCounts()
+#    print d
+    
+    
+    #for r in engine.MarginaliseAll(): print r
+#    
+#    engine.SetObs({'c':0,'s':0})
+#    print 'EVIDENCE:',engine.evidence
+#    for r in engine.MarginaliseAll(): print r
+#
+#    print 'Results using JTree inference'
+#    engine = JoinTree(G)
+#    engine.SetObs(['c','s'],[0,0])
+#    print engine.Marginalise('c')
+#    print engine.Marginalise('s')
+#    print engine.Marginalise('r')
+#    print engine.Marginalise('w')
+
+
+
+
+
+
+
+
+if __name__=='__mains__':
     suite = unittest.makeSuite(MCMCTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)

@@ -174,6 +174,7 @@ class BNet(graph.Graph):
         assert(len(self.v) > 0)
         samples = []
         topological = self.topological_sort(self.v.values()[0])
+        
         for i in range(n):
             sample = {}
             for v in topological:
@@ -296,9 +297,9 @@ if __name__=='__main__':
     print 'w:', crsw.Marginalise('c s r'.split())
 
     #add some evidence
-    JT.SetObs(['c'],[1])
-    JT.MargAll()
-
+    #JT.SetObs(['c'],[1])
+    #JT.MargAll()
+    G.Sample(1)
 ##    print 'DEBUGGING: performing same calculations as JunctionTree:'
 ##    #create the clusters and set them to allOnes
 ##    c1 = inference.Cluster([r,s,c])
@@ -401,6 +402,8 @@ if __name__=='__mains__':
     #print JT.Marginalise('w')
     #print 'RESULT, after Junction Tree:'
     JT.MargAll()
+    
+    G.Sample(1)
 
 ##    # verification
 ##    print 'VERIFICATION, Results should look like this :'
