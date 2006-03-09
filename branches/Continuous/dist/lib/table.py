@@ -138,6 +138,8 @@ class Table:
       Index can be a dictionary of var name:value pairs, 
       or pure numbers as in the standard way
       of accessing a numarray array array[1,:,1]
+      
+      returns the indexed cpt
       """
       if isinstance(index, types.DictType):
          numIndex = self._numIndexFromDict(index)

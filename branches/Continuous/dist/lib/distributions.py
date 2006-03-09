@@ -352,20 +352,111 @@ class Gaussian_Distribution(Distribution):
             self.weights = na.array(wi, shape=[self.nvalues]+self.parents_shape, type='Float32')
         except:
             raise 'Not a valid weight'
+    
+    def normalize(self):
+        pass
         
+    #=================================================================
+    # Indexing Functions
+    def __getitem__(self,index):
+        """
+        similar indexing to the Table class
+        index can be a number, a slice instance, or a dict ,
+        
+        returns a tuple (mean, variance, weights)
+        """
+       
+        if isinstance(index, types.DictType):
+             d_index, c_index = self._numIndexFromDict(index)
+        else: raise "not supported"
+#        elif isinstance(index, types.TupleType):
+#            numIndex = list(index)     
+#        else:
+#             numIndex = [index]
+
+        return tuple([self.mean[tuple([slice(None,None,None)] + d_index)], \
+                      self.sigma[tuple([slice(None,None,None)]*2 + d_index)], \
+                      self.weights[tuple([slice(None,None,None)] + c_index)]])      
+
+    def __setitem__(self, index, value):
+        """ Overload array-style indexing behaviour.
+        Index can be a dictionary of var name:value pairs, 
+        or pure numbers as in the standard way
+        of accessing a numarray array array[1,:,1]
+        
+        value must be a dict with keys ('mean', 'variance' or 'weights')
+        and values the corresponding values to be introduced
+        """
+
+        
+        if isinstance(index, types.DictType):
+            d_index, c_index = self._numIndexFromDict(index)
+        else: raise "not supported..."
+        
+#        elif isinstance(index, types.TupleType):
+#            numIndex = list(index)     
+#        else:
+#            numIndex = [index]
+        
+        if value.has_key('mean'):
+            self.mean[tuple([slice(None,None,None)]    + d_index)] = value['mean']
+        if value.has_key('sigma'):
+            self.sigma[tuple([slice(None,None,None)]*2 + d_index)] = value['sigma']  
+        if value.has_key('weights'):
+            self.weights[tuple([slice(None,None,None)] + c_index)] = value['weights']
+            
+    def _numIndexFromDict(self, d):
+        # first treat the discrete parents
+        d_index = []
+        for dp in self.discrete_parents:
+            if d.has_key(dp.name):
+                d_index.append(d[dp.name])    
+            else:
+                d_index.append(slice(None,None,None))
+        
+        # now treat the continuous parents
+        c_index = []
+        for dp in self.continuous_parents:
+            if d.has_key(dp.name):
+                c_index.append(d[dp.name])    
+            else:
+                c_index.append(slice(None,None,None))
+                
+        return (d_index,c_index)
+        
+      
     #======================================================
     #=== Sampling
     def sample(self, index={}):
-        mean = self.mean.copy()
-        sigma = self.sigma.copy()
-#        if index:
-#            for v in reversed(self.discrete_parents):
-#                if index.has_key(v): 
-#                    mean = na.take(mean, index[v], axis=self.discrete_parents.index(v))
-#                    sigma = na.take(sigma, index[v], axis=self.discrete_parents.index(v))
+        """ in order to sample from this distributions, all parents must be known """
+#        mean = self.mean.copy()
+#        sigma = self.sigma.copy()
+##        if index:
+##            # discrete parents
+##            for v,i in enumerate(reversed(self.discrete_parents)):
+##            # reverse: avoid missing axes when taking in random
+##            # we start from the end, that way all other dimensions keep the same index
+##                if index.has_key(v.name): 
+##                    # take the corresponding mean; +1 because first axis is the mean
+##                    mean = na.take(mean, index[v], axis=(i+1) )
+##                    # take the corresponding covariance; +2 because first 2 axes are the cov
+##                    sigma = na.take(sigma, index[v], axis=(i+2) )
+##            
+##            # continuous parents
+##            for v in reversed(self.continuous_parents):
+##                if index.has_key(v):
 
+        d_index, c_index = self._numIndexFromDict(index)
+        mean  = na.array(self.mean[tuple([slice(None,None,None)]+d_index)])
+        sigma = self.sigma[tuple([slice(None,None,None)]*2 +d_index)]
+        wi = na.sum(self.weights * na.array(c_index)[na.NewAxis,...], axis=1)
         
-        return ra.multivariate_normal(self.mean, self.sigma)
+#        if self.continuous_parents:
+#            wi = na.array(self.weights[tuple([slice(None,None,None)]+c_index)])
+#        else: wi = 0.0
+        
+        # return a random number from a normal multivariate distribution
+        return float(ra.multivariate_normal(mean + wi, sigma))
 
     def random(self):
         """ Returns a random state of this distribution using a uniform distribution """
@@ -374,20 +465,25 @@ class Gaussian_Distribution(Distribution):
         return [(5*sigma*(random.random() - 0.5) + mu) for mu,sigma in zip(self.mean, self.sigma.diagonal())]
     
     #==================================================
-    #=== Learning Functions
+    #=== Learning & Sampling Functions
     def initializeCounts(self):
         ''' initialize counts array to empty '''
         self.samples = list()
         # this list will contain all the sampled values
         
-    def incrCounts(self, value):
-        """ add the vlue to list of counts """
-        if value.__class__.__name__ == 'list':
-            self.samples.extend(value)
-        elif value.__class__.__name__ == 'dict':
-            raise "not implemented yet"
+    def incrCounts(self, index):
+        """ add the value to list of counts """
+        if index.__class__.__name__ == 'list':
+            self.samples.extend(index)
+        elif index.__class__.__name__ == 'dict':
+            # for the moment only take index of main variable
+            # ignore the value of the parents, 
+            # the value of the parents is not necessary for MCMC but it is very
+            # important for learning!
+            #TODO: Add support for values of the parents
+            self.samples.append(index[self.names_list[0]])
         else:
-            self.samples.append(value)
+            self.samples.append(index)
 
     def addToCounts(self, index, counts):
         raise "What's the meaning of this for a gaussian distribution ???"
@@ -433,7 +529,7 @@ class GaussianTestCase(unittest.TestCase):
         
         self.a = a = G.add_v(BVertex('a',discrete=False,nvalues=1))
         self.b = b = G.add_v(BVertex('b',discrete=False,nvalues=2))
-        self.c = c = G.add_v(BVertex('c',discrete=False,nvalues=3))
+        self.c = c = G.add_v(BVertex('c',discrete=False,nvalues=1))
         self.d = d = G.add_v(BVertex('d',discrete=True,nvalues=2))
         self.e = e = G.add_v(BVertex('e',discrete=True,nvalues=3))
         self.f = f = G.add_v(BVertex('f',discrete=False,nvalues=1))
@@ -494,9 +590,9 @@ class GaussianTestCase(unittest.TestCase):
 		 """ test a gaussian with continuous parents """
 		 cd = self.cd
 		 #c has two continuous parents
-		 assert(cd.mean.shape == (3,)), \
+		 assert(cd.mean.shape == (cd.nvalues,)), \
 				"mean does not have correct shape for continous parents"
-		 assert(cd.sigma.shape == (3,3)), \
+		 assert(cd.sigma.shape == (cd.nvalues,cd.nvalues)), \
 				"sigma does not have correct shape for continous parents"
 		 assert(cd.weights.shape == tuple([cd.nvalues]+cd.parents_shape)), \
 				"weights does not have correct shape for continous parents"
@@ -539,6 +635,44 @@ class GaussianTestCase(unittest.TestCase):
         error = 0.0001
         assert(na.allclose([a.mean,a.sigma], [4.545454, 2.876324], atol = error)), \
         "Mu and sigma doesn't seem to be calculated correctly..."
+
+    def testIndexing(self):
+        fd = self.f.distribution    # 2 discrete parents : d(2),e(3)
+        
+        fd.setParameters(mu=range(6),sigma=range(6))
+        
+#        # test normal indexing
+#        assert(na.allclose(fd[0][0].flat, na.array(range(3),type='Float32')) and \
+#               na.allclose(fd[0][1].flat, na.array(range(3), type='Float32')) and \
+#               na.allclose(fd[1,2][0].flat, na.array(5, type='Float32')) and \
+#               na.allclose(fd[1,2][1].flat, na.array(5, type='Float32'))), \
+#        "Normal indexing does not seem to work..."
+        
+        # test dict indexing
+        assert(na.allclose(fd[{'d':0}][0].flat, na.array(range(3),type='Float32')) and \
+               na.allclose(fd[{'d':0}][1].flat, na.array(range(3), type='Float32')) and \
+               na.allclose(fd[{'d':1,'e':2}][0].flat, na.array(5, type='Float32')) and \
+               na.allclose(fd[{'d':1,'e':2}][1].flat, na.array(5, type='Float32'))), \
+        "Dictionary indexing does not seem to work..." 
+        
+        # now test setting of parameters
+        fd[{'d':1,'e':2}] = {'mean':0.5, 'sigma':0.6}
+        fd[{'d':0}] = {'mean':[0,1.2,2.4],'sigma':[0,0.8,0.9]}
+        na.allclose(fd[{'d':0}][0].flat, na.array([0,1.2,2.4],type='Float32'))
+        assert(na.allclose(fd[{'d':0}][0].flat, na.array([0,1.2,2.4],type='Float32')) and \
+               na.allclose(fd[{'d':0}][1].flat,na.array([0,0.8,0.9],type='Float32')) and \
+               na.allclose(fd[{'d':1,'e':2}][0].flat, na.array(0.5, type='Float32')) and \
+               na.allclose(fd[{'d':1,'e':2}][1].flat, na.array(0.6, type='Float32'))), \
+        "Setting of values using dict does not seem to work..."             
+
+        # now run tests for continuous parents
+        cd = self.c.distribution    # 2 continuous parents a(1),b(2)
+
+        cd[{'a':0,'b':1}] = {'weights':69}
+        assert(na.allclose(cd[{'a':0,'b':1}][2],69.0)), \
+        "Indexing for continuous parents does not work"
+
+        
 
     def testSampling(self):
         " Test the sample() function "

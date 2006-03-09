@@ -790,8 +790,8 @@ class InferenceEngineTestCase(unittest.TestCase):
             G2.add_e(graph.DirEdge(len(G2.e), *ep))
         
         G2.InitDistributions()
-        a.setDistributionParameters(mu = 0.0, sigma = 1.0)
-        b.setDistributionParameters(mu = 1.0, sigma = 0.5, wi = 1.0)
+        a.setDistributionParameters(mu = 1.0, sigma = 1.0)
+        b.setDistributionParameters(mu = 1.0, sigma = 1.0, wi = 2.0)
         
         self.a = a
         self.b = b
@@ -804,7 +804,7 @@ class MCMCKostaTestCase(InferenceEngineTestCase):
     def setUp(self):
         InferenceEngineTestCase.setUp(self)
         self.engine = MCMCEngine_Kostas(self.BNet,2000)
-        self.engine2 = MCMCEngine_Kostas(self.G2,2000)
+        self.engine2 = MCMCEngine_Kostas(self.G2,5000)
     
     def testUnobservedDiscrete(self):
         """ DISCRETE: Compute and check the probability of water-sprinkler given no evidence
