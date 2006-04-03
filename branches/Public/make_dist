@@ -1,0 +1,7 @@
+# this script will create the following distributions files for OpenBayes :
+# - source distribution (platform independant)
+# - windows installer (.exe)
+# - rpm
+sudo python setup.py sdist
+sudo python setup.py bdist_wininst
+sudo python setup.py bdist_rpm
