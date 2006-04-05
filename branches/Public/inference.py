@@ -1,4 +1,4 @@
-__all__ = ['JoinTree','MCMCEngine_Kostas','MCMCEngine']
+__all__ = ['JoinTree','MCMCEngine']
 
 import numarray as na
 from numarray.ieeespecial import getnan
@@ -28,11 +28,16 @@ class InferenceEngine:
         self.BNet = BNet
         self.evidence = {}
     
-    def SetObs(self, v, val):
-        """ Incorporate new evidence 
-        """
-        self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
-    
+    def SetObs(self, ev = dict()):
+        """ Incorporate new evidence """
+        logging.info('Incorporating Observations')
+        # evidence = {var.name:observed value}
+        self.evidence = dict(ev)
+           
+    def MarginaliseAll(self):
+        assert 0, 'In InferenceEngine, method must not be implemented at \
+                   Child level'
+                   
     def Marginalise(self, v):
         assert 0, 'In InferenceEngine, method must not be implemented at \
                    Child level'
@@ -61,24 +66,6 @@ class InferenceEngine:
                 v.distribution.setCounts()
                 v.distribution.normalize(dim=v.name)
     
-    def LearnEMParams(self, cases, iterations=10):
-        isConverged = False
-        iter = 0
-        while not isConverged and iter < iterations:
-            LL = self.EMStep(cases)
-            iter += 1
-            isConverged = EMConverged(LL, prevLL, thresh)
-    
-    def EMStep(self, cases):
-        for v in self.BNet.v.values():
-            v.distribution.initializeCounts()
-        for case in cases:
-            self.SetObs(case)
-            for v in self.BNet.v.values():
-                if v.distribution.isAdjustable:
-                    v.counts += self.MarginaliseFamily(v.name)
-        for v in self.BNet.v.values():
-            v.ResetParameters()
         
 class Cluster(graph.Vertex):
     """
@@ -505,7 +492,10 @@ class JoinTree(InferenceEngine, graph.Graph):
         c = self.clusterdict[v]
         res = c.potential.Marginalise(c.other(v))
         res.Normalise()
-        return res
+        
+        vDist = self.BNet.v[v].GetSamplingDistribution()
+        vDist.setParameters(res)
+        return vDist
     
     def MarginaliseFamily(self, v):
         """ returns Pr(fam(v)), v is a variable name
@@ -514,11 +504,9 @@ class JoinTree(InferenceEngine, graph.Graph):
         res = c.Marginalise(c.other(self.BNet.v[v].family))
         return res.Normalise()
     
-    def SetObs(self, v,val):
+    def SetObs(self, ev = dict()):
         """ Incorporate new evidence """
-        logging.info('Incorporating Observations')
-        # evidence = {var.name:observed value}
-        self.evidence = dict((vi,vali) for vi,vali in zip(v,val))
+        InferenceEngine.SetObs(self, ev)
         
         # add any missing variables, -1 means not observed:
         for vv in self.BNet.v.values():
@@ -601,11 +589,15 @@ class JoinTree(InferenceEngine, graph.Graph):
             l.SetObs(vval)
             c.potential *= l
 
-    def MargAll(self):
+    def MarginaliseAll(self):
+        """ returns a dict with all the marginals """
+        res = dict()
         for v in self.BNet.v.values():
-            if not v.observed: print v, self.Marginalise(v.name)
+            if not v.observed: res[v.name] = self.Marginalise(v.name)
         for v in self.BNet.observed:
-            print v, self.Marginalise(v.name)
+            res[v.name] = self.Marginalise(v.name)
+        
+        return res
                 
     def Print(self):
         for c in self.v.values():
@@ -622,20 +614,17 @@ class JoinTree(InferenceEngine, graph.Graph):
             
 
 
-class MCMCEngine_Kostas(InferenceEngine):
+class MCMCEngine(InferenceEngine):
         """ MCMC in the way described in the presentation by Rina Rechter """
         def __init__(self, BNet, Nsamples = 1000):
             InferenceEngine.__init__(self, BNet)
             self.N = Nsamples
         
-        def SetObs(self, evidence = dict()):
-            self.evidence = dict(evidence)
-        
         def MarginaliseAll(self):
             samples = self.BNet.Sample(self.N)
-            res = []
+            res = dict()
             for v in self.BNet.all_v:
-                res.append(self.Marginalise(v.name, samples = samples))
+                res[v.name] = self.Marginalise(v.name, samples = samples)
            
             return res
             
@@ -663,104 +652,6 @@ class MCMCEngine_Kostas(InferenceEngine):
             
             return vDist
             
-class MCMCEngine(InferenceEngine):
-        """ Implementation of MCMC (aka Gibbs Sampler), as described on p.517 of Russell and Norvig
-        """
-        cut = 100
-        def __init__(self, BNet, cut=100):
-            """ creates an MCMC inference Engine for the BNet specified
-            cut = maximum number of iterations allowd for the sampler
-            """
-            InferenceEngine.__init__(self, BNet)
-            self.cut = cut
-            
-        def SetObs(self, v, val):
-            pass
-                
-        def Marginalise(self, v, N):
-            """ Compute the Pr(v) where v is a variable name,
-            N is the number of iterations of MCMC to perform.
-            """
-            # the return distribution
-            # choose a distribution type, Table or Gaussian
-            #vDist = Table(v, shape=self.BNet.v[v].nvalues)
-            vDist = self.BNet.v[v].GetSamplingDistribution()
-            nonEvidence = []
-            # find out which values are not specified in evidence
-            for vv in self.BNet.v.values():
-                if not self.evidence.has_key(vv.name): nonEvidence.append(vv.name)
-
-            # state is first selected at random            
-            state = copy.copy(self.evidence)
-            for vname in nonEvidence:
-                # CHECK: legal values are 0 - nvalues-1: checked OK
-                #state[vname] = random.randint(0, self.BNet.v[vname].nvalues-1)
-                state[vname] = self.BNet.v[vname].distribution.random()
-            # state = {'a':0,'b':1}   # chosen completely at random, 
-                                      # without keeping in mind the distribution
-            for i in range(N):
-                if i > self.cut:
-                        #########################################
-                        # cut is used to avoid the first samples...
-                        # is this really necessary??? maybe,....(Kostas Comments)
-                        ##################################
-                        # 
-                        vDist[state[v]] += 1
-                        pass
-                        
-                # sample non-evidence variables again for next iteration
-                for vname in nonEvidence:
-                        state[vname] = self.sampleGivenMB(self.BNet.v[vname], state)
-
-            # added a normalize() function in Table
-            vDist.normalize()
-            return vDist
-        
-        def sampleGivenMB(self, v, state):
-            #MBval = Table(v.name, shape=v.nvalues)
-            MBval = v.GetSamplingDistribution()    # MBval contains 0s
-            children = v.out_v
-            index = {}
-            for vert in v.family:       
-                    index[vert.name] = state[vert.name]
-            # index = {var.name:state}    only for var in v.family
-            
-            childrenAndIndex = []
-            for child in children:
-                cindex = {}
-                # family = a node and all its parents
-                for cvert in child.family: # replaced [child]+list(child.in_v)
-                    # cvert is either a child or an uncle(parent of child) of v
-                    # cindex contains the state of all variables in the family
-                    # of a child of v
-                    cindex[cvert.name] = state[cvert.name]       
-                childrenAndIndex.append((child,cindex))
-
-            #OPTIMIZE: could vectorize this code
-            for value in range(v.nvalues):
-                index[v.name] = value
-                # initialise each element of the distribution with the
-                # conditional probability table values of the variable
-                # Pr(v=i)=Pr(v=i|Pa(v)=index)
-                # index is randomly selected at each iteration
-                MBval[value] = v.distribution[index]
-                ##################################################
-                # this could be replaced by Table multiplication instead
-                # of an element-wise multiplication
-                # in that case we don't need all those index dictionnaries
-                ##################################################
-                for child,cindex in childrenAndIndex:
-                    cindex[v.name] = value
-                    MBval[value] *= child.distribution[cindex]
-            x=1
-            MBval.normalize()
-
-            #######################################
-            # added a sample() function in Distribution
-            #######################################
-            return MBval.sample()
-        
-
 class InferenceEngineTestCase(unittest.TestCase):
     """ An abstract set of inference test cases.  Basically anything that is similar between the different inference engines can be implemented here and automatically applied to lower engines.  For example, we can define the learning tests here and they shouldn't have to be redefined for different engines.
     """
@@ -798,20 +689,47 @@ class InferenceEngineTestCase(unittest.TestCase):
         self.a = a
         self.b = b
         self.G2 = G2
-    
 
-class MCMCKostaTestCase(InferenceEngineTestCase):
-    """ MCMC Kosta unit tests.
+class LearningTestCase(InferenceEngineTestCase):
+    """ Learning Test case """
+    def setUp(self):
+        InferenceEngineTestCase.setUp(self)   
+    
+    def testML(self):
+        # sample the network 2000 times
+        cases = self.BNet.Sample(2000)
+        
+        # create a new BNet with same nodes as self.BNet but all parameters
+        # set to 1s
+        G = copy.deepcopy(self.BNet)
+        
+        G.InitDistributions()
+        
+        # create an infeence engine
+        engine = JoinTree(G)
+        
+        # learn according to the test cases
+        engine.LearnMLParams(cases)
+        
+        tol = 0.05
+        assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
+               for v in G.all_v])), \
+                " Learning does not converge to true values "
+
+class MCMCTestCase(InferenceEngineTestCase):
+    """ MCMC unit tests.
     """
     def setUp(self):
         InferenceEngineTestCase.setUp(self)
-        self.engine = MCMCEngine_Kostas(self.BNet,2000)
-        self.engine2 = MCMCEngine_Kostas(self.G2,5000)
+        self.engine = MCMCEngine(self.BNet,2000)
+        self.engine2 = MCMCEngine(self.G2,5000)
     
     def testUnobservedDiscrete(self):
         """ DISCRETE: Compute and check the probability of water-sprinkler given no evidence
         """
-        cprob, rprob, sprob, wprob = self.engine.MarginaliseAll()
+        res = self.engine.MarginaliseAll()
+        
+        cprob, sprob, rprob, wprob = res['c'], res['s'], res['r'], res['w']
 
         error = 0.05
         #print cprob[True] <= (0.5 + error)and cprob[True] >= (0.5-error)
@@ -831,95 +749,25 @@ class MCMCKostaTestCase(InferenceEngineTestCase):
         engine = self.engine2
         
         res = engine.MarginaliseAll()
-        for r in res:print r
-              
-
-class MCMCTestCase(InferenceEngineTestCase):
-    """ MCMC unit tests.
-    """
-    def setUp(self):
-        InferenceEngineTestCase.setUp(self)
-        self.engine = MCMCEngine(self.BNet,cut=100)
-        self.engine2 = MCMCEngine(self.G2)
         
-    def testUnobserved(self):
-        """ Compute and check the probability of c=true and r=true given no evidence
-        """
-        N=1000
-        cprob = self.engine.Marginalise('c', N)
-        sprob = self.engine.Marginalise('s', N)
-        wprob = self.engine.Marginalise('w', N)
-        #FIX: fill in actual value
-        error = 0.05
-        #print cprob[True] <= (0.5 + error)and cprob[True] >= (0.5-error)
-        #print wprob[True] <= (0.65090001 + 2*error) and wprob[True] >= (0.65090001 - 2*error)
-        #print sprob[True] <= (0.3 + error) and sprob[True] >= (0.3 - error)
-        
-        assert(cprob[True] <= (0.5 + error) and \
-               cprob[True] >= (0.5-error) and \
-               # wprob has a bigger error generally...
-               wprob[True] <= (0.65090001 + 2*error) and \
-               wprob[True] >= (0.65090001 - 2*error) and \
-               sprob[True] <= (0.3 + error) and \
-               sprob[True] >= (0.3 - error)), \
-              "Incorrect probability with unobserved water-sprinkler network"
-
-    def testUnobservedGaussian(self):
-        """ Compute and check the probability of c=true and r=true given no evidence
-        All nodes are gaussian
-        """
-        N=1000
-        aprob = self.engine2.Marginalise('a', N)
-        bprob = self.engine2.Marginalise('b', N)
-
-        error = 0.05
-       
-        assert(1), \
-              "Incorrect probability with unobserved gaussian network"   
-               
-    def _testObserved(self):
-        """ Compute and check the probability of w=true|r=false,c=true and s=false|w=true,c=false
-        """
-        N=1000
-        self.engine.SetObs([self.c.name,self.r.name],[True,False])
-        wprob = self.engine.Marginalise(self.w.name,N)
-        #Violates abstraction
-        self.engine.evidence.clear()
-        self.engine.SetObs([self.c.name,self.w.name],[False,True])
-        sprob = self.engine.Marginalise(self.s.name,N)
-        #FIX: fill in actual value
-        assert(wprob[True] == 'value' and \
-               sprob[False] == 'value'), \
-              "Either P(w=true|c=true,r=false) or P(s=false|c=false,w=true) was incorrect"
+        #---TODO: find the true results and compare them...
     
-    def _testLearning(self):
-        """ Sample network and then learn parameters and check that they are relatively close to original.
+    def testObservedDiscrete(self):
+        """ DISCRETE: Compute and check the probability of water-sprinkler given some evidence
         """
-        ev = self.engine.BNet.Sample(n=10000)
+        self.engine.SetObs({'c':1,'s':0})
+        res = self.engine.MarginaliseAll()
         
-        #Remember what the old CPTs looked like and keep track of original dimension order
-        cCPT = self.c.distribution.cpt.copy()
-        self.c.distribution.isAdjustable=True
-        self.c.distribution.uniform()
-        sCPT = self.s.distribution.cpt.copy()
-        self.s.distribution.isAdjustable=True
-        self.s.distribution.uniform()
-        rCPT = self.r.distribution.cpt.copy()
-        self.r.distribution.isAdjustable=True
-        self.r.distribution.uniform()
-        wCPT = self.w.distribution.cpt.copy()
-        self.w.distribution.isAdjustable=True
-        self.w.distribution.uniform()
+        cprob, sprob, rprob, wprob = res['c'], res['s'], res['r'], res['w']
 
-        # Learn parameters
-        self.engine.LearnMLParams(ev)
-        
-        # Check that they match original parameters
-        assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
-               na.allclose(sCPT,self.s.distribution.cpt,atol=.1) and \
-               na.allclose(rCPT,self.r.distribution.cpt,atol=.1) and \
-               na.allclose(wCPT,self.w.distribution.cpt,atol=.1)),\
-              "CPTs were more than atol=.1 apart"
+        error = 0.05        
+        assert(na.allclose(cprob.cpt,[0.0,1.0], atol=error) and \
+               na.allclose(rprob.cpt,[0.2,0.8], atol=error) and \
+               na.allclose(sprob.cpt,[1.0,0.0], atol=error) and \
+               na.allclose(wprob.cpt,[ 0.278, 0.722], atol=error) ), \
+               " Somethings wrong with MCMC inference with evidence "        
+
+ 
         
 class JTreeTestCase(InferenceEngineTestCase):
     def setUp(self):
@@ -942,7 +790,7 @@ class JTreeTestCase(InferenceEngineTestCase):
     def testEvidence(self):
         """ check that evidence works """
         print 'evidence c=1,s=0'
-        self.engine.SetObs(['c','s'],[1,0])
+        self.engine.SetObs({'c':1,'s':0})
         
         c=self.engine.Marginalise('c')
         r=self.engine.Marginalise('r')
@@ -955,120 +803,31 @@ class JTreeTestCase(InferenceEngineTestCase):
                na.allclose(w.cpt,[ 0.278, 0.722]) ), \
                " Somethings wrong with JoinTree evidence"        
 
+    def testMarginaliseAll(self):
+        res = self.engine.MarginaliseAll()
+        
+        assert(res.__class__.__name__ == 'dict' and \
+               set(res.keys()) == set(self.BNet.v)), \
+               " MarginaliseAll is not a correct dictionary "
+               
+
     ###########################################################
     ### SHOULD ADD A MORE GENERAL TEST:
     ###     - not only binary nodes
     ###     - more complex structure
     ###     - check message passing
     ###########################################################
+    
+    
 if __name__=='__main__':
-    suite = unittest.makeSuite(MCMCKostaTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-
-    suite = unittest.makeSuite(JTreeTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-#    G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-#    c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
-#    for ep in [(c,r), (c,s), (r,w), (s,w)]:
-#        G.add_e(graph.DirEdge(len(G.e), *ep))
-#    G.InitDistributions()
-#    c.setDistributionParameters([0.5, 0.5])
-#    s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-#    r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-#    w.distribution[:,0,0]=[0.99, 0.01]
-#    w.distribution[:,0,1]=[0.1, 0.9]
-#    w.distribution[:,1,0]=[0.1, 0.9]
-#    w.distribution[:,1,1]=[0.0, 1.0]
-#    
-#
-#    print G
-#    engine = MCMCEngine_Kostas(G,1000)
-#    
-#    d = c.GetSamplingDistribution()
-#    d.initializeCounts()
-#    d.incrCounts(range(10))
-#    d.setCounts()
-#    print d
-    
-    
-    #for r in engine.MarginaliseAll(): print r
-#    
-#    engine.SetObs({'c':0,'s':0})
-#    print 'EVIDENCE:',engine.evidence
-#    for r in engine.MarginaliseAll(): print r
-#
-#    print 'Results using JTree inference'
-#    engine = JoinTree(G)
-#    engine.SetObs(['c','s'],[0,0])
-#    print engine.Marginalise('c')
-#    print engine.Marginalise('s')
-#    print engine.Marginalise('r')
-#    print engine.Marginalise('w')
-
-
-
-
-
-
-
-
-if __name__=='__mains__':
     suite = unittest.makeSuite(MCMCTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
-##   
+
     suite = unittest.makeSuite(JTreeTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
-    G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-    c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
-    for ep in [(c,r), (c,s), (r,w), (s,w)]:
-        G.add_e(graph.DirEdge(len(G.e), *ep))
-    G.InitDistributions()
-    c.setDistributionParameters([0.5, 0.5])
-    s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-    r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-    w.distribution[:,0,0]=[0.99, 0.01]
-    w.distribution[:,0,1]=[0.1, 0.9]
-    w.distribution[:,1,0]=[0.1, 0.9]
-    w.distribution[:,1,1]=[0.0, 1.0]
 
-    print G
-    engine = MCMCEngine(G,cut=100)
-    engine.SetObs(['c','s'],[1,0])
-    print engine.Marginalise('c',1000)
-    print engine.Marginalise('s',1000)
-    print engine.Marginalise('r',1000)
-    print engine.Marginalise('w',1000)
-
-#===============================================================================
-#    ev = G.Sample(100)
-#    #for e in ev:print e
-#
-#    print 'real parameters'
-#    print c.distribution
-#
-#    cCPT = c.distribution.cpt.copy()
-#    c.distribution.isAdjustable=True
-#    c.distribution.uniform()
-#    sCPT = s.distribution.cpt.copy()
-#    s.distribution.isAdjustable=True
-#    s.distribution.uniform()
-#    rCPT = r.distribution.cpt.copy()
-#    r.distribution.isAdjustable=True
-#    r.distribution.uniform()
-#    wCPT = w.distribution.cpt.copy()
-#    w.distribution.isAdjustable=True
-#    w.distribution.uniform()
-#
-#    print 'initialization parameters'
-#    print c.distribution
-#    
-#    engine = JoinTree(G)
-#    engine.LearnMLParams(ev)
-#
-#    print 'Learned parameters'
-#    print c.distribution
-#===============================================================================
+    suite = unittest.makeSuite(LearningTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

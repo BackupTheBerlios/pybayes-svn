@@ -116,7 +116,7 @@ class MultinomialDistribution(Distribution, Table):
     a Conditional Probability Table (CPT)
     This class now inherits from Distribution and Table.
     """
-    def __init__(self, v, cpt = None, isAdjustable=False, ignoreFamily = False):
+    def __init__(self, v, cpt = None, isAdjustable=True, ignoreFamily = False):
         Distribution.__init__(self, v, isAdjustable=isAdjustable, ignoreFamily = ignoreFamily)
         self.distribution_type = "Multinomial"
         
