@@ -15,7 +15,7 @@ setup(  name='OpenBayes',
 	    author_email = 'gaitanis@tele.ucl.ac.be, elliot.cohen@gmail.com',
 	    url = 'http://www.openbayes.org',
         packages = ['OpenBayes'],
-        package_dir = {'OpenBayes':''},
+        package_dir = {'OpenBayes':'./'},
 	    license = 'modified Python',
 	    classifiers=[
           'Development Status :: First Public Release',
