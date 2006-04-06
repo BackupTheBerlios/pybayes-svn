@@ -6,8 +6,8 @@ from WaterSprinkler import *
 
 # create an inference Engine
 # choose the one you like by commenting/uncommenting the appropriate line
-ie = JoinTree(G)
-#ie = MCMCEngine(G)
+#ie = JoinTree(G)
+ie = MCMCEngine(G)
 
 # perform inference with no evidence
 results = ie.MarginaliseAll()
