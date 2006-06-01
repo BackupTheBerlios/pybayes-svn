@@ -464,6 +464,10 @@ class JoinTree(InferenceEngine, graph.Graph):
                     #logging.debug('JT:initialisation '+c.name+' *= '+v.name)
                     c.potential *= v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
 
+                    # stop here for this node otherwise we count it
+                    # more than once, bug reported by Michael Munie
+                    break
+
         # set all likelihoods to ones
         for l in self.likelihoods: l.AllOnes()
 
