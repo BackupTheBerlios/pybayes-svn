@@ -5,7 +5,7 @@ Journal of Approximate Reasoning, 1994.
 Copyright 2005, Kosta Gaitanis (gaitanis@tele.ucl.ac.be).  Please see the
 license file for legal information.
 """
-#test
+
 __version__ = '0.1'
 __author__ = 'Kosta Gaitanis & Elliot Cohen'
 __author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
