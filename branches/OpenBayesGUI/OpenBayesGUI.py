@@ -217,22 +217,33 @@ class CustomDataTablePS(wx.grid.PyGridTableBase):
     #fonction qui permet de rendre la grid dynamique
     #creation de cellule a la demande
     def SetValue(self, row, col, value):
-
-        try:
-            self.data[row][col] = value
-
-        except IndexError:
-
-            # add a new row
-            self.data.append([''])
-            self.rowLabels.append("State(" + str(row+1) + ")")
-            self.SetValue(row, col, value)
-
-            # tell the grid we've added a row
-            msg = wx.grid.GridTableMessage(self,
-                    wx.grid.GRIDTABLE_NOTIFY_ROWS_APPENDED, 1)
-            
-            self.GetView().ProcessTableMessage(msg)
+        if (value == ""):
+            self.RemoveData(row)
+        
+        else:
+            try:
+                self.data[row][col] = value
+    
+            except IndexError:
+    
+                # add a new row
+                self.data.append([''])
+                self.rowLabels.append("State(" + str(row+1) + ")")
+                self.SetValue(row, col, value)
+    
+                # tell the grid we've added a row
+                msg = wx.grid.GridTableMessage(self,
+                        wx.grid.GRIDTABLE_NOTIFY_ROWS_APPENDED, 1)
+                
+                self.GetView().ProcessTableMessage(msg)
+    
+    def RemoveData(self, row):
+        
+        self.data.pop(row)
+        self.rowLabels.pop()
+        msg = wx.grid.GridTableMessage(self,
+                   wx.grid.GRIDTABLE_NOTIFY_ROWS_DELETED, row, 1)
+        self.GetView().ProcessTableMessage(msg)
 
     def GetRowLabelValue(self, row):
         try:
@@ -645,8 +656,9 @@ class ShapeDialogPN(wx.Panel):
 
 #Initialisation de la grid Property State
 class ShapeDialogPS(wx.grid.Grid):
-    def __init__(self, parent, vari):
+    def __init__(self, parent, distri, vari):
         self.var = vari
+        self.dis = distri
         self.gridShapePS = wx.grid.Grid(parent, -1, size = (650, 300))
         self.gps = GridShapePS(self.gridShapePS, vari)
 
@@ -664,6 +676,16 @@ class ShapeDialogPS(wx.grid.Grid):
 
             if (self.gps.table.GetValue(x, 0) != ""):
                 self.var.stateName.append(self.gps.table.GetValue(x, 0))
+        y = self.gps.table.GetNumberRows()-1
+        num = 1.0/y
+        del self.dis.dpiData[:]
+        stri = str(num) + " "
+        
+        for x in range(self.gps.table.GetNumberRows()-2):
+
+            if (self.gps.table.GetValue(x, 0) != ""):
+                stri += str(num) + " "
+        self.dis.dpiData.append(stri)
         
         global modif
         modif = True
@@ -791,7 +813,7 @@ class ShapeDialog(wx.Dialog):
 
         #fonctions qui vont initialiser le fenetre
         ShapeDialogPN(self.panelNode, vari, shape)
-        ShapeDialogPS(self.panelState, vari)
+        ShapeDialogPS(self.panelState, distri, vari)
         ShapeDialogPD(self.panelDistri, distri, vari)
         ShapeDialogPP(self.panelProp, vari)
         DiagramDialogPPT(self.panelPropType)
