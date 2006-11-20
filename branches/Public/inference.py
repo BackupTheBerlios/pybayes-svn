@@ -511,6 +511,7 @@ class JoinTree(InferenceEngine, graph.Graph):
     def SetObs(self, ev = dict()):
         """ Incorporate new evidence """
         InferenceEngine.SetObs(self, ev)
+
         
         # add any missing variables, -1 means not observed:
         for vv in self.BNet.v.values():
@@ -602,7 +603,15 @@ class JoinTree(InferenceEngine, graph.Graph):
             res[v.name] = self.Marginalise(v.name)
         
         return res
-                
+ 
+    def LearnMLParams(self, cases):
+        InferenceEngine.LearnMLParams(self, cases)
+        
+        # reinitialize the JunctionTree to take effect of new parameters learned
+        self.Initialization()
+        
+        self.GlobalPropagation()
+               
     def Print(self):
         for c in self.v.values():
             print c
@@ -637,6 +646,7 @@ class MCMCEngine(InferenceEngine):
             if not samples:
                 # if no samples are given, get them
                 samples = self.BNet.Sample(self.N)
+                print 'SAMPLES:',samples[0]
             
             # 2. Create the distribution that will be returned
             v = self.BNet.v[vname]        # the variable

@@ -174,7 +174,19 @@ class BNet(graph.Graph):
         """
         assert(len(self.v) > 0)
         samples = []
-        topological = self.topological_sort(self.v.values()[0])
+
+        # find a node without parents and start from there.
+        # There is always at least one node without parents
+        # because a BNet is a Directed Acyclic Graph
+        # this is critical in small networks:
+        # e.g. A--> B
+        #      starting at B will produce an empty output...
+        for v in self.v.values():
+            if len(v.in_v) == 0:
+                start_node = v
+                break
+
+        topological = self.topological_sort(start_node)
         
         for i in range(n):
             sample = {}
@@ -182,6 +194,7 @@ class BNet(graph.Graph):
                 assert(not v.distribution == None), "vertex's distribution is not initialized"
                 sample[v.name] = v.distribution.sample(sample)
             samples.append(sample)
+
         return samples
     
 
