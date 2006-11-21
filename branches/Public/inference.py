@@ -15,7 +15,11 @@ import distributions
 from potentials import DiscretePotential
 from table import Table
 
-logging.basicConfig(level= logging.DEBUG)
+# show INFO messages
+logging.basicConfig(level= logging.INFO)
+#uncomment the following to remove all messages
+#logging.basicConfig(level = logging.NOTSET)
+
 class InferenceEngine:
     """ General Inference Engine class
     Does not really implement something but creates a standard set of
@@ -560,7 +564,7 @@ class JoinTree(InferenceEngine, graph.Graph):
     def GlobalUpdate(self, evidence):
         """ perform message passing to update netwrok according to evidence """
         # evidence = {var.name:value} ; -1=unobserved
-        print evidence
+        #print evidence
         logging.info('Global Update')
         self.ObservationEntry(evidence.keys(),evidence.values())
         
@@ -646,7 +650,6 @@ class MCMCEngine(InferenceEngine):
             if not samples:
                 # if no samples are given, get them
                 samples = self.BNet.Sample(self.N)
-                print 'SAMPLES:',samples[0]
             
             # 2. Create the distribution that will be returned
             v = self.BNet.v[vname]        # the variable
