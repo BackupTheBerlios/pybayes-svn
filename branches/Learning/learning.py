@@ -1,14 +1,23 @@
 import graph
 import bayesnet
 import distributions
-import inference
+from inference import JoinTree
 import random
+import unittest
+import copy
+import numarray as na
+
+import logging
+# show INFO messages
+#logging.basicConfig(level= logging.INFO)
+#uncomment the following to remove all messages
+logging.basicConfig(level = logging.NOTSET)
 
 class EMLearningEngine:
     """ EM learning algorithm
     Learns the parameters of a known bayesian structure from incomplete data.
     """   
-    BNet = none # The underlying bayesian network
+    BNet = None # The underlying bayesian network
     
     def __init__(self, BNet):
         self.BNet = BNet
@@ -22,25 +31,23 @@ class EMLearningEngine:
         old = 'not yet'
         new = 0
         precision = 0.001
+        engine = JoinTree(self.BNet)
+        #engine = MCMCEngine(self.BNet)
         while self.hasntConverged(old, new, precision) and iter < max_iter:
             iter += 1
             old = {}
             new = {}
-            i = 0
-            j = 0
-            for v in self.BNet.v.values():
+
+            for j,v in enumerate(self.BNet.v.values()):
                 old[j]=v.distribution.cpt
-                j += 1
-            old_param = new_param
-            engine = JoinTree(self.BNet)
-            #engine = MCMCEngine(self.BNet)
-            self.LearnEMParams(self, cases, engine)
+
+
+            self.LearnEMParams(cases, engine)
             # reinitialize the JunctionTree to take effect of new parameters learned
             engine.Initialization()
             engine.GlobalPropagation()
-            for v in self.BNet.v.values():
+            for j,v in enumerate(self.BNet.v.values()):
                 new[j]=v.distribution.cpt
-                j += 1
             
     
     def LearnEMParams(self, cases, engine):
@@ -58,8 +65,8 @@ class EMLearningEngine:
                 new_dict={}
                 for key in case.iterkeys():
                     if case[key] != '?':
-                        engine.setObs({key:case[key]})
-                        new_dict[key]=case[key] #Contient tous les éléments de case sauf l'élément inconnu
+                        engine.SetObs({key:case[key]})
+                        new_dict[key]=case[key] #Contient tous les elements de case sauf l'element inconnu
                 for key in case.iterkeys():
                     if case[key] == '?': #NE MARCHE QU'AVEC UNE DONNEE MANQUANTE PAR CASE!!(pour l'instant)
                         likelihood = engine.Marginalise(key).cpt
@@ -151,9 +158,15 @@ class EMLearningTestCase(unittest.TestCase):
         
         G.InitDistributions()
         
-        self.EMLearning(cases, 10)
+        engine = EMLearningEngine(G)
+        engine.EMLearning(cases, 10)
         
         tol = 0.05
         assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
                for v in G.all_v])), \
                 " Learning does not converge to true values "
+                
+if __name__ == '__main__':
+    suite = unittest.makeSuite(EMLearningTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
