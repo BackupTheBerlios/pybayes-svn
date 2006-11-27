@@ -27,4 +27,4 @@ for r in results.values():
     print r, '\n'
 
 print 'ok'
-print w.distribution.cpt
+print ie.Marginalise('w')
