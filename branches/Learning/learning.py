@@ -21,6 +21,8 @@ class EMLearningEngine:
     
     def __init__(self, BNet):
         self.BNet = BNet
+        self.engine = JoinTree(BNet)
+        #self.engine = MCMCEngine(BNet)
     
     def EMLearning(self, cases, max_iter):
         """ cases = [{'c':0,'s':1,'r':'?','w':1},{...},...]
@@ -28,55 +30,57 @@ class EMLearningEngine:
         Will estimate  the '?' by inference.
         """
         iter = 0
-        old = 'not yet'
-        new = 0
-        precision = 0.001
-        engine = JoinTree(self.BNet)
-        #engine = MCMCEngine(self.BNet)
+        old = None
+        new = self.BNet
+        precision = 0.005
+##        engine = JoinTree(self.BNet)
+##        #engine = MCMCEngine(self.BNet)
         while self.hasntConverged(old, new, precision) and iter < max_iter:
             iter += 1
-            old = {}
-            new = {}
-
-            for j,v in enumerate(self.BNet.v.values()):
-                old[j]=v.distribution.cpt
-
-
-            self.LearnEMParams(cases, engine)
+##            old = {}
+##            new = {}
+##            for j,v in enumerate(self.BNet.v.values()):
+##                old[j]=v.distribution.cpt
+            old = copy.copy(new)
+            self.LearnEMParams(cases)
             # reinitialize the JunctionTree to take effect of new parameters learned
-            engine.Initialization()
-            engine.GlobalPropagation()
-            for j,v in enumerate(self.BNet.v.values()):
-                new[j]=v.distribution.cpt
-            
+            self.engine.Initialization()
+            self.engine.GlobalPropagation()
+##            for j,v in enumerate(self.BNet.v.values()):
+##                new[j]=v.distribution.cpt
+            new = copy.copy(self.BNet)
+            if old == new:
+                print 'y a un stress ici'
+            print iter
     
-    def LearnEMParams(self, cases, engine):
+    def LearnEMParams(self, cases):
         """ First part of the algorithm : Estimation of the unknown 
         data. (E-part)
-        """  
+        """ 
         for v in self.BNet.v.values():
                 v.distribution.initializeCounts()
         for case in cases:
-            if not self.hasUnknown(case):
+            known={}
+            unknown={}
+            for key in case.iterkeys():
+                if case[key] != '?':
+                    known[key] = case[key] #Contient tous les elements de case sauf l'element inconnu
+                else:
+                    unknown[key] = case[key]
+            if len(case) == len(known): #Then all the data is known
                 for v in self.BNet.v.values():
-                    if v.distribution.isAdjustable: #NECESSAIRE??
-                            v.distribution.incrCounts(case)
+                    if v.distribution.isAdjustable: 
+                        v.distribution.incrCounts(case)
             else:
-                new_dict={}
-                for key in case.iterkeys():
-                    if case[key] != '?':
-                        engine.SetObs({key:case[key]})
-                        new_dict[key]=case[key] #Contient tous les elements de case sauf l'element inconnu
-                for key in case.iterkeys():
-                    if case[key] == '?': #NE MARCHE QU'AVEC UNE DONNEE MANQUANTE PAR CASE!!(pour l'instant)
-                        likelihood = engine.Marginalise(key).cpt
-                        for v in self.BNet.v.values():
-                            if v.distribution.isAdjustable: #NECESSAIRE??
-                                for state in range(v.nvalues):
-                                    new_dict[key]=state
-                                    v.distribution.addToCounts(new_dict, likelihood[state])
-                                    del new_dict[key]
-        
+                self.engine.SetObs(known)
+                likelihood = {}
+                for key in unknown.iterkeys():
+                    likelihood[key] = self.engine.Marginalise(key).cpt
+                for v in self.BNet.v.values():
+                    if v.distribution.isAdjustable:
+                        self.IterUnknown(known, unknown, likelihood, v)
+                self.engine.Initialization() 
+
         """ Second part of the algorithm : Estimation of the parameters. 
         (M-part)
         """
@@ -84,38 +88,41 @@ class EMLearningEngine:
             if v.distribution.isAdjustable:
                 v.distribution.setCounts()
                 v.distribution.normalize(dim=v.name)
-
-    def hasUnknown(self, case):
-        result = False
-        for key in case.iterkeys():
-            if case[key] == '?':
-                result = True
-                break
-        return result
+    
+    def IterUnknown(self, known, unknown, likelihood, v):
+                #la recursion devrait commencer ici
+                for state in range(self.BNet.v[unknown.keys()[0]].nvalues):
+                    known[unknown.keys()[0]] = state
+                    v.distribution.addToCounts(known, likelihood[unknown.keys()[0]][state])
+                    del known[unknown.keys()[0]]
+               
     
     def hasntConverged(self, old, new, precision):
-        #Voir avec 
-        if old == 'not yet':
+        if not old :
             return True   
         else:
-            final = 0
-            m = 0
-            for v in self.BNet.v.values():
-                new_dist = new[m]
-                if len(v.distribution.family) != 1:
-                    for k in range(len(v.distribution.parents)):
-                        new_dist = new_dist[0]
-                old_dist = old[m]
-                if len(v.distribution.family) != 1:
-                    for k in range(len(v.distribution.parents)):
-                        old_dist = old_dist[0]
-                difference = new_dist-old_dist #EST-IL POSSIBLE QUE LES NOEUDS AIENT CHANGE DE PLACE??
-                result = max(max(abs(difference)),final)
-                m += 1
-            if result > precision:
-                return True
-            else:
-                return False
+##            print not  na.alltrue([na.allclose(v.distribution.cpt, new.v[v.name].distribution.cpt, atol=precision) for v in old.v.values()])
+##            return not  na.alltrue([na.allclose(v.distribution.cpt, new.v[v.name].distribution.cpt, atol=precision) for v in old.v.values()])
+            return True
+##            final = 0
+##            m = 0
+##            for v in self.BNet.v.values():
+##                new_dist = new[m]
+##                if len(v.distribution.family) != 1:
+##                    for k in range(len(v.distribution.parents)):
+##                        new_dist = new_dist[0]
+##                old_dist = old[m]
+##                if len(v.distribution.family) != 1:
+##                    for k in range(len(v.distribution.parents)):
+##                        old_dist = old_dist[0]
+##                difference = new_dist-old_dist #EST-IL POSSIBLE QUE LES NOEUDS AIENT CHANGE DE PLACE??
+##                result = max(max(abs(difference)),final)
+##                m += 1
+##            if result > precision:
+##                return True
+##            else:
+##                return False
+
     
     
 
@@ -149,8 +156,7 @@ class EMLearningTestCase(unittest.TestCase):
         for i in range(500):
             case = cases[3*i]
             rand = random.sample(['c','s','r','w'],1)[0]
-            case[rand] = '?'
-            
+            case[rand] = '?' 
         
         # create a new BNet with same nodes as self.BNet but all parameters
         # set to 1s
@@ -159,12 +165,13 @@ class EMLearningTestCase(unittest.TestCase):
         G.InitDistributions()
         
         engine = EMLearningEngine(G)
-        engine.EMLearning(cases, 10)
+        engine.EMLearning(cases, 3)
         
         tol = 0.05
         assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
                for v in G.all_v])), \
                 " Learning does not converge to true values "
+        print 'ok!!!!!!!!!!!!'
                 
 if __name__ == '__main__':
     suite = unittest.makeSuite(EMLearningTestCase, 'test')
