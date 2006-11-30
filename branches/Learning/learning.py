@@ -33,21 +33,13 @@ class EMLearningEngine:
         old = None
         new = self.BNet
         precision = 0.05
-##        engine = JoinTree(self.BNet)
-##        #engine = MCMCEngine(self.BNet)
         while self.hasntConverged(old, new, precision) and iter < max_iter:
             iter += 1
-##            old = {}
-##            new = {}
-##            for j,v in enumerate(self.BNet.v.values()):
-##                old[j]=v.distribution.cpt
             old = copy.deepcopy(new)
             self.LearnEMParams(cases)
             # reinitialize the JunctionTree to take effect of new parameters learned
             self.engine.Initialization()
             self.engine.GlobalPropagation()
-##            for j,v in enumerate(self.BNet.v.values()):
-##                new[j]=v.distribution.cpt
             new = copy.deepcopy(self.BNet)
             print 'EM iteration: ', iter
     
@@ -70,28 +62,29 @@ class EMLearningEngine:
                     if v.distribution.isAdjustable: 
                         v.distribution.incrCounts(case)
             else:
-                k = 0
+                k = 1
                 possible_list = []
                 temp_dic = {}
                 temp_unknown = copy.copy(unknown)
                 for key in temp_unknown.iterkeys():
-                    for state in range(self.BNet.v[key].nvalues):
-                        k += 1
-                old_k = k
+                    k = k*self.BNet.v[key].nvalues
                 first_k = k
                 print 'k=4: ', k
-                k = k/self.BNet.v[temp_unknown.keys()[0]].nvalues
+                k = first_k/self.BNet.v[temp_unknown.keys()[0]].nvalues
+                old_k = k
+                iteration = 2
                 print 'k=2: ', k
                 print 'temp_unknown: ',temp_unknown
                 for state in range(self.BNet.v[temp_unknown.keys()[0]].nvalues):
                     temp_dic[temp_unknown.keys()[0]]=state
                     temp = copy.copy(temp_dic)
                     for j in range(k):
-                        possible_list.append(temp)
+                        foo = copy.copy(temp)
+                        possible_list.append(foo)
                     del temp_dic[temp_unknown.keys()[0]]
                 del temp_unknown[temp_unknown.keys()[0]]
                 print 'possible_list 1: ', possible_list
-                states_list = self.DetermineList(possible_list, temp_unknown, k, old_k, first_k)
+                states_list = self.DetermineList(possible_list, temp_unknown, old_k, iteration, first_k)
                 print 'states_list: ', states_list
                 likelihood_list = self.DetermineLikelihood(known, states_list)
                 for j in range(first_k):
@@ -101,14 +94,6 @@ class EMLearningEngine:
                         if v.distribution.isAdjustable:
                             v.distribution.addToCounts(index, likelihood_list[j])
                 
-##                self.engine.SetObs(known)
-##                likelihood = {}
-##                for key in unknown.iterkeys():
-##                    likelihood[key] = self.engine.ExtractCPT(key)
-##                for v in self.BNet.v.values():
-##                    if v.distribution.isAdjustable:
-##                        self.IterUnknown(known, unknown, likelihood, v)
-##                self.engine.Initialization() 
 
         """ Second part of the algorithm : Estimation of the parameters. 
         (M-part)
@@ -137,10 +122,10 @@ class EMLearningEngine:
             likelihood.append(like)
         return likelihood
 
-    def DetermineList (self, possible_list, temp_unknown, k, old_k, first_k):
+    def DetermineList (self, possible_list, temp_unknown, old_k, iteration, first_k):
         print 'temp_unknown detlist: ',temp_unknown
         if len(temp_unknown) != 0:
-            m = k/self.BNet.v[temp_unknown.keys()[0]].nvalues
+            m = old_k/self.BNet.v[temp_unknown.keys()[0]].nvalues
             print 'm=1: ', m
             temp_list = []
             temp_dic = {}
@@ -150,33 +135,27 @@ class EMLearningEngine:
                 temp = copy.copy(temp_dic)
                 print 'temp:', temp
                 for j in range(m):
-                    temp_list.append(temp)
+                    foo = copy.copy(temp)
+                    temp_list.append(foo)
                 del temp_dic[temp_unknown.keys()[0]]
             del temp_unknown[temp_unknown.keys()[0]] 
             print 'temp_list: ', temp_list
-            for j in range(old_k/k - 1):
+            for j in range(iteration):
+                foo = copy.copy(temp_list)
                 temp_list.extend(temp_list)
             print 'temp_list:', temp_list
             print 'temp_list[0]:', temp_list[0]
             print 'possible_list[0]', possible_list[0]
-            for j in range(first_k):
-                print 'temp_list[j]): ', temp_list[j]
-                possible_list[j].update(temp_list[j]) ##Y A UN STRESS
+            for i in range(first_k):
+                possible_list[i].update(temp_list[i])
                 print 'possible_list', possible_list
-            old_k = k
-            k = m
+            old_k = m
+            iteration = iteration*2
             print 'possible_list len(unknown) different de 0: ', possible_list
-            self.DetermineList(possible_list, temp_unknown, k, old_k, first_k)
+            self.DetermineList(possible_list, temp_unknown, old_k, iteration, first_k)
         else:
             print 'possible_list len(unknown) = 0: ', possible_list
             return possible_list
-    
-##    def IterUnknown(self, known, unknown, likelihood, v):
-##                #la recursion devrait commencer ici
-##                for state in range(self.BNet.v[unknown.keys()[0]].nvalues):
-##                    known[unknown.keys()[0]] = state
-##                    v.distribution.addToCounts(known, likelihood[unknown.keys()[0]][state])
-##                    del known[unknown.keys()[0]]
     
     def hasntConverged(self, old, new, precision):
         if not old :
@@ -189,13 +168,14 @@ class EMLearningTestCase(unittest.TestCase):
     def setUp(self):
         # create a discrete network
         G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+        s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 's r w'.split()]
+        c = G.add_v(bayesnet.BVertex('c',True,3))
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
         G.InitDistributions()
-        c.setDistributionParameters([0.5, 0.5])
-        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+        c.setDistributionParameters([1/3, 1/3, 1/3])
+        s.setDistributionParameters([0.5, 0.9, 0.2, 0.5, 0.1, 0.8])
+        r.setDistributionParameters([0.8, 0.2, 0.4, 0.2, 0.8, 0.6])
         w.distribution[:,0,0]=[0.99, 0.01]
         w.distribution[:,0,1]=[0.1, 0.9]
         w.distribution[:,1,0]=[0.1, 0.9]
@@ -220,7 +200,7 @@ class EMLearningTestCase(unittest.TestCase):
 ##            case = cases[3*i]
 ##            rand = random.sample(['c','s','r','w'],1)[0]
 ##            case[rand] = '?'
-        cases = [{'c':'?','s':1,'r':'?','w':0}]
+        cases = [{'s':'?','r':'?','c':'?','w':'?'}]
         # create a new BNet with same nodes as self.BNet but all parameters
         # set to 1s
         G = copy.deepcopy(self.BNet)
