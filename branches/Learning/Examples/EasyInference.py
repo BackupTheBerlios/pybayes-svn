@@ -11,8 +11,11 @@ ie = JoinTree(G)
 
 # perform inference with no evidence
 results = ie.MarginaliseAll()
-
+print 'top'
 for n,r in results.items(): print n,r
+##for i in ie.likedict.iterkeys():
+##    print i
+##    print ie.likedict[i].cpt
 
 # add some evidence
 ie.SetObs({'s':1})    # s=1
@@ -23,5 +26,5 @@ results = ie.MarginaliseAll()
 # notice that the JoinTree engine does not perform a full message pass but only distributes 
 # the new evidence...
 
-for r in results.values(): 
-    print r, '\n'
+##for r in results.values(): 
+##    print r, '\n'

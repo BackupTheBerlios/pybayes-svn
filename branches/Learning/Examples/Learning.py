@@ -30,7 +30,7 @@ print 'Learned from %d cases in %1.3f secs' %(N,(time()-t))
 
 # print the learned parameters
 for v in G2.all_v: 
-    print v.distribution,'\n'
+    print v.distribution.cpt,'\n'
 
     
 

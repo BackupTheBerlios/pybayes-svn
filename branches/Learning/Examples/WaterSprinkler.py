@@ -71,5 +71,16 @@ w.distribution[:,1,1]=[0.0, 1.0]
 #w.distribution[{'s':1,'r':0}]=[0.1, 0.9]
 #w.distribution[{'s':1,'r':1}]=[0.0, 1.0]
 
-
-
+##import copy
+##G2 = copy.deepcopy(G)
+##G2.InitDistributions()
+##
+##for v in G2.v.values():
+##        v.distribution.initializeCounts()
+##for v in G2.v.values():
+##    if v.distribution.isAdjustable:
+##        v.distribution.setCounts()
+##        v.distribution.normalize(dim=v.name)
+##
+##print G2.v['w'].distribution.cpt
+##print  G.v['w'].distribution.cpt

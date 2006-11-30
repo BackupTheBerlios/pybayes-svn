@@ -16,9 +16,9 @@ from potentials import DiscretePotential
 from table import Table
 
 # show INFO messages
-logging.basicConfig(level= logging.INFO)
+#logging.basicConfig(level= logging.INFO)
 #uncomment the following to remove all messages
-#logging.basicConfig(level = logging.NOTSET)
+logging.basicConfig(level = logging.NOTSET)
 
 class InferenceEngine:
     """ General Inference Engine class
@@ -629,6 +629,9 @@ class JoinTree(InferenceEngine, graph.Graph):
             print c.cpt.shape
             print na.sum(c.cpt.flat)
             
+    def ExtractCPT (self, v):
+        return copy.copy(self.Marginalise(v).cpt)
+        
 
 
 class MCMCEngine(InferenceEngine):
