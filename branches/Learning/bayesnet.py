@@ -120,6 +120,15 @@ class BNet(graph.Graph):
         else:
             raise "All edges should be directed"
 
+    def del_e(self, e):
+##        edge = copy.deepcopy(e)
+        graph.Graph.del_e(self, e)
+##        for v in edge._v:
+##            v.family = [v] + list(v.in_v)
+    
+    def inv_e(self, e):
+        self.e[e].invert()
+    
     def Moralize(self):
         logging.info('Moralising Tree')
         G = inference.MoralGraph(name = 'Moralized ' + str(self.name))

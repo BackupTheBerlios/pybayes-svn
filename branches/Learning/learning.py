@@ -18,6 +18,7 @@ class EMLearningEngine:
     Learns the parameters of a known bayesian structure from incomplete data.
     """   
     BNet = None # The underlying bayesian network
+    engine = None
     
     def __init__(self, BNet):
         self.BNet = BNet
@@ -142,7 +143,7 @@ class EMLearningEngine:
             print 'temp_list: ', temp_list
             for j in range(iteration):
                 foo = copy.copy(temp_list)
-                temp_list.extend(temp_list)
+                temp_list.extend(foo)
             print 'temp_list:', temp_list
             print 'temp_list[0]:', temp_list[0]
             print 'possible_list[0]', possible_list[0]
@@ -151,8 +152,9 @@ class EMLearningEngine:
                 print 'possible_list', possible_list
             old_k = m
             iteration = iteration*2
-            print 'possible_list len(unknown) different de 0: ', possible_list
-            self.DetermineList(possible_list, temp_unknown, old_k, iteration, first_k)
+            new_possible_list = copy.copy(possible_list)
+            print 'new_possible_list len(unknown) different de 0: ', new_possible_list
+            self.DetermineList(new_possible_list, temp_unknown, old_k, iteration, first_k)
         else:
             print 'possible_list len(unknown) = 0: ', possible_list
             return possible_list
@@ -163,6 +165,81 @@ class EMLearningEngine:
         else:
             return not  na.alltrue([na.allclose(v.distribution, new.v[v.name].distribution, atol=precision) for v in old.v.values()])
     
+
+class StructLearningEngine:
+    """ Structural learning algorithm
+    Learns the structure of a bayesian network from the known parameters.
+    """   
+    BNet = None # The underlying bayesian network
+    engine = None
+    
+    def __init__(self, BNet):
+        self.BNet = BNet
+        self.engine = JoinTree(BNet)
+        #self.engine = MCMCEngine(BNet) 
+
+    def DetOptStruct (self):
+        """Determine the optimal structure"""
+
+    def ChangeStruct(self, change, edge):
+        """Changes the edge (add, remove or reverse)"""
+        if change == 'del':
+            self.BNet.del_e(edge)
+            # EST-CE QU'IL FAUT AUSSI DELETER LE NOEUD SI LE SEUL ARC QUI LE LIE EST EDGE??
+        elif change == 'add':
+            self.BNet.add_e(edge)
+            # FAUT-IL VERIFIER QUE LE NOUVEAU BNET EST ACYCLIQUE??
+        elif change == 'inv':
+            self.BNet.inv_e(edge)
+            # FAUT-IL VERIFIER QUE LE NOUVEAU BNET EST ACYCLIQUE??
+        else:
+            assert(False), "The asked change of structure is not possible. Only 'del' for delete, 'add' for add, and 'inv' for invert"
+
+    
+
+
+class StructLearningTestCase(unittest.TestCase):
+    def setUp(self):
+        # create a discrete network
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
+        G.InitDistributions()
+        c.setDistributionParameters([0.5, 0.5])
+        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+        w.distribution[:,0,0]=[0.99, 0.01]
+        w.distribution[:,0,1]=[0.1, 0.9]
+        w.distribution[:,1,0]=[0.1, 0.9]
+        w.distribution[:,1,1]=[0.0, 1.0]
+        
+        self.c = c
+        self.s = s
+        self.r = r
+        self.w = w
+        self.BNet = G
+    
+    def testStruct(self):
+        # sample the network 2000 times
+        cases = self.BNet.Sample(2000)
+        
+        # create a new BNet with same nodes as self.BNet but all parameters
+        # set to 1s
+        G = copy.deepcopy(self.BNet)
+        
+        G.InitDistributions()
+        
+        engine = EMLearningEngine(G)
+        engine.EMLearning(cases, 10)
+        
+        tol = 0.05
+        assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
+               for v in G.all_v])), \
+                " Learning does not converge to true values "
+        print 'ok!!!!!!!!!!!!'
+                
+
 
 class EMLearningTestCase(unittest.TestCase):
     def setUp(self):
@@ -217,6 +294,10 @@ class EMLearningTestCase(unittest.TestCase):
         print 'ok!!!!!!!!!!!!'
                 
 if __name__ == '__main__':
-    suite = unittest.makeSuite(EMLearningTestCase, 'test')
+    suite = unittest.makeSuite(StructLearningTestCase, 'test')
     runner = unittest.TextTestRunner()
-    runner.run(suite)
+    runner.run(suite)    
+    
+##    suite = unittest.makeSuite(EMLearningTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)

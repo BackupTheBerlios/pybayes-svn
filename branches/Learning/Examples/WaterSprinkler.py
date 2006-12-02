@@ -19,8 +19,9 @@ G = BNet( 'Water Sprinkler Bayesian Network' )
 c, s, r, w = [G.add_v( BVertex( nm, True, 2 ) ) for nm in 'c s r w'.split()]
 for ep in [( c, r ), ( c, s ), ( r, w ), ( s, w )]:
     G.add_e( DirEdge( len( G.e ), *ep ) )
-
+    
 print G
+
 
 # finalize the bayesian network once all edges have been added   
 G.InitDistributions()

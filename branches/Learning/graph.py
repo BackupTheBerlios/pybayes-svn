@@ -329,6 +329,11 @@ class Graph(delegate.Delegate):
                     self.e[e.name] = e
                     return e
 
+            def del_e(self, e):
+                    '''delete an edge'''
+                    assert(self.e.has_key(e)), "The edge is not in the BNet"
+                    del self.e[e]
+
             def connected_components(self):
                     '''Return a list of lists.  Each holds transitively-connected vertices.'''
                     unchecked = set(self.v.values())
