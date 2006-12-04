@@ -1,9 +1,0 @@
-setup.py
-./__init__.py
-./bayesnet.py
-./delegate.py
-./distributions.py
-./graph.py
-./inference.py
-./potentials.py
-./table.py
