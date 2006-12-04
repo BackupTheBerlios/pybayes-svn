@@ -10,20 +10,27 @@ __author_email__ = 'rmoncarey@gmail.com'
 # -*- coding: utf-8 -*-
 
 from xml.dom.minidom import Document, parse, Node
+from bayesnet import BNet, BVertex
+from graph import DirEdge
+from inference import JoinTree
+
+from numarray import array, concatenate, NewAxis, allclose
+import unittest
 
 #Declaration des variables qui seront utilisees
 #en variables globales dans OpenBayes GUI
 class BnInfos:
+    'docu bninfos'
     name = None
     root = None
     
-    def __init__(self):
+    def __init__(self,name = 'None', root = 'None'):
         pass
 
 class StaticProperties:
-    format = None
-    version = None
-    creator = None
+    format = 'MSR DTAS XML'
+    version = '1.0'
+    creator = 'OpenBayes XBN Parser'
     
     def __init__(self):
         pass
@@ -39,15 +46,32 @@ class DynamicProperties:
 class Variables:
     name = None
     type = None
-    xpos = None
-    ypos= None
-    description = None
+    xpos = '0'
+    ypos= '0'
+    description = ''
     stateName = []
     propertyNameValue = {}
     
-    def __init__(self):
-        pass
+    def __init__(self, v = None):
+        ''' v should be a OpenBayes.bayesnet.BVertex class '''
+        if v:
+            self.name = str(v.name)
+            if v.discrete:
+                self.type = 'discrete'
+            else:
+                print 'Can only save discrete variables in the XBN format !!!'
+            
+            self.stateName = [str(i) for i in range(v.nvalues)]
+            
+    def __str__(self):
+        string = 'Name: '+ self.name
+        string += '\nType: '+ self.type
+        string += '\nxy pos: '+ self.xpos + self.ypos
+        string += '\nstatename: '+ str(self.stateName)
 
+        
+        return string
+            
 class Distribution:
     type = None
     name = None
@@ -55,8 +79,68 @@ class Distribution:
     dpiIndex = []
     dpiData = []
     
-    def __init__(self):
-        pass
+    def __init__(self, dist = None):
+        """ receives a discrete distribution class from 
+        OpenBayes.Distributions.MultinomialDistribution """
+        
+        if dist:
+            # a distribution is there
+            if dist.distribution_type == "Multinomial":
+                self.type = 'discrete'
+            else:
+                raise 'Can only save discrete variables in the XBN format !!!'
+            
+            self.name = dist.vertex.name
+            self.condelem = dist.names_list[1:] # all the parents, 1st element is this nodes name
+            
+            if len(dist.shape) > 1:
+                # indexed, for nodes with parents
+                self.dpiIndex = Combinations(dist.shape[1:])
+                strings = []
+                for dd in self.dpiIndex:
+                    string = ''
+                    for el in dd:
+                        string += str(el)+' '
+                    strings.append(string)
+                
+                dpiIndex = self.dpiIndex
+                self.dpiIndex = strings
+                
+                
+                self.dpiData = [dist[dict([(ce, ii) for ii,ce in zip(i,self.condelem)])] for i in dpiIndex]
+                strings = []
+                for dd in self.dpiData:
+                    string = ''
+                    for el in dd:
+                        string += str(el)+' '
+                    strings.append(string)
+                
+                self.dpiData = strings
+            else:
+                # not indexed, for nodes without parents
+                self.dpiData = dist[:]
+                # transform to string
+                string = ''
+                for el in self.dpiData:
+                    string += str(el)+' '
+                
+                self.dpiData = [string]
+
+                
+                
+                
+def Combinations(dims):
+    ''' dims is an array containing the number of elements in each dimension.
+        This functions returns all the possible combinations in an array
+        
+        >>> Combinations([4,3,2])
+        [[0,0,0],[0,0,1],[0,1,0],[0,1,1,],...,[3,2,0],[3,2,1]]
+    '''
+    if len(dims) > 1:
+        return [el+[i] for i in range(dims[-1]) for el in Combinations(dims[:-1])]
+    else:
+        return [[el] for el in range(dims[0])]
+        
 
 class XmlParse:
 
@@ -65,32 +149,48 @@ class XmlParse:
     distributionList = []
     
     def __init__(self, url):
+        #empty BNet
+        self.G = BNet()
+        
         self.xbn = parse(url)
         self.version = ""
-        v = ""
         node = self.xbn.childNodes
+        ok=False
         #XBN version 1.0
         try:
-            bnmodel = node[0].childNodes
-            statdynvar = bnmodel[1].childNodes
-            stat = statdynvar[0].childNodes
-            elem = stat[2].childNodes
-            v = elem[0].nodeValue
+            # get basic info on the BN
+            bnmodel = node[0].childNodes        #<BNMODEL>
+            statdynvar = bnmodel[1].childNodes  #children of bnmodel 
+                                                #<STATICPROPERTIES>,<DYNAMICPROPERTIES>,<VARIABLES>
+            stat = statdynvar[0].childNodes     #<STATICPROPERTIES>
+            self.version = stat[2].childNodes[0].nodeValue           #<VERSION>        
+            ok=True   
         except:
             pass
         
         #XBN version 0.2
         try:
-            bnmodel = node[1].childNodes
-            statdynvar = bnmodel[1].childNodes
-            stat = statdynvar[1].childNodes
-            attrs = stat[3].attributes
-            v = attrs.get(attrs.keys()[0]).nodeValue
-
+            bnmodel = node[1].childNodes        #<BNMODEL>
+            statdynvar = bnmodel[1].childNodes  #children of bnmodel 
+                                                #<STATICPROPERTIES>,<DYNAMICPROPERTIES>,<VARIABLES>
+            stat = statdynvar[1].childNodes     #<STATICPROPERTIES>
+            attrs = stat[3].attributes          # ??? but it works, to get the version number
+            self.version = attrs.get(attrs.keys()[0]).nodeValue     #<VERSION>           
+            ok=True
         except:
             pass
-
-        self.version = v
+            
+        if not ok: raise 'Neither version 1.0 or 0.2, verify your xbn file...'
+        
+    def Load(self):
+        self.getBnInfos()
+        self.getStaticProperties()
+        self.getDynamicProperties()
+        self.getVariablesXbn()
+        self.getStructureXbn()
+        self.getDistribution()
+        
+        return self.G
     
     def getBnInfos(self):
         bn = BnInfos()
@@ -107,9 +207,11 @@ class XmlParse:
             
             if attrName == "NAME":
                 bn.name = attrValue
+                # not used in BNet class                
             
             elif attrName == "ROOT":
                 bn.root = attrValue
+                self.G.name = attrValue                
                         
         return bn
     
@@ -302,6 +404,15 @@ class XmlParse:
                                 v.propertyNameValue[attrValueb] = info.childNodes[1].childNodes[0].nodeValue
 
                 self.variablesList.append(v)
+                
+        # create the corresponding nodes into the BNet class
+        for v in self.variablesList:
+            #---TODO: Discrete or Continuous. Here True means always discrete
+            bv = BVertex(v.name,True,len(v.stateName))
+            bv.state_names = v.stateName
+            self.G.add_v(bv)
+            #---TODO: add the names of the states into the vertex
+            
         
         return self.variablesList
     
@@ -334,6 +445,14 @@ class XmlParse:
                     
                     elif attrName == "CHILD":
                         self.structureList.append(attrValue)
+
+        for ind in range(0,len(self.structureList),2):
+            par = self.G.v[self.structureList[ind]]
+            child = self.G.v[self.structureList[ind+1]]
+            self.G.add_e(DirEdge(len(self.G.e),par,child))
+
+        # initialize the distributions
+        self.G.InitDistributions()
 
         return self.structureList
 
@@ -403,98 +522,350 @@ class XmlParse:
 
             if dist.nodeType == Node.ELEMENT_NODE:                                   
                 self.distributionList.append(d)
+                
+        for d in self.distributionList:
+            dist = self.G.v[d.name].distribution # the distribution class into the BNet
+            
+            #---TODO: what about gaussians ???
+            dist.distribution_type = 'Multinomial'
+            
+            if d.type == 'ci':
+                # conditionally independant values are defined
+                # fill the matrix with the conditionally independant term
+                new = array([float(da) for da in d.dpiData[0].split()],type='Float32') # transform a string into a numarray
+                for pa in dist.family[1:]:
+                    new = new[...,NewAxis]
+                    n_states = pa.nvalues # number of states for each parent
+                    new = concatenate([new]*n_states, axis=-1)
+                    
+                # replace all values in the distribution with the ci values
+                dist[:]=new            
+
+            if len(d.dpiIndex):
+                # when multiple elements (nodes with parents)
+                for data,index in zip(d.dpiData,d.dpiIndex):
+                    # data, index are strings containing the data and index
+                    ii = tuple([int(i) for i in index.split()]) # transform the string into a tuple of integers
+                    
+                    # create a dictionnary with the name of the dimension and the value it takes
+                    dictin = {}     # e.g. dictin = {'Alternator':1,'FanBelt':0}
+                    for pa,iii in zip(d.condelem,ii):
+                        dictin[pa] = iii
+                        
+                    dd = array([float(da) for da in data.split()],type='Float32') # transform a string into a numarray
+                    dist[dictin] = dd
+                
+            else:
+                # for nodes with no parents
+                # simply insert the data into the matrix
+                dd = array([float(da) for da in d.dpiData[0].split()],type='Float32')
+                dist[:] = dd
+            
         return self.distributionList
     
-def AfficheStatProp(text): 
-    print text.format
-    print text.version
-    print text.creator
+#----------------------------------------------------------------------
+#---Save a BNet into a file in XBN format
+class SaveXbn:
+    def __init__(self, dest, BNet):
+        self.BNet = BNet
+        
+        #Open file for writing
+        f=open(dest, 'w')
+        self.stringxbn = None   # this string will contain the file input
+        
+        # read the data from the BNet class
+        #1) bnInfos
+        self.bnInfos = BnInfos(BNet.name, 'Root ' + BNet.name)    # name of Bnet, root of Bnet (??) MS?
+        
+        #2) listStatProp, Static Properties
+        self.listStatProp = StaticProperties()
+        
+        #3) listDynProp, Dynamic Properties
+        self.listDynProp = DynamicProperties()
+        
+        #4) listVar, Variables List (Nodes)
+        self.listVar = [Variables(v) for v in BNet.all_v]
 
-def AfficheDynProp(text): 
-    for p in text.dynPropType:
-        print p
-    print text.dynProperty
-    print text.dynPropXml
+        #5) listStruct, Edges list 
+        self.listStruct = [v.name for e in BNet.e.values() for v in e._v ]
+##        for e in BNet.e.values():
+##            for v in e._v:
+##                self.listStruct.append(v.name)
+        
+        #6) listDistrib, Distributions for each node
+        self.listDistrib = [Distribution(v.distribution) for v in BNet.all_v]
         
         
-def AfficheVar(list):
-    for test in list:
-        print test.name
-        print test.type
-        print test.xpos
-        print test.ypos
-        print test.description
-        for s in test.stateName:
-            print s
-        for n, v in test.propertyNameValue.items():
-            print "name"
-            print n
-            print "value"
-            print v
-
-
-def AfficheStruct(list):
-    for test in list:
-        print test
+##        #on force les variables a etre globales
+##        global bnInfos
+##        global listStatProp
+##        global listDynProp
+##        global listVar
+##        global listStruct
+##        global listDistrib        
         
-def AfficheDistri(list):
-    for test in list:
-        print "NOM:"
-        print test.name
-        print "TYPE:"
-        print test.type
-        print "CONDELEM:"
-        for condelem in test.condelem:
-            print condelem
-        x=0
-        for data in test.dpiData:
-            try:
-                print "INDEX:"
-                print test.dpiIndex[x]
-                x +=1
-            except:
-                pass
-            print "DATA:"
-            print data
+        #lancement du formatage et de la recuperation
+        #des valeurs contenues dans les variables globales
+        try:
+            self.stringxbn = self.getbnInfos()
+        except:
+            self.stringxbn = "<?xml version=\"1.0\"?>\n"
+            self.stringxbn += "<ANALYSISNOTEBOOK NAME=\"Notebook."
+            self.stringxbn +=  "bndefault\" ROOT=\""
+            self.stringxbn +=  "bndefault\">\n  <BNMODEL NAME=\""
+            self.stringxbn +=  "bndefault\">"
+        
+        self.getListStatProp()
 
+        try:
+            self.stringxbn += self.getListDynProp()
+        except:
+            self.stringxbn += "      <DYNAMICPROPERTIES/>\n"
+        
+        try:
+            self.stringxbn += self.getListVar()
+        except:
+            self.stringxbn += "      <VARIABLES/>\n"
+            
+        if (len(self.listStruct) != 0):
+            self.getListStruct()
+        else:
+            self.stringxbn += "      <STRUCTURE/>\n"
+            
+        if (len(self.listDistrib) != 0):
+            self.getListDistrib()
+        else:
+            self.stringxbn += "      <DISTRIBUTIONS/>\n"
+            self.stringxbn += "      </BNMODEL>\n"
+            self.stringxbn += "    </ANALYSISNOTEBOOK>"
+            
+        f.write(self.stringxbn)
+        f.write('\n')
 
+        
+        f.close()
     
+    def getbnInfos(self):
+        bn = "<?xml version=\"1.0\"?>\n"
+        bn += "<ANALYSISNOTEBOOK NAME=\"Notebook."
+        bn +=  self.bnInfos.root + "\" ROOT=\"%s"
+        bn +=  self.bnInfos.root + "\">\n  <BNMODEL NAME=\""
+        bn +=  self.bnInfos.root + "\">"
+        
+        return bn
+        
+    def getListStatProp(self):
+        self.stringxbn += "<STATICPROPERTIES><FORMAT>MSR DTAS XML</FORMAT>\n"
+        self.stringxbn += "        <VERSION>1.0</VERSION>\n"
+        self.stringxbn += "        <CREATOR>Open Bayes GUI</CREATOR>\n"
+        self.stringxbn += "        </STATICPROPERTIES>\n"
+    
+    def getListDynProp(self):
+        dp = "      <DYNAMICPROPERTIES>\n"
+ 
+        for pt in listDynProp.dynPropType:
+            dp += "        <PROPERTYTYPE NAME=\""
+            dp += pt['NAME'] + "\""
+            dp += " TYPE=\"" + pt['TYPE'] + "\""
+            
+            if (pt.has_key('ENUMSET')):
+                dp += " ENUMSET=\"" + pt['ENUMSET'] + "\""
+            
+            
+            if (pt.has_key('COMMENT')):
+                dp += "><COMMENT>" + pt['COMMENT']
+                dp += "</COMMENT>\n"
+                dp += "          </PROPERTYTYPE>\n"
+            else:
+                dp += "/>\n"
+    
+        for name, value in listDynProp.dynProperty.items():
+            dp += "          <PROPERTY NAME=\"" + name + "\">"
+            dp += "<PROPVALUE>" + value + "</PROPVALUE>\n"
+            dp += "            </PROPERTY>\n"
+            
+        for name, value in listDynProp.dynPropXml.items():
+            dp += "          <PROPERTY NAME=\"" + name + "\">"
+            dp += "<PROPVALUE>" + value + "</PROPVALUE>\n"
+            dp += "            </PROPERTY>\n"
+                
+        dp += "        </DYNAMICPROPERTIES>\n"
+        
+        return dp
+    
+    def getListVar(self):
+        var = "      <VARIABLES>\n"
+        for info in self.listVar:
+            var += "        <VAR NAME=\"" + info.name + "\""
+            var += " TYPE=\"" + info.type + "\""
+            var += " XPOS=\"" + info.xpos + "\""
+            var += " YPOS=\"" + info.ypos + "\">"
+            var += "<FULLNAME>" + info.description
+            var += "</FULLNAME>\n"
+ 
+            for s in info.stateName:
+                var += "          <STATENAME>" + s
+                var += "</STATENAME>\n"
+            
+            for name, value in info.propertyNameValue.items():
+                var += "          <PROPERTY NAME=\"" + name + "\">"
+                var += "<PROPVALUE>" + value + "</PROPVALUE>\n"
+                var += "            </PROPERTY>\n"
+            
+            var += "          </VAR>\n"
+        
+        var += "        </VARIABLES>\n"
+        
+        return var
+    
+    def getListStruct(self):
+        self.stringxbn += "      <STRUCTURE>\n"
+        child = False
+        
+        for info in self.listStruct:
+            if not child:
+                self.stringxbn += "        <ARC PARENT=\"" + info + "\""
+                child = True
+            else:
+                self.stringxbn += " CHILD=\"" + info + "\"/>\n"
+                child = False
+        
+        self.stringxbn += "        </STRUCTURE>\n"
+        
+    def getListDistrib(self):
+        self.stringxbn += "      <DISTRIBUTIONS>\n"
+        
+        for info in self.listDistrib:
+            self.stringxbn += "        <DIST TYPE=\"" + info.type + "\">\n"
+            
+            if (len(info.condelem) > 0):
+                self.stringxbn += "          <CONDSET>\n"
+                
+                for condelem in info.condelem:
+                    self.stringxbn += "            <CONDELEM NAME=\""
+                    self.stringxbn += condelem + "\"/>\n"
+                self.stringxbn += "            </CONDSET>\n"
+            
+            self.stringxbn += "          <PRIVATE NAME=\""
+            self.stringxbn += info.name + "\"/>\n"
+
+            self.stringxbn += "          <DPIS>\n"
+            x=0
+            for data in info.dpiData:
+                try:
+                    if (len(info.condelem) > 0):
+                        self.stringxbn += "            <DPI INDEXES=\""
+                        self.stringxbn += info.dpiIndex[x] + "\">"
+                    else:
+                        self.stringxbn += "            <DPI>"
+
+                    x +=1
+                except:
+                    pass
+                self.stringxbn += str(data) + "</DPI>\n"
+            self.stringxbn += "            </DPIS>\n"
+            self.stringxbn += "          </DIST>\n"
+        self.stringxbn += "        </DISTRIBUTIONS>\n"
+        self.stringxbn += "      </BNMODEL>\n"
+        self.stringxbn += "    </ANALYSISNOTEBOOK>"
+#=======================================================================
+#--- TESTS
+#=======================================================================
+class LoadXBNTestCase(unittest.TestCase):        
+    def setUp(self):
+        file_name = './WetGrass.xbn'
+        x = XmlParse(file_name)
+        self.G = x.Load()
+        self.engine = JoinTree(self.G)
+
+    def testGeneral(self):
+        ' tests general data'
+        assert(self.G.name == 'bndefault'), \
+                " General BN data is not read correctly"
+                
+    def testDistributions(self):
+        ' test the distributions'
+        r = self.G.v['Rain']
+        s = self.G.v['Sprinkler']
+        w = self.G.v['Watson']
+        h = self.G.v['Holmes']
+        
+        assert(allclose(r.distribution.cpt, [0.2, 0.8]) and \
+                allclose(s.distribution.cpt, [0.1, 0.9]) and \
+                allclose(w.distribution[{'Rain':1}], [0.2, 0.8]) ), \
+                " Distribution values are not correct"
+
+    def testInference(self):
+        """ Loads the RainWatson BN, performs inference and checks the results """
+        r=self.engine.Marginalise('Rain')        
+        s=self.engine.Marginalise('Sprinkler')
+        w=self.engine.Marginalise('Watson')
+        h=self.engine.Marginalise('Holmes')
+
+        assert(allclose(r.cpt,[0.2,0.8]) and \
+               allclose(s.cpt,[0.1,0.9]) and \
+               allclose(w.cpt,[0.36,0.64]) and \
+               allclose(h.cpt,[ 0.272, 0.728]) ), \
+               " Somethings wrong with JoinTree inference engine"
+
+class SaveXBNTestCase(unittest.TestCase):        
+    def setUp(self):
+        ''' reads an xbn, then writes it again, then reads it again and then 
+        perform inference '''
+        file_name_in = './WetGrass.xbn'
+        file_name_out = './test.xbn'
+        x = XmlParse(file_name_in)
+        self.G = x.Load()
+        SaveXbn(file_name_out, self.G)
+        self.engine = JoinTree(self.G)
+        x = XmlParse(file_name_out)
+        self.G = x.Load()
+
+    def testGeneral(self):
+        ' tests general data'
+        assert(self.G.name == 'bndefault'), \
+                " General BN data is not read correctly"
+                
+    def testDistributions(self):
+        ' test the distributions'
+        r = self.G.v['Rain']
+        s = self.G.v['Sprinkler']
+        w = self.G.v['Watson']
+        h = self.G.v['Holmes']
+        
+        assert(allclose(r.distribution.cpt, [0.2, 0.8]) and \
+                allclose(s.distribution.cpt, [0.1, 0.9]) and \
+                allclose(w.distribution[{'Rain':1}], [0.2, 0.8]) ), \
+                " Distribution values are not correct"
+
+    def testInference(self):
+        """ Loads the RainWatson BN, performs inference and checks the results """
+        r=self.engine.Marginalise('Rain')        
+        s=self.engine.Marginalise('Sprinkler')
+        w=self.engine.Marginalise('Watson')
+        h=self.engine.Marginalise('Holmes')
+
+        assert(allclose(r.cpt,[0.2,0.8]) and \
+               allclose(s.cpt,[0.1,0.9]) and \
+               allclose(w.cpt,[0.36,0.64]) and \
+               allclose(h.cpt,[ 0.272, 0.728]) ), \
+               " Somethings wrong with JoinTree inference engine"
+
+
+#---MAIN   
 if __name__ == '__main__':
-    
-    #chemin = '/home/boum/workspace/OpenBayes-GUI/Auto.xbn'
-    chemin2 = '/home/boum/OpenBayesGUI/xbn/cancer1.0.xbn'
-    chemin = '/home/boum/OpenBayesGUI/xbn/WetGrass1.0.xbn'
+    suite = unittest.makeSuite(SaveXBNTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+##    #chemin = '/home/boum/workspace/OpenBayes-GUI/Auto.xbn'
+##    #chemin2 = '/home/boum/OpenBayesGUI/xbn/cancer1.0.xbn'
+##    #chemin = '/home/boum/OpenBayesGUI/xbn/WetGrass1.0.xbn'
+##    chemin = './WetGrass.xbn'
+##
+##    x = XmlParse(chemin)
+##    G = x.Load()
+##    
+##    print G
+##    
+##    SaveXbn('test.xbn', G)
 
-    x = XmlParse(chemin)
-    #infos = x.getBnInfos()
-    #print infos.name
-    #print infos.root
-
-    #listStatProp = x.getStaticProperties()
-    #AfficheStatProp(listStatProp)
-    listDynProp = x.getDynamicProperties()
-    AfficheDynProp(listDynProp)
-    #listVar = x.getVariablesXbn()
-    #AfficheVar(listVar)
-    #listStruct = x.getStructureXbn()
-    #AfficheStruct(listStruct)
-    #listDistri = x.getDistribution()
-    #AfficheDistri(listDistri)
-    print ""
-    print ""
-    print ""
-    x2 = XmlParse(chemin2)
-    #infos2 = x2.getBnInfos()
-    #print infos2.name
-    #print infos2.root
-    #listStatProp2 = x2.getStaticProperties()
-    #AfficheStatProp(listStatProp2)
-    #listDynProp2 = x2.getDynamicProperties()
-    #AfficheDynProp(listDynProp2)
-    #listVar2 = x2.getVariablesXbn()
-    #AfficheVar(listVar2)
-    #listStruct2 = x2.getStructureXbn()
-    #AfficheStruct(listStruct2)
-    listDistri2 = x2.getDistribution()
-    AfficheDistri(listDistri2)
-  
