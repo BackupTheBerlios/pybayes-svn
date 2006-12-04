@@ -45,68 +45,62 @@ class EMLearningEngine:
             print 'EM iteration: ', iter
     
     def LearnEMParams(self, cases):
-        """ First part of the algorithm : Estimation of the unknown 
+        """ 
+        First part of the algorithm : Estimation of the unknown 
         data. (E-part)
         """ 
+        # Initialise the counts of each vertex
         for v in self.BNet.v.values():
                 v.distribution.initializeCounts()
         for case in cases:
-            known={}
-            unknown={}
+            known={} # will contain all the known data of case
+            unknown=[] # will contain all the unknown keys of case
             for key in case.iterkeys():
-                if case[key] != '?':
-                    known[key] = case[key] #Contient tous les elements de case sauf l'element inconnu
+                if case[key] != '?': # It's the only part of code you have to change if you want to have another 'unknown sign' instead of '?'
+                    known[key] = case[key]
                 else:
-                    unknown[key] = case[key]
-            if len(case) == len(known): #Then all the data is known
+                    unknown.append(key)
+            if len(case) == len(known): # Then all the data is known -> proceed as LearnMLParams (inference.py)
                 for v in self.BNet.v.values():
                     if v.distribution.isAdjustable: 
                         v.distribution.incrCounts(case)
             else:
-                k = 1
-                possible_list = []
-                temp_dic = {}
-                temp_unknown = copy.copy(unknown)
-                for key in temp_unknown.iterkeys():
-                    k = k*self.BNet.v[key].nvalues
-                first_k = k
-                k = first_k/self.BNet.v[temp_unknown.keys()[0]].nvalues
-                old_k = k
-                iteration = 2
-                for state in range(self.BNet.v[temp_unknown.keys()[0]].nvalues):
-                    temp_dic[temp_unknown.keys()[0]]=state
-                    temp = copy.copy(temp_dic)
-                    for j in range(k):
-                        foo = copy.copy(temp)
-                        possible_list.append(foo)
-                    del temp_dic[temp_unknown.keys()[0]]
-                del temp_unknown[temp_unknown.keys()[0]]
-                states_list = self.DetermineList(possible_list, temp_unknown, old_k, iteration, first_k)
-                likelihood_list = self.DetermineLikelihood(known, states_list)
-                for j in range(first_k):
+                states_list = self.Combinations(unknown) # Give a dictionary list of all the possible states of the unknown parameters
+                likelihood_list = self.DetermineLikelihood(known, states_list) # Give a list with the likelihood to have the states in states_list                
+                for j, index_unknown in enumerate(states_list):
                     index = copy.copy(known)
-                    index.update(states_list[j])
+                    index.update(index_unknown)
                     for v in self.BNet.v.values():
                         if v.distribution.isAdjustable:
-                            v.distribution.addToCounts(index, likelihood_list[j])
-                
-
-        """ Second part of the algorithm : Estimation of the parameters. 
+                            v.distribution.addToCounts(index, likelihood_list[j]) 
+        """ 
+        Second part of the algorithm : Estimation of the parameters. 
         (M-part)
         """
         for v in self.BNet.v.values():
             if v.distribution.isAdjustable:
                 v.distribution.setCounts()
                 v.distribution.normalize(dim=v.name)
-
+    
     def DetermineLikelihood(self, known, states_list):
+        """ 
+        Give a list with the likelihood to have the states in states_list
+        I think this function could be optimized
+        """        
         likelihood = []
         for states in states_list:
+            # states = {'c':0,''r':1} for example (c and r were unknown in the beginning)
             like = 1
             temp_dic = {}
             copy_states = copy.copy(states)
             for key in states.iterkeys():
-                self.engine.SetObs(known)
+                """ 
+                It has to be done for all keys because we have to set every 
+                observation but key to compute the likelihood to have key in
+                his state. The multiplication of all the likelihoods gives the
+                likelihood to have states.                 
+                """
+                self.engine.SetObs(known) # Has to be done at each iteration because of the self.engine.Initialization() below 
                 temp_dic[key] = (copy_states[key])
                 del copy_states[key]
                 if len(copy_states) != 0:
@@ -118,40 +112,33 @@ class EMLearningEngine:
             likelihood.append(like)
         return likelihood
 
-    def DetermineList (self, possible_list, temp_unknown, old_k, iteration, first_k):
-        if len(temp_unknown) != 0:
-            m = old_k/self.BNet.v[temp_unknown.keys()[0]].nvalues
-            temp_list = []
-            temp_dic = {}
-            for state in range(self.BNet.v[temp_unknown.keys()[0]].nvalues):
-                temp_dic[temp_unknown.keys()[0]]=state
-                temp = copy.copy(temp_dic)
-                for j in range(m):
-                    foo = copy.copy(temp)
-                    temp_list.append(foo)
-                del temp_dic[temp_unknown.keys()[0]]
-            del temp_unknown[temp_unknown.keys()[0]] 
-            for j in range(iteration):
-                foo = copy.copy(temp_list)
-                temp_list.extend(foo)
-            for i in range(first_k):
-                possible_list[i].update(temp_list[i])
-            old_k = m
-            iteration = iteration*2
-            new_possible_list = copy.copy(possible_list)
-            return self.DetermineList(new_possible_list, temp_unknown, old_k, iteration, first_k)
-            
+    def Combinations(self, vertices):
+        ''' vertices is a list of BVertex instances
+        
+        in the case of the water-sprinkler BN :
+        >>> Combinations([c,r,w])
+        [{'c':0,'r':0,'w':0},{'c':0,'r':0,'w':1},...,{'c'=1,'r':1,'w':1}]
+        '''
+        if len(vertices) > 1:
+            list_comb = self.Combinations(vertices[:-1])
+            new_list_comb = []
+            for el in list_comb:
+                for i in range(self.BNet.v[vertices[-1]].nvalues):
+                    temp = copy.copy(el)
+                    temp[self.BNet.v[vertices[-1]].name]=i
+                    new_list_comb.append(temp)
+            return new_list_comb
         else:
-            return possible_list
+            return [{self.BNet.v[vertices[0]].name:el} for el in range(self.BNet.v[vertices[0]].nvalues)]
     
     def hasntConverged(self, old, new, precision):
+        '''
+        Return true if the difference of distribution of at least one vertex 
+        of the old and new BNet is bigger than precision
+        '''
         if not old :
             return True   
         else:
-            for v in old.v.values():
-                print v.distribution.names_list
-                print len(new.v[v.name].distribution)
-            
             return not  na.alltrue([na.allclose(v.distribution, new.v[v.name].distribution, atol=precision) for v in old.v.values()])
     
 
@@ -234,14 +221,13 @@ class EMLearningTestCase(unittest.TestCase):
     def setUp(self):
         # create a discrete network
         G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-        s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 's r w'.split()]
-        c = G.add_v(bayesnet.BVertex('c',True,3))
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
         G.InitDistributions()
-        c.setDistributionParameters([1/3, 1/3, 1/3])
-        s.setDistributionParameters([0.5, 0.9, 0.2, 0.5, 0.1, 0.8])
-        r.setDistributionParameters([0.8, 0.2, 0.4, 0.2, 0.8, 0.6])
+        c.setDistributionParameters([0.5, 0.5])
+        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
         w.distribution[:,0,0]=[0.99, 0.01]
         w.distribution[:,0,1]=[0.1, 0.9]
         w.distribution[:,1,0]=[0.1, 0.9]
@@ -282,25 +268,6 @@ class EMLearningTestCase(unittest.TestCase):
                 " Learning does not converge to true values "
         print 'ok!!!!!!!!!!!!'
 
-def Combinations(vertices):
-    ''' vertices is a list of BVertex instances
-        
-        in the case of the water-sprinkler BN :
-        >>> Combinations([c,r,w])
-        [{'c':0,'r':0,'w':0},{'c':0,'r':0,'w':1},...,{'c'=1,'r':1,'w':1}]
-    '''
-    if len(vertices) > 1:
-        list_comb = Combinations(vertices[:-1])
-        new_list_comb = []
-        for el in list_comb:
-            for i in range(vertices[-1].nvalues):
-                temp = copy.copy(el)
-                temp[vertices[-1].name]=i
-                new_list_comb.append(temp)
-        return new_list_comb
-    else:
-        return [{vertices[0].name:el} for el in range(vertices[0].nvalues)]
-                
 if __name__ == '__main__':
 ##    suite = unittest.makeSuite(StructLearningTestCase, 'test')
 ##    runner = unittest.TextTestRunner()
