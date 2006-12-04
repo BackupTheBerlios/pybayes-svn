@@ -70,12 +70,9 @@ class EMLearningEngine:
                 for key in temp_unknown.iterkeys():
                     k = k*self.BNet.v[key].nvalues
                 first_k = k
-                print 'k=4: ', k
                 k = first_k/self.BNet.v[temp_unknown.keys()[0]].nvalues
                 old_k = k
                 iteration = 2
-                print 'k=2: ', k
-                print 'temp_unknown: ',temp_unknown
                 for state in range(self.BNet.v[temp_unknown.keys()[0]].nvalues):
                     temp_dic[temp_unknown.keys()[0]]=state
                     temp = copy.copy(temp_dic)
@@ -84,9 +81,7 @@ class EMLearningEngine:
                         possible_list.append(foo)
                     del temp_dic[temp_unknown.keys()[0]]
                 del temp_unknown[temp_unknown.keys()[0]]
-                print 'possible_list 1: ', possible_list
                 states_list = self.DetermineList(possible_list, temp_unknown, old_k, iteration, first_k)
-                print 'states_list: ', states_list
                 likelihood_list = self.DetermineLikelihood(known, states_list)
                 for j in range(first_k):
                     index = copy.copy(known)
@@ -124,45 +119,39 @@ class EMLearningEngine:
         return likelihood
 
     def DetermineList (self, possible_list, temp_unknown, old_k, iteration, first_k):
-        print 'temp_unknown detlist: ',temp_unknown
         if len(temp_unknown) != 0:
             m = old_k/self.BNet.v[temp_unknown.keys()[0]].nvalues
-            print 'm=1: ', m
             temp_list = []
             temp_dic = {}
             for state in range(self.BNet.v[temp_unknown.keys()[0]].nvalues):
                 temp_dic[temp_unknown.keys()[0]]=state
-                print 'temp_dic: ', temp_dic
                 temp = copy.copy(temp_dic)
-                print 'temp:', temp
                 for j in range(m):
                     foo = copy.copy(temp)
                     temp_list.append(foo)
                 del temp_dic[temp_unknown.keys()[0]]
             del temp_unknown[temp_unknown.keys()[0]] 
-            print 'temp_list: ', temp_list
             for j in range(iteration):
                 foo = copy.copy(temp_list)
                 temp_list.extend(foo)
-            print 'temp_list:', temp_list
-            print 'temp_list[0]:', temp_list[0]
-            print 'possible_list[0]', possible_list[0]
             for i in range(first_k):
                 possible_list[i].update(temp_list[i])
-                print 'possible_list', possible_list
             old_k = m
             iteration = iteration*2
             new_possible_list = copy.copy(possible_list)
-            print 'new_possible_list len(unknown) different de 0: ', new_possible_list
-            self.DetermineList(new_possible_list, temp_unknown, old_k, iteration, first_k)
+            return self.DetermineList(new_possible_list, temp_unknown, old_k, iteration, first_k)
+            
         else:
-            print 'possible_list len(unknown) = 0: ', possible_list
             return possible_list
     
     def hasntConverged(self, old, new, precision):
         if not old :
             return True   
         else:
+            for v in old.v.values():
+                print v.distribution.names_list
+                print len(new.v[v.name].distribution)
+            
             return not  na.alltrue([na.allclose(v.distribution, new.v[v.name].distribution, atol=precision) for v in old.v.values()])
     
 
@@ -266,18 +255,18 @@ class EMLearningTestCase(unittest.TestCase):
     
     def testEM(self):
         # sample the network 2000 times
-##        cases = self.BNet.Sample(2000)
-##        
-##        # delete some observations
-##        for i in range(500):
-##            case = cases[3*i]
-##            rand = random.sample(['c','s','r','w'],1)[0]
-##            case[rand] = '?' 
-##        for i in range(50):
-##            case = cases[3*i]
-##            rand = random.sample(['c','s','r','w'],1)[0]
-##            case[rand] = '?'
-        cases = [{'s':'?','r':'?','c':'?','w':'?'}]
+        cases = self.BNet.Sample(2000)
+        
+        # delete some observations
+        for i in range(500):
+            case = cases[3*i]
+            rand = random.sample(['c','s','r','w'],1)[0]
+            case[rand] = '?' 
+        for i in range(50):
+            case = cases[3*i]
+            rand = random.sample(['c','s','r','w'],1)[0]
+            case[rand] = '?'
+
         # create a new BNet with same nodes as self.BNet but all parameters
         # set to 1s
         G = copy.deepcopy(self.BNet)
@@ -292,12 +281,31 @@ class EMLearningTestCase(unittest.TestCase):
                for v in G.all_v])), \
                 " Learning does not converge to true values "
         print 'ok!!!!!!!!!!!!'
+
+def Combinations(vertices):
+    ''' vertices is a list of BVertex instances
+        
+        in the case of the water-sprinkler BN :
+        >>> Combinations([c,r,w])
+        [{'c':0,'r':0,'w':0},{'c':0,'r':0,'w':1},...,{'c'=1,'r':1,'w':1}]
+    '''
+    if len(vertices) > 1:
+        list_comb = Combinations(vertices[:-1])
+        new_list_comb = []
+        for el in list_comb:
+            for i in range(vertices[-1].nvalues):
+                temp = copy.copy(el)
+                temp[vertices[-1].name]=i
+                new_list_comb.append(temp)
+        return new_list_comb
+    else:
+        return [{vertices[0].name:el} for el in range(vertices[0].nvalues)]
                 
 if __name__ == '__main__':
-    suite = unittest.makeSuite(StructLearningTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)    
-    
-##    suite = unittest.makeSuite(EMLearningTestCase, 'test')
+##    suite = unittest.makeSuite(StructLearningTestCase, 'test')
 ##    runner = unittest.TextTestRunner()
-##    runner.run(suite)
+##    runner.run(suite)    
+    
+    suite = unittest.makeSuite(EMLearningTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

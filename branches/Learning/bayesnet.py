@@ -120,14 +120,18 @@ class BNet(graph.Graph):
         else:
             raise "All edges should be directed"
 
-    def del_e(self, e):
-##        edge = copy.deepcopy(e)
-        graph.Graph.del_e(self, e)
-##        for v in edge._v:
-##            v.family = [v] + list(v.in_v)
+    def del_e(self, edge):
+        # remove the parent from the child node
+        edge._v[1].family.pop(edge._v[1].family.index(edge._v[0]))
+        graph.Graph.del_e(self, edge)
+        
+        
     
     def inv_e(self, e):
         self.e[e].invert()
+        # change the families of the corresponding nodes
+        e._v[0].family.append(e._v[1])
+        e._v[1].family.pop(e._v[1].family.index(e._v[0]))
     
     def Moralize(self):
         logging.info('Moralising Tree')
@@ -167,6 +171,7 @@ class BNet(graph.Graph):
     def InitDistributions(self):
         """ Finalizes the network, all edges must be added. A distribution (unknown)
         is added to each node of the network"""
+        #---TODO: test if DAG (fdebrouc)
         # this replaces the InitCPTs() function
         for v in self.v.values(): v.InitDistribution()
     
