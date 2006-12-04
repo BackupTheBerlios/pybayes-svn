@@ -1,4 +1,0 @@
-from OpenBayes import BNet, BVertex, DirEdge, JoinTree, MCMCEngine, MultinomialDistribution,  EMLearningTestCase
-##import EMLearningTestCase
-##import EMLearningEngine
-test = EMLearningTestCase()
