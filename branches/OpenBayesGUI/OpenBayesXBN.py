@@ -1,7 +1,7 @@
 """
 OpenBayesXBN allow you to parse XBN file format
 """
-
+__all__ = ['LoadXBN','SaveXBN']
 __version__ = '0.1'
 __author__ = 'Ronald Moncarey'
 __author_email__ = 'rmoncarey@gmail.com'
@@ -17,10 +17,10 @@ from inference import JoinTree
 from numarray import array, concatenate, NewAxis, allclose
 import unittest
 
-#Declaration des variables qui seront utilisees
-#en variables globales dans OpenBayes GUI
+# these classes represent the different sections defined
+# in the XBN file format
 class BnInfos:
-    'docu bninfos'
+    'Name and Root name of the bayesian network'
     name = None
     root = None
     
@@ -28,6 +28,9 @@ class BnInfos:
         pass
 
 class StaticProperties:
+    """format = 'MSR DTAS XML'
+    version = 1.0
+    creator = 'OpenBayes XBN Parser'"""
     format = 'MSR DTAS XML'
     version = '1.0'
     creator = 'OpenBayes XBN Parser'
@@ -36,6 +39,8 @@ class StaticProperties:
         pass
 
 class DynamicProperties:
+    """ Dynamic Properties are not used, this is a dummy class for future
+    implementations """
     dynPropType = []
     dynProperty = {}
     dynPropXml = {}
@@ -44,6 +49,15 @@ class DynamicProperties:
         pass
     
 class Variables:
+    """ contains one variable of the network
+    name                name of the variable (string)
+    type                only 'discrete' for the moment
+    xpos,ypos           x,y on the visual representation of the graph
+    stateName           ['state1','state2',...] the names of the states of this
+                        variable. The length of this list determines the number
+                        states of the variable
+    propertyNameValue   not used
+    """
     name = None
     type = None
     xpos = '0'
@@ -73,6 +87,16 @@ class Variables:
         return string
             
 class Distribution:
+    """ contains the Conditional Probability Table of a variable according to
+    the values of it's parents
+    
+    type            only 'discrete for the moment
+    name            name of the variable (string). Must be the same as the name
+                    defined in section VARIABLES
+    condelem        the list of parents of this variable
+    dpiIndex = []
+    dpiData = []
+    """
     type = None
     name = None
     condelem = []
@@ -142,13 +166,21 @@ def Combinations(dims):
         return [[el] for el in range(dims[0])]
         
 
-class XmlParse:
+class LoadXBN:
+    """ Loads the data from a XBN file
+    
+        >>> xbn = LoadXBN('WetGrass.xbn')
+        >>> BNet = xbn.Load()
+        
+        BNet is a openbayes.bayesnet.BNet class
+    """
 
     variablesList = []
     structureList = []
     distributionList = []
     
     def __init__(self, url):
+        """Loads the data from a XBN file"""
         #empty BNet
         self.G = BNet()
         
@@ -565,7 +597,7 @@ class XmlParse:
     
 #----------------------------------------------------------------------
 #---Save a BNet into a file in XBN format
-class SaveXbn:
+class SaveXBN:
     def __init__(self, dest, BNet):
         self.BNet = BNet
         
@@ -771,55 +803,15 @@ class SaveXbn:
 #=======================================================================
 #--- TESTS
 #=======================================================================
-class LoadXBNTestCase(unittest.TestCase):        
+
+class XBNTestCase(unittest.TestCase):   
+         
     def setUp(self):
-        file_name = './WetGrass.xbn'
-        x = XmlParse(file_name)
-        self.G = x.Load()
-        self.engine = JoinTree(self.G)
-
-    def testGeneral(self):
-        ' tests general data'
-        assert(self.G.name == 'bndefault'), \
-                " General BN data is not read correctly"
-                
-    def testDistributions(self):
-        ' test the distributions'
-        r = self.G.v['Rain']
-        s = self.G.v['Sprinkler']
-        w = self.G.v['Watson']
-        h = self.G.v['Holmes']
-        
-        assert(allclose(r.distribution.cpt, [0.2, 0.8]) and \
-                allclose(s.distribution.cpt, [0.1, 0.9]) and \
-                allclose(w.distribution[{'Rain':1}], [0.2, 0.8]) ), \
-                " Distribution values are not correct"
-
-    def testInference(self):
-        """ Loads the RainWatson BN, performs inference and checks the results """
-        r=self.engine.Marginalise('Rain')        
-        s=self.engine.Marginalise('Sprinkler')
-        w=self.engine.Marginalise('Watson')
-        h=self.engine.Marginalise('Holmes')
-
-        assert(allclose(r.cpt,[0.2,0.8]) and \
-               allclose(s.cpt,[0.1,0.9]) and \
-               allclose(w.cpt,[0.36,0.64]) and \
-               allclose(h.cpt,[ 0.272, 0.728]) ), \
-               " Somethings wrong with JoinTree inference engine"
-
-class SaveXBNTestCase(unittest.TestCase):        
-    def setUp(self):
-        ''' reads an xbn, then writes it again, then reads it again and then 
-        perform inference '''
+        """ reads the WetGrass.xbn """
         file_name_in = './WetGrass.xbn'
-        file_name_out = './test.xbn'
-        x = XmlParse(file_name_in)
-        self.G = x.Load()
-        SaveXbn(file_name_out, self.G)
-        self.engine = JoinTree(self.G)
-        x = XmlParse(file_name_out)
-        self.G = x.Load()
+        xbn = LoadXBN(file_name_in)
+        self.G = xbn.Load()
+
 
     def testGeneral(self):
         ' tests general data'
@@ -840,6 +832,7 @@ class SaveXBNTestCase(unittest.TestCase):
 
     def testInference(self):
         """ Loads the RainWatson BN, performs inference and checks the results """
+        self.engine = JoinTree(self.G)
         r=self.engine.Marginalise('Rain')        
         s=self.engine.Marginalise('Sprinkler')
         w=self.engine.Marginalise('Watson')
@@ -850,22 +843,27 @@ class SaveXBNTestCase(unittest.TestCase):
                allclose(w.cpt,[0.36,0.64]) and \
                allclose(h.cpt,[ 0.272, 0.728]) ), \
                " Somethings wrong with JoinTree inference engine"
+            
+    def testSave(self):
+        ''' reads an xbn, then writes it again, then reads it again and then 
+        perform inference and checks the results'''
+        file_name_out = './test.xbn'
+        SaveXBN(file_name_out, self.G)
+        xbn = LoadXBN(file_name_out)
+        self.G = xbn.Load()
+        
+        self.testInference()
+        
+        import os
+        # delete the test.xbn file
+        os.remove(file_name_out)
 
 
 #---MAIN   
 if __name__ == '__main__':
-    suite = unittest.makeSuite(SaveXBNTestCase, 'test')
+    
+    suite = unittest.makeSuite(XBNTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
-##    #chemin = '/home/boum/workspace/OpenBayes-GUI/Auto.xbn'
-##    #chemin2 = '/home/boum/OpenBayesGUI/xbn/cancer1.0.xbn'
-##    #chemin = '/home/boum/OpenBayesGUI/xbn/WetGrass1.0.xbn'
-##    chemin = './WetGrass.xbn'
-##
-##    x = XmlParse(chemin)
-##    G = x.Load()
-##    
-##    print G
-##    
-##    SaveXbn('test.xbn', G)
+  
 

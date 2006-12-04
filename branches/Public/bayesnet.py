@@ -109,7 +109,7 @@ class BVertex(graph.Vertex):
 class BNet(graph.Graph):
     log = logging.getLogger('BNet')
     log.setLevel(logging.ERROR)
-    def __init__(self, name = None):
+    def __init__(self, name = ''):
         graph.Graph.__init__(self, name)
 
     def add_e(self, e):
@@ -203,14 +203,34 @@ class BNetTestCase(unittest.TestCase):
     """
     def setUp(self):
         G = BNet('Water Sprinkler Bayesian Network')
-        c,s,r,w = [G.add_v(BVertex(name,2,True)) for name in 'c s r w'.split()]
+        
+        c,s,r,w = [G.add_v(BVertex(name,True,2)) for name in 'c s r w'.split()]
+        
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
-        G.InitCPTs()
-        c.setCPT([0.5, 0.5])
-        s.setCPT([0.5, 0.9, 0.5, 0.1])
-        r.setCPT([0.8, 0.2, 0.2, 0.8])
-        w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
+            
+        G.InitDistributions()
+
+        c.setDistributionParameters([0.5, 0.5])
+        # the following 2 lines are equivalent
+        c.distribution.cpt = na.array([0.5,0.5])
+        c.distribution[:]  = na.array([0.5,0.5])
+        
+        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+        
+        w.setDistributionParameters([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
+        # this is equivalent, we access directly the cpt property of the distribution
+        w.distribution[:,0,0]=[0.99, 0.01]
+        w.distribution[:,0,1]=[0.1, 0.9]
+        w.distribution[:,1,0]=[0.1, 0.9]
+        w.distribution[:,1,1]=[0.0, 1.0]
+        
+        # same thing using dictionnaries
+        w.distribution[{'s':0,'r':0}]=[0.99, 0.01]
+        w.distribution[{'s':0,'r':1}]=[0.1, 0.9]
+        w.distribution[{'s':1,'r':0}]=[0.1, 0.9]
+        w.distribution[{'s':1,'r':1}]=[0.0, 1.0]
         
         self.c = c
         self.s = s
@@ -219,276 +239,26 @@ class BNetTestCase(unittest.TestCase):
         self.BNet = G
 
     def testTopoSort(self):
-        sorted = self.BNet.topological_sort(self.s)
+        sorted = self.BNet.topological_sort(self.c)
+
         assert(sorted[0] == self.c and \
                sorted[1] == self.s and \
                sorted[2] == self.r and \
                sorted[3] == self.w), \
                "Sorted was not in proper topological order"
 
-    def testSample(self):
-        cCPT = distributions.MultinomialDistribution(self.c)
-        sCPT = distributions.MultinomialDistribution(self.s)
-        rCPT = distributions.MultinomialDistribution(self.r)
-        wCPT = distributions.MultinomialDistribution(self.w)
-        for i in range(1000):
-            sample = self.BNet.Sample
-            # Can use sample in all of these, it will ignore extra variables
-            cCPT[sample] += 1
-            sCPT[sample] += 1
-            rCPT[sample] += 1
-            wCPT[sample] += 1
-        assert(na.allclose(cCPT,self.c.cpt,atol=.1) and \
-               na.allclose(sCPT,self.s.cpt,atol-.1) and \
-               na.allclose(rCPT,self.r.cpt,atol-.1) and \
-               na.allclose(wCPT,self.w.cpt,atol-.1)), \
-               "Samples did not generate appropriate CPTs"
     
     def testFamily(self):
-        cFamily = self.BNet.v.values['c'].family
-        sFamily = self.BNet.v.values['s'].family
-        rFamily = self.BNet.v.values['r'].family
-        wFamily = self.BNet.v.values['w'].family
-        
+        cFamily = set(self.BNet.v['c'].distribution.names_list[1:])
+        sFamily = set(self.BNet.v['s'].distribution.names_list[1:])
+        rFamily = set(self.BNet.v['r'].distribution.names_list[1:])
+        wFamily = set(self.BNet.v['w'].distribution.names_list[1:])
+
         assert(cFamily == set([]) and sFamily == set(['c']) and \
                rFamily == set(['c']) and wFamily == set(['r','s'])),\
               "Families are not set correctly"
     
 if __name__=='__main__':
-    ''' Water Sprinkler example '''
-    #suite = unittest.makeSuite(CPTIndexTestCase, 'test')
-    #runner = unittest.TextTestRunner()
-    #runner.run(suite)
-    
-    G = BNet('Water Sprinkler Bayesian Network')
-    
-    c,s,r,w = [G.add_v(BVertex(name,True,2)) for name in 'c s r w'.split()]
-    
-    for ep in [(c,r), (c,s), (r,w), (s,w)]:
-        G.add_e(graph.DirEdge(len(G.e), *ep))
-        
-    G.InitDistributions()
-    
-    c.setDistributionParameters([0.5, 0.5])
-    s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-    r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-    w.distribution[:,0,0]=[0.99, 0.01]
-    w.distribution[:,0,1]=[0.1, 0.9]
-    w.distribution[:,1,0]=[0.1, 0.9]
-    w.distribution[:,1,1]=[0.0, 1.0]
-    
-    print G
-    
-    JT = inference.JoinTree(G)
-    clusters = JT.all_v
-    c1,c2 = clusters[:]
-    
-    #print c1.potential
-    #print c2.potential
-    #JT.SetObs(['c'],[1])
-    #print JT.Marginalise('w')
-    #print 'RESULT, after Junction Tree:'
-    JT.MargAll()
-
-    # verification
-    print 'VERIFICATION, Results should look like this :'
-    cp = potentials.DiscretePotential(['c'],[2],[0.5,0.5])
-    sp = potentials.DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1])
-    rp = potentials.DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])
-    wp = potentials.DiscretePotential(['w','s','r'],[2,2,2])
-    wp[:,0,0]=[0.99, 0.01]
-    wp[:,0,1]=[0.1, 0.9]
-    wp[:,1,0]=[0.1, 0.9]
-    wp[:,1,1]=[0.0, 1.0]
-
-    cr = cp*rp
-    crs = cr*sp
-    crsw = crs*wp
-
-    print 'c:', crsw.Marginalise('s r w'.split())
-    print 's:', crsw.Marginalise('c r w'.split())
-    print 'r:', crsw.Marginalise('c s w'.split())
-    print 'w:', crsw.Marginalise('c s r'.split())
-
-    #add some evidence
-    #JT.SetObs(['c'],[1])
-    #JT.MargAll()
-    G.Sample(1)
-##    print 'DEBUGGING: performing same calculations as JunctionTree:'
-##    #create the clusters and set them to allOnes
-##    c1 = inference.Cluster([r,s,c])
-##    c2 = inference.Cluster([w,s,r])
-##    e  = inference.SepSet('c1-c2',c1,c2)
-##
-##    #assign each vertex to a cluster and initialise potentials
-##    #c,r,s -> c1, w -> c2
-##    c1.potential *= c.distribution
-##    c1.potential *= s.distribution
-##    c1.potential *= r.distribution
-##    c2.potential *= w.distribution
-##
-##    print c1.potential,c1.potential.names_list
-##    print "JT after initialisation"
-##    jtp0 = JT.all_v[1].potential
-##    print jtp0, jtp0.names_list
-##    
-##    print c2.potential,c2.potential.names_list
-##    print "JT after initialisation"
-##    jtp1 = JT.all_v[0].potential
-##    print jtp1, jtp1.names_list
-##    #up to here all is OK
-##    
-##    #start message passing, root = c1
-##    print 'collect evidence: c2-->c1'
-##    c2.MessagePass(c1)
-##    #normally c1 should contain the correct values for c,s and r
-##    print 'c:', c1.potential.Marginalise('s r'.split())
-##    print 's:', c1.potential.Marginalise('c r'.split())
-##    print 'r:', c1.potential.Marginalise('c s'.split())
-##
-##    #do the same thing for the JT
-##    jt0 = JT.all_v[1]
-##    jt1 = JT.all_v[0]
-##    jt1.MessagePass(jt0)
-##    #verify the results
-##    print 'Results for JTree:'
-##    print 'c:', jt0.potential.Marginalise('s r'.split())
-##    print 's:', jt0.potential.Marginalise('c r'.split())
-##    print 'r:', jt0.potential.Marginalise('c s'.split())
-##    
-##    print 'distribute evidence: c1-->c2'
-##    c1.MessagePass(c2)
-##    #normally c2 should contain the correct values for w
-##    print 'w:', c2.potential.Marginalise('s r'.split())
-##
-##    jt0.MessagePass(jt1)
-##    #verify the results
-##    print 'Results for JTree:'
-##    print 'w:', jt1.potential.Marginalise('s r'.split())
-
-##    #start message passing, root = c2
-##    print 'collect evidence: c1-->c2'
-##    c1.MessagePass(c2)
-##    #normally c2 should contain the correct values for w
-##    print 'w:', c2.potential.Marginalise('s r'.split())
-##
-##    print 'distribute evidence: c2-->c1'
-##    c2.MessagePass(c1)
-##    #normally c1 should contain the correct values for c,s and r
-##    print 'c:', c1.potential.Marginalise('s r'.split())
-##    print 's:', c1.potential.Marginalise('c r'.split())
-##    print 'r:', c1.potential.Marginalise('c s'.split())
-
-
-if __name__=='__mains__':
-    ''' Water Sprinkler example with more than binary nodes'''
-    #suite = unittest.makeSuite(CPTIndexTestCase, 'test')
-    #runner = unittest.TextTestRunner()
-    #runner.run(suite)
-    
-    G = BNet('Water Sprinkler Bayesian Network')
-
-    print 'c:5,s:4,r:3,w:2'
-    c,s,r,w = [G.add_v(BVertex(name,True,s)) for s,name in zip([5,4,3,2],'c s r w'.split())]
-    
-    for ep in [(c,r), (c,s), (r,w), (s,w)]:
-        G.add_e(graph.DirEdge(len(G.e), *ep))
-
-    G.InitDistributions()
-    
-    c.setCPT([1.0/c.nvalues]*c.nvalues)
-    s.distribution.cpt = na.arange(5*4,shape=s.distribution.cpt.shape,type='Float32')
-    s.distribution.normalize()
-    r.distribution.cpt = na.arange(5*3,shape=r.distribution.cpt.shape,type='Float32')
-    r.distribution.normalize()
-    w.distribution.cpt = na.arange(2*3*4,shape=w.distribution.cpt.shape,type='Float32')
-    w.distribution.normalize()    
-    
-    print G
-    
-    JT = inference.JoinTree(G)
-    clusters = JT.all_v
-    c1,c2 = clusters[:]
-    
-    #print c1.potential
-    #print c2.potential
-    #JT.SetObs(['c'],[1])
-    #print JT.Marginalise('w')
-    #print 'RESULT, after Junction Tree:'
-    JT.MargAll()
-    
-    G.Sample(1)
-
-##    # verification
-##    print 'VERIFICATION, Results should look like this :'
-##    cp = potentials.DiscretePotential(['c'],[5],c.distribution.cpt)
-##    sp = potentials.DiscretePotential(['s','c'],[4,5],s.distribution.cpt)
-##    rp = potentials.DiscretePotential(['r','c'],[3,5],r.distribution.cpt)
-##    wp = potentials.DiscretePotential(['w','s','r'],[2,4,3],w.distribution.cpt)
-##
-##
-##    cr = cp*rp
-##    crs = cr*sp
-##    crsw = crs*wp
-##
-##    print 'c:', crsw.Marginalise('s r w'.split())
-##    print 's:', crsw.Marginalise('c r w'.split())
-##    print 'r:', crsw.Marginalise('c s w'.split())
-##    print 'w:', crsw.Marginalise('c s r'.split())
-
-if __name__=='__mains__':
-    G = BNet('Bnet')
-    
-    a, b, c, d, e, f, g, h = [G.add_v(BVertex(nm,True,s+2)) for s,nm in enumerate('a b c d e f g h'.split())]
-
-    for ep in [(a, b), (a,c), (b,d), (d,f), (c,e), (e,f), (c,g), (e,h), (g,h)]:
-        G.add_e(graph.DirEdge(len(G.e), *ep))
-        
-    G.InitDistributions()
-    #G.RandomizeCPTs()
-    
-    
-    JT = inference.JoinTree(G)
-    JT2 = inference.MCMCEngine(G,1000)
-    
-    print JT
-
-    
-    print JT.Marginalise('c')
-    
-    JT.SetObs(['b'],[1])
-    print JT.Marginalise('c')
-
-    print JT2.Marginalise('c')
-    
-    #JT.SetObs(['b','a'],[1,2])
-    #print JT.Marginalise('c')
-    
-    #JT.SetObs(['b'],[1])
-    #print JT.Marginalise('c')
-    
-##    logging.basicConfig(level=logging.CRITICAL)
-##    
-##    def RandomObs(JT, G):
-##        for N in range(100):
-##            n = randint(len(G.v))
-##            
-##            obsn = []
-##            obs = []
-##            for i in range(n):
-##                v = randint(len(G.v))
-##                vn = G.v.values()[v].name
-##                if vn not in obsn:
-##                    obsn.append(vn)
-##                    val = randint(G.v[vn].nvalues)
-##                    obs.append(val)
-##                    
-##            JT.SetObs(obsn,obs)
-##            
-##    t = time.time()
-##    RandomObs(JT,G)
-##    t = time.time() - t
-##    print t
-    
-    #profile.run('''JT.GlobalPropagation()''')
-                
+    suite = unittest.makeSuite(BNetTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
