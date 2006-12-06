@@ -363,10 +363,11 @@ class Graph(delegate.Delegate):
                                             unprocessed.extend(v.out_v)
                     return visited
 
-            @staticmethod
-            def topological_sort(start_v):
+            #@staticmethod
+            def topological_sort(self):
                 '''Return a topological sort list of vertices.'''
-                unprocessed = [start_v]
+                # unprocessed is a list of all nodes that have no parents
+                unprocessed = [v for v in self.v.values() if not v.in_v]
                 visited = []
                 while unprocessed:
                     v = unprocessed.pop(0)

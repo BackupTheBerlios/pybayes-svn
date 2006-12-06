@@ -175,18 +175,7 @@ class BNet(graph.Graph):
         assert(len(self.v) > 0)
         samples = []
 
-        # find a node without parents and start from there.
-        # There is always at least one node without parents
-        # because a BNet is a Directed Acyclic Graph
-        # this is critical in small networks:
-        # e.g. A--> B
-        #      starting at B will produce an empty output...
-        for v in self.v.values():
-            if len(v.in_v) == 0:
-                start_node = v
-                break
-
-        topological = self.topological_sort(start_node)
+        topological = self.topological_sort()
         
         for i in range(n):
             sample = {}
