@@ -6,6 +6,7 @@ import random
 import unittest
 import copy
 import numarray as na
+import math
 
 import logging
 # show INFO messages
@@ -89,7 +90,7 @@ class EMLearningEngine:
         """        
         likelihood = []
         for states in states_list:
-            # states = {'c':0,''r':1} for example (c and r were unknown in the beginning)
+            # states = {'c':0,'r':1} for example (c and r were unknown in the beginning)
             like = 1
             temp_dic = {}
             copy_states = copy.copy(states)
@@ -154,14 +155,57 @@ class StructLearningEngine:
         self.engine = JoinTree(BNet)
         #self.engine = MCMCEngine(BNet) 
 
-    def DetOptStruct (self):
-        """Determine the optimal structure"""
+    def StructLearning(self, cases, max_iter): #A REPETER PLUSIEURS FOIS
+        """Greedy search for optimal structure (all the data in cases are known).
+        It will go through every node of the BNet. At each node, it will delete 
+        every outgoing edge, or add every possible edge, or reverse every 
+        possible edge. It will compute the BIC score each time and keep the BNet
+        with the highest score.
+        """
+        G_initial = copy.deepcopy(self.BNet)
+        G_best = copy.deepcopy(G_initial)#FAUT-IL FAIRE UN DICO AVEC LES SCORES ET LES NOEUDS?
+        N = len(cases)
+        for v in self.BNet.all_v:
+            G = copy.deepcopy(G_initial)
+            # delete the outgoing edges
+            while e in G.v[v.name].out_e:
+                edge = G.v[v.name].out_e.pop(G.v[v.name].out_e[0])
+                node = edge._v[1] #node is the child node, the only node for which the cpt table changes
+                cpt_matrix_best = G_best.v[node.name].distribution.cpt
+                dim_best = G_best.Dimension(node)
+                score_best = ScoreBIC(N, dim_best, cpt_matrix_best)
+                self.ChangeStruct('del', edge) #delete the current edge
+                self.BNet.v[node.name].setDistributionParameters([0.5, 0.5])###################################################################
+                self.BNet = G_initial #re-initialise the BNet such that it deletes only one edge at a time
+    
+    def ScoreBIC (self, N, dim, cpt_matrix):
+        ''' This function computes the BIC score of one node.
+        N is the size of the data from which we learn the structure
+        dim is the dimension of the node, = (nbr of state - 1)*nbr of state of the parents
+        cpt_matrix is the cpt table of the node
+        return the BIC score
+        '''
+        score = self.ForBIC(N, cpt_matrix)
+        score = score - 0.5*dim*math.log10(N)
+        return score
+
+    
+    def ForBIC (self, N, cpt_matrix):
+        score = 0
+        if not isinstance(cpt_matrix[0],float):
+            for i in range(len(cpt_matrix)):
+                score = score + self.ForBIC(N, cpt_matrix[i])
+            return score
+        else :
+            for i in range(len(cpt_matrix)):
+                if cpt_matrix[i] != 0:
+                    score = score + N*cpt_matrix[i]*math.log10(cpt_matrix[i])
+            return score
 
     def ChangeStruct(self, change, edge):
         """Changes the edge (add, remove or reverse)"""
         if change == 'del':
             self.BNet.del_e(edge)
-            # EST-CE QU'IL FAUT AUSSI DELETER LE NOEUD SI LE SEUL ARC QUI LE LIE EST EDGE??
         elif change == 'add':
             self.BNet.add_e(edge)
             # FAUT-IL VERIFIER QUE LE NOUVEAU BNET EST ACYCLIQUE??
@@ -197,24 +241,52 @@ class StructLearningTestCase(unittest.TestCase):
         self.BNet = G
     
     def testStruct(self):
-        # sample the network 2000 times
-        cases = self.BNet.Sample(2000)
-        
-        # create a new BNet with same nodes as self.BNet but all parameters
-        # set to 1s
-        G = copy.deepcopy(self.BNet)
-        
-        G.InitDistributions()
-        
-        engine = EMLearningEngine(G)
-        engine.EMLearning(cases, 10)
-        
-        tol = 0.05
-        assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
-               for v in G.all_v])), \
-                " Learning does not converge to true values "
-        print 'ok!!!!!!!!!!!!'
-                
+        N = 1000
+        # sample the network N times
+        cases = self.BNet.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
+        # create a new bayesian network with all parameters set to 1
+        G2 = copy.deepcopy(self.BNet)
+        # set all parameters to 1s
+        G2.InitDistributions()
+        # create an inference Engine
+        # choose the one you like by commenting/uncommenting the appropriate line
+        ie = JoinTree(G2)
+        #ie = MCMCEngine(G)
+        # Learn the parameters from the set of cases
+        ie.LearnMLParams(cases)
+        G3 = copy.deepcopy(self.BNet)
+        # delete one edge (r,w)
+        for e in self.BNet.v['r'].out_e:
+            G3.del_e(e)
+            G3.InitDistributions()
+            engine = JoinTree(G3)
+            engine.LearnMLParams(cases) #ne faire cela que pour le noeud fils
+            break
+        # print the learned parameters
+        for v in G2.all_v: 
+            print v.name, ' G2: ', v.distribution.cpt,'\n'
+            print G3.v[v.name].name, ' G3: ', G3.v[v.name].distribution.cpt,'\n'
+        # Verification of the recursive ScoreBIC function
+        sG3 = 0
+        for i,it in enumerate(G3.v['w'].distribution.cpt):
+            for j,jt in enumerate(it):
+                sG3 = sG3 + N*G3.v['w'].distribution.cpt[i][j]*math.log10(G3.v['w'].distribution.cpt[i][j])
+        sG3 = sG3 - math.log10(N)
+        sG2 = 0
+        for i, it in enumerate(G2.v['w'].distribution.cpt):
+            for j, jt in enumerate(it):
+                for k, kt in enumerate(jt):
+                    if G2.v['w'].distribution.cpt[i][j][k] != 0:
+                        sG2 = sG2 + N*G2.v['w'].distribution.cpt[i][j][k]*math.log10(G2.v['w'].distribution.cpt[i][j][k])
+        sG2 = sG2 - math.log10(N)*2
+        struct_engine3 = StructLearningEngine(G3)
+        struct_engine2 = StructLearningEngine(G2)
+        scoreG3 = struct_engine3.ScoreBIC(N,2,G3.v['w'].distribution.cpt)
+        scoreG2 = struct_engine2.ScoreBIC(N,4,G2.v['w'].distribution.cpt)
+        print 'sG2: ', sG2
+        print 'scoreG2: ', scoreG2
+        print 'sG3: ', sG3
+        print 'scoreG3: ', scoreG3
 
 
 class EMLearningTestCase(unittest.TestCase):
@@ -269,10 +341,10 @@ class EMLearningTestCase(unittest.TestCase):
         print 'ok!!!!!!!!!!!!'
 
 if __name__ == '__main__':
-##    suite = unittest.makeSuite(StructLearningTestCase, 'test')
-##    runner = unittest.TextTestRunner()
-##    runner.run(suite)    
-    
-    suite = unittest.makeSuite(EMLearningTestCase, 'test')
+    suite = unittest.makeSuite(StructLearningTestCase, 'test')
     runner = unittest.TextTestRunner()
-    runner.run(suite)
+    runner.run(suite)    
+    
+##    suite = unittest.makeSuite(EMLearningTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)

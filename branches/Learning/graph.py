@@ -330,7 +330,7 @@ class Graph(delegate.Delegate):
                     return e
 
             def del_e(self, e):
-                    '''delete an edge'''
+                    '''delete an edge (e is the name of the edge)'''
                     assert(self.e.has_key(e)), "The edge is not in the BNet"
                     del self.e[e]
 
@@ -380,6 +380,26 @@ class Graph(delegate.Delegate):
                         visited.append(v)
                         unprocessed.extend(v.out_v)
                 return visited
+
+            def HasNoCycles(self, start_v):
+                ''' Return True if the node start_v is not in a cycle
+                '''
+                unprocessed = [start_v]
+                visited = []
+                result = True
+                i = 0
+                while unprocessed:
+                            i += 1
+                            v = unprocessed.pop(0)
+                            if start_v in visited:
+                                result = False
+                                break
+                            elif i != 1 and v not in visited:
+                                visited.append(v)
+                                unprocessed.extend(v.out_v)
+                            elif i == 1:
+                                unprocessed.extend(v.out_v)
+                return result
 
 #================================================================================
 

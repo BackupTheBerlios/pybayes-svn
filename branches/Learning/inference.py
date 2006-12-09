@@ -840,13 +840,13 @@ class JTreeTestCase(InferenceEngineTestCase):
     
     
 if __name__=='__main__':
-    suite = unittest.makeSuite(MCMCTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-
-    suite = unittest.makeSuite(JTreeTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+##    suite = unittest.makeSuite(MCMCTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
+##
+##    suite = unittest.makeSuite(JTreeTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
 
     suite = unittest.makeSuite(LearningTestCase, 'test')
     runner = unittest.TextTestRunner()

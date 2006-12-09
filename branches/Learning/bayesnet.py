@@ -123,7 +123,7 @@ class BNet(graph.Graph):
     def del_e(self, edge):
         # remove the parent from the child node
         edge._v[1].family.pop(edge._v[1].family.index(edge._v[0]))
-        graph.Graph.del_e(self, edge)
+        graph.Graph.del_e(self, edge.name)
         
         
     
@@ -210,6 +210,16 @@ class BNet(graph.Graph):
             samples.append(sample)
 
         return samples
+    
+        def Dimension(self, node):
+            ''' Computes the dimension of node
+            = (nbr of state - 1)*nbr of state of the parents
+            '''
+            q = 1
+            for Pa in self.v[node.name].parents:
+                q = q*self.v[Pa].nvalues
+            dim = (self.v[node.name].nvalues-1)*q
+            return dim
     
 
 class BNetTestCase(unittest.TestCase):

@@ -72,6 +72,9 @@ w.distribution[:,1,1]=[0.0, 1.0]
 #w.distribution[{'s':1,'r':0}]=[0.1, 0.9]
 #w.distribution[{'s':1,'r':1}]=[0.0, 1.0]
 
+for v in G.all_v: 
+    print v.name, ' G: ', v.distribution.cpt,'\n'
+
 ##import copy
 ##G2 = copy.deepcopy(G)
 ##G2.InitDistributions()
