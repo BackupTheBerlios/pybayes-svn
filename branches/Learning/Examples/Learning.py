@@ -39,12 +39,18 @@ G4 = deepcopy(G)
 for e in G4.v['c'].out_e:
     G4.del_e(e)
     break
+G4.InitDistributions()
+G4.v['c'].distribution.setParameters(G2.v['c'].distribution.cpt)
+G4.v['s'].distribution.setParameters(G2.v['s'].distribution.cpt)
+G4.v['w'].distribution.setParameters(G2.v['w'].distribution.cpt)
+if G4.v['r'].distribution.isAdjustable:
+    G4.v['r'].distribution.initializeCounts()
 for case in cases :
-    if G4.v['c'].distribution.isAdjustable:
-        G4.v['c'].distribution.incrCounts(case)
-if G4.v['c'].distribution.isAdjustable:
-    G4.v['c'].distribution.setCounts()
-    G4.v['c'].distribution.normalize(dim=v.name)
+    if G4.v['r'].distribution.isAdjustable:
+        G4.v['r'].distribution.incrCounts(case)
+if G4.v['r'].distribution.isAdjustable:
+    G4.v['r'].distribution.setCounts()
+    G4.v['r'].distribution.normalize(dim='r')
    
 
 

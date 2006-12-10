@@ -210,16 +210,16 @@ class BNet(graph.Graph):
             samples.append(sample)
 
         return samples
-    
-        def Dimension(self, node):
-            ''' Computes the dimension of node
-            = (nbr of state - 1)*nbr of state of the parents
-            '''
-            q = 1
-            for Pa in self.v[node.name].parents:
-                q = q*self.v[Pa].nvalues
-            dim = (self.v[node.name].nvalues-1)*q
-            return dim
+
+    def Dimension(self, node):
+        ''' Computes the dimension of node
+        = (nbr of state - 1)*nbr of state of the parents
+        '''
+        q = 1
+        for Pa in self.v[node.name].distribution.parents:
+            q = q * self.v[Pa.name].nvalues
+        dim = (self.v[node.name].nvalues-1)*q
+        return dim
     
 
 class BNetTestCase(unittest.TestCase):
