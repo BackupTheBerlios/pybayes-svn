@@ -201,31 +201,61 @@ class GreedyStructLearningEngine:
             edges = copy.deepcopy(G.v[v.name].out_e)
             
             # delete the outgoing edges
-            while len(edges) != 0:
-                edge = edges.pop(0)
-                node = edge._v[1] #node is the child node, the only node for which the cpt table changes
-                cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
-                dim_init = G_initial.Dimension(node)
-                score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init)
-                print 'score init for node ', node.name, ' : ', score_init
-                self.ChangeStruct('del', edge) #delete the current edge
-                self.SetNewDistribution(G_initial, node, cases)
-                cpt_matrix = self.BNet.v[node.name].distribution.cpt
-                dim = self.BNet.Dimension(node)
-                print 'dim',node, dim
-                score = self.ScoreBIC(N, dim, cpt_matrix)
-                print 'score for node ', node.name, ' : ', score
-                var_score = score - score_init
-                if var_score > prec_var_score:
-                    prec_var_score = var_score
-                    G_best = copy.deepcopy(self.BNet)
-                    G_best.InitDistributions()
-                    for vert in G_initial.all_v:
-                        G_best.v[vert.name].distribution.setParameters(self.BNet.v[vert.name].distribution.cpt)     
-                self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
-                self.BNet.InitDistributions()
-                for verti in G_initial.all_v:
-                    self.BNet.v[verti.name].distribution.setParameters(G_initial.v[verti.name].distribution.cpt)
+##            while edges:
+            edge = edges.pop(0)
+            node = edge._v[1] #node is the child node, the only node for which the cpt table changes
+            cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
+            dim_init = G_initial.Dimension(node)
+            score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init)
+            print 'score init for node ', node.name, ' : ', score_init
+            self.ChangeStruct('del', edge) #delete the current edge
+            self.SetNewDistribution(G_initial, node, cases)
+            cpt_matrix = self.BNet.v[node.name].distribution.cpt
+            dim = self.BNet.Dimension(node)
+            print 'dim',node, dim
+            score = self.ScoreBIC(N, dim, cpt_matrix)
+            print 'score for node ', node.name, ' : ', score
+            var_score = score - score_init
+            if var_score > prec_var_score:
+                prec_var_score = var_score
+                G_best = copy.deepcopy(self.BNet)
+                G_best.InitDistributions()
+                for vert in G_initial.all_v:
+                    G_best.v[vert.name].distribution.setParameters(self.BNet.v[vert.name].distribution.cpt)     
+            self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
+            self.BNet.InitDistributions()
+            for verti in G_initial.all_v:
+                self.BNet.v[verti.name].distribution.setParameters(G_initial.v[verti.name].distribution.cpt)
+            
+            # Add all possible edges
+            G = copy.deepcopy(G_initial)
+            nodes = []
+            for node in G.all_v:
+                if not node in G.v[v.name].out_v:
+                    nodes.append(node)
+            while nodes:
+                node = nodes.pop(0)
+                edge = graph.DirEdge(len(G.e), v,node)
+                self.ChangeStruct('add', edge)
+                if self.BNet.HasNoCycles(node):
+                    cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
+                    dim_init = G_initial.Dimension(node)
+                    score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init)
+                    self.SetNewDistribution(G_initial, node, cases)
+                    cpt_matrix = self.BNet.v[node.name].distribution.cpt
+                    dim = self.BNet.Dimension(node)
+                    score = self.ScoreBIC(N, dim, cpt_matrix)
+                    var_score = score - score_init
+                    if var_score > prec_var_score:
+                        prec_var_score = var_score
+                        G_best = copy.deepcopy(self.BNet)
+                        G_best.InitDistributions()
+                        for vert in G_initial.all_v:
+                            G_best.v[vert.name].distribution.setParameters(self.BNet.v[vert.name].distribution.cpt)     
+                    self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
+                    self.BNet.InitDistributions()
+                    for verti in G_initial.all_v:
+                        self.BNet.v[verti.name].distribution.setParameters(G_initial.v[verti.name].distribution.cpt)
         
         #self.BNet is the optimal graph structure
         self.BNet = copy.deepcopy(G_best)
@@ -275,10 +305,8 @@ class GreedyStructLearningEngine:
             self.BNet.del_e(edge)
         elif change == 'add':
             self.BNet.add_e(edge)
-            # FAUT-IL VERIFIER QUE LE NOUVEAU BNET EST ACYCLIQUE??
         elif change == 'inv':
             self.BNet.inv_e(edge)
-            # FAUT-IL VERIFIER QUE LE NOUVEAU BNET EST ACYCLIQUE??
         else:
             assert(False), "The asked change of structure is not possible. Only 'del' for delete, 'add' for add, and 'inv' for invert"
 
