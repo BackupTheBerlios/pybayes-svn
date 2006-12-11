@@ -334,6 +334,11 @@ class Graph(delegate.Delegate):
                     assert(self.e.has_key(e)), "The edge is not in the BNet"
                     del self.e[e]
 
+            def connex_components(self):
+                """ returns a list of list of nodes that are conencted between
+                 them"""
+                
+
             def connected_components(self):
                     '''Return a list of lists.  Each holds transitively-connected vertices.'''
                     unchecked = set(self.v.values())
@@ -368,8 +373,16 @@ class Graph(delegate.Delegate):
                                             unprocessed.extend(v.out_v)
                     return visited
 
+            #@staticmethod
+            def topological_sort(self):
+                '''Return a topological sort list of vertices.'''
+                # unprocessed is a list of all nodes that have no parents
+                unprocessed = [v for v in self.v.values() if not v.in_v]
+                
+                return topological_sort_by_node(unprocessed)
+
             @staticmethod
-            def topological_sort(start_v):
+            def topological_sort_by_node(start_v):
                 '''Return a topological sort list of vertices.'''
                 unprocessed = [start_v]
                 visited = []

@@ -70,6 +70,7 @@ class InferenceEngine:
                 v.distribution.setCounts()
                 v.distribution.normalize(dim=v.name)
     
+
         
 class Cluster(graph.Vertex):
     """
@@ -632,6 +633,19 @@ class JoinTree(InferenceEngine, graph.Graph):
     def ExtractCPT (self, v):
         return copy.copy(self.Marginalise(v).cpt)
         
+class ConnexeInferenceJTree(JoinTree):
+    """ Accepts a non connexe BNet as entry.
+        Creates an JoinTree Inference engine for each component of the BNet
+        and acts transparently to the user
+    """
+    def __init__(self, BNet):
+        self.BNet = BNet
+        
+        self.BNets = BNet.split_into_components()
+        
+    def Marginalise(self, vname):
+        """ trouver dans quel réseau appartient le noeud et faire l'inférence 
+        sur celui-ci"""
 
 
 class MCMCEngine(InferenceEngine):

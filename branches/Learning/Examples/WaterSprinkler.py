@@ -17,7 +17,7 @@ from OpenBayes import BNet, BVertex, DirEdge
 # create the network
 G = BNet( 'Water Sprinkler Bayesian Network' )
 c, s, r, w = [G.add_v( BVertex( nm, True, 2 ) ) for nm in 'c s r w'.split()]
-for ep in [( c, r ), ( c, s ), ( r, w ), ( s, w )]:
+for ep in [( r, w ), ( s, w )]:
     G.add_e( DirEdge( len( G.e ), *ep ) )
     
 print G
@@ -31,20 +31,22 @@ G.InitDistributions()
 # 0 |  0.5
 # 1 |  0.5
 c.setDistributionParameters([0.5, 0.5])
+r.setDistributionParameters([0.5, 0.5])
+s.setDistributionParameters([0.5, 0.5])
 # c s | Pr(s|c)
 #-----+--------
 # 0 0 |   0.5
 # 1 0 |   0.9
 # 0 1 |   0.5
 # 1 1 |   0.1
-s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+#s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
 # c r | Pr(r|c)
 #-----+--------
 # 0 0 |   0.8
 # 1 0 |   0.2
 # 0 1 |   0.2
 # 1 1 |   0.8
-r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+#r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
 # s r w | Pr(w|c,s)
 #-------+------------
 # 0 0 0 |   1.0

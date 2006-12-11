@@ -197,46 +197,56 @@ class GreedyStructLearningEngine:
         prec_var_score = 0
         
         for v in self.BNet.all_v:
+            print '\n\nWORKING ON NODE',v.name,'\n==========================================='
             G = copy.deepcopy(G_initial)
             edges = copy.deepcopy(G.v[v.name].out_e)
             
             # delete the outgoing edges
-##            while edges:
-            edge = edges.pop(0)
-            node = edge._v[1] #node is the child node, the only node for which the cpt table changes
-            cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
-            dim_init = G_initial.Dimension(node)
-            score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init)
-            print 'score init for node ', node.name, ' : ', score_init
-            self.ChangeStruct('del', edge) #delete the current edge
-            self.SetNewDistribution(G_initial, node, cases)
-            cpt_matrix = self.BNet.v[node.name].distribution.cpt
-            dim = self.BNet.Dimension(node)
-            print 'dim',node, dim
-            score = self.ScoreBIC(N, dim, cpt_matrix)
-            print 'score for node ', node.name, ' : ', score
-            var_score = score - score_init
-            if var_score > prec_var_score:
-                prec_var_score = var_score
-                G_best = copy.deepcopy(self.BNet)
-                G_best.InitDistributions()
-                for vert in G_initial.all_v:
-                    G_best.v[vert.name].distribution.setParameters(self.BNet.v[vert.name].distribution.cpt)     
-            self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
-            self.BNet.InitDistributions()
-            for verti in G_initial.all_v:
-                self.BNet.v[verti.name].distribution.setParameters(G_initial.v[verti.name].distribution.cpt)
+            while edges:
+                edge = edges.pop(0)
+                node = edge._v[1] #node is the child node, the only node for which the cpt table changes
+                cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
+                dim_init = G_initial.Dimension(node)
+                score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init)
+                print 'score init for node ', node.name, ' : ', score_init
+                self.ChangeStruct('del', edge) #delete the current edge
+                self.SetNewDistribution(G_initial, node, cases)
+                cpt_matrix = self.BNet.v[node.name].distribution.cpt
+                dim = self.BNet.Dimension(node)
+                print 'dim',node, dim
+                score = self.ScoreBIC(N, dim, cpt_matrix)
+                print 'score for node ', node.name, ' : ', score
+                var_score = score - score_init
+                if var_score > prec_var_score:
+                    prec_var_score = var_score
+                    G_best = copy.deepcopy(self.BNet)
+                    G_best.InitDistributions()
+                    for vert in G_initial.all_v:
+                        G_best.v[vert.name].distribution.setParameters(self.BNet.v[vert.name].distribution.cpt)     
+                self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
+                self.BNet.InitDistributions()
+                for verti in G_initial.all_v:
+                    self.BNet.v[verti.name].distribution.setParameters(G_initial.v[verti.name].distribution.cpt)
             
             # Add all possible edges
             G = copy.deepcopy(G_initial)
+            
+            print G
             nodes = []
             for node in G.all_v:
-                if not node in G.v[v.name].out_v:
+                if (not (node.name in [vv.name for vv in G.v[v.name].out_v])) and (not (node.name == v.name)):
                     nodes.append(node)
+                    print 'added',v,'-->',node
+                    print'---------------------------'
             while nodes:
                 node = nodes.pop(0)
-                edge = graph.DirEdge(len(G.e), v,node)
+                edge = graph.DirEdge(max(G.e.keys())+1, v,node)
+                for ee in self.BNet.e.values():
+                    print ee
+                print 'new edge:',edge
                 self.ChangeStruct('add', edge)
+                
+
                 if self.BNet.HasNoCycles(node):
                     cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
                     dim_init = G_initial.Dimension(node)
