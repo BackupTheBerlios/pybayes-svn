@@ -640,13 +640,17 @@ class ConnexeInferenceJTree(JoinTree):
     """
     def __init__(self, BNet):
         self.BNet = BNet
-        
         self.BNets = BNet.split_into_components()
         
     def Marginalise(self, vname):
-        """ trouver dans quel réseau appartient le noeud et faire l'inférence 
+        """ trouver dans quel reseau appartient le noeud et faire l'inference 
         sur celui-ci"""
-
+        for G in self.BNets:
+            if [v.name == vname for v in G.all_v]:
+                engine = JoinTree(G)
+                return engine.Marginalise(vname)
+            else:
+                assert(False), "The node is not in the BNet"
 
 class MCMCEngine(InferenceEngine):
         """ MCMC in the way described in the presentation by Rina Rechter """

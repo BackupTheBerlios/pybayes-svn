@@ -1,7 +1,7 @@
 import graph
 import bayesnet
 import distributions
-from inference import JoinTree
+from inference import ConnexeInferenceJTree
 import random
 import unittest
 import copy
@@ -155,19 +155,31 @@ class GreedyStructLearningEngine:
         self.BNet.InitDistributions()
         for v in BNet.all_v:
                 self.BNet.v[v.name].distribution.setParameters(BNet.v[v.name].distribution.cpt)       
-        self.engine = JoinTree(BNet)
-        #self.engine = MCMCEngine(BNet) 
+        self.engine = ConnexeInferenceJTree(BNet) 
 
     def StructLearning(self, cases):
         N = len(cases)
         new_score = self.GlobalBICScore(self.BNet, N)
         old_score = None
-        while old_score or new_score > old_score:
+        while self.Converged(old_score, new_score):
             old_score = copy.copy(new_score)
             print 'old_score', iter, old_score
             self.LearnStruct(cases, N)
+            self.engine = ConnexeInferenceJTree(self.BNet)
             new_score = copy.copy(self.GlobalBICScore(self.BNet, N))
             print 'new_score', iter, new_score
+            print '---------------------------------------------'
+            print 'learned BNet : '
+            print self.BNet
+            print '---------------------------------------------'
+
+    def Converged(self, old_score, new_score):
+        result = False
+        if not old_score:
+            result = True
+        if new_score > old_score:
+            result = True
+        return result
 
     def GlobalBICScore(self, G, N):
         score = 0
@@ -185,7 +197,6 @@ class GreedyStructLearningEngine:
         with the highest score.
         """
         G_initial = copy.deepcopy(self.BNet)
-        print G_initial
         G_initial.InitDistributions()
         for v in G_initial.all_v:
                 G_initial.v[v.name].distribution.setParameters(self.BNet.v[v.name].distribution.cpt)
@@ -197,7 +208,6 @@ class GreedyStructLearningEngine:
         prec_var_score = 0
         
         for v in self.BNet.all_v:
-            print '\n\nWORKING ON NODE',v.name,'\n==========================================='
             G = copy.deepcopy(G_initial)
             edges = copy.deepcopy(G.v[v.name].out_e)
             
@@ -208,14 +218,11 @@ class GreedyStructLearningEngine:
                 cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
                 dim_init = G_initial.Dimension(node)
                 score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init)
-                print 'score init for node ', node.name, ' : ', score_init
                 self.ChangeStruct('del', edge) #delete the current edge
                 self.SetNewDistribution(G_initial, node, cases)
                 cpt_matrix = self.BNet.v[node.name].distribution.cpt
                 dim = self.BNet.Dimension(node)
-                print 'dim',node, dim
                 score = self.ScoreBIC(N, dim, cpt_matrix)
-                print 'score for node ', node.name, ' : ', score
                 var_score = score - score_init
                 if var_score > prec_var_score:
                     prec_var_score = var_score
@@ -230,23 +237,14 @@ class GreedyStructLearningEngine:
             
             # Add all possible edges
             G = copy.deepcopy(G_initial)
-            
-            print G
             nodes = []
             for node in G.all_v:
                 if (not (node.name in [vv.name for vv in G.v[v.name].out_v])) and (not (node.name == v.name)):
                     nodes.append(node)
-                    print 'added',v,'-->',node
-                    print'---------------------------'
             while nodes:
                 node = nodes.pop(0)
                 edge = graph.DirEdge(max(G.e.keys())+1, v,node)
-                for ee in self.BNet.e.values():
-                    print ee
-                print 'new edge:',edge
                 self.ChangeStruct('add', edge)
-                
-
                 if self.BNet.HasNoCycles(node):
                     cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
                     dim_init = G_initial.Dimension(node)
@@ -262,10 +260,40 @@ class GreedyStructLearningEngine:
                         G_best.InitDistributions()
                         for vert in G_initial.all_v:
                             G_best.v[vert.name].distribution.setParameters(self.BNet.v[vert.name].distribution.cpt)     
-                    self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
-                    self.BNet.InitDistributions()
-                    for verti in G_initial.all_v:
-                        self.BNet.v[verti.name].distribution.setParameters(G_initial.v[verti.name].distribution.cpt)
+                self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
+                self.BNet.InitDistributions()
+                for verti in G_initial.all_v:
+                    self.BNet.v[verti.name].distribution.setParameters(G_initial.v[verti.name].distribution.cpt)
+        
+            # Invert all possible edges
+            G = copy.deepcopy(G_initial)
+            edges = copy.deepcopy(G.v[v.name].out_e)
+            while edges:
+                edge = edges.pop(0)
+                node = edge._v[1] #node is the child node
+                self.ChangeStruct('del', edge)
+                self.SetNewDistribution(G_initial, node, cases)
+                inverted_edge = graph.DirEdge(max(G.e.keys())+1, node, v)
+                self.ChangeStruct('add', inverted_edge)
+                if self.BNet.HasNoCycles(node):
+                    cpt_matrix_init = copy.deepcopy(G_initial.v[node.name].distribution.cpt)
+                    dim_init = G_initial.Dimension(node)
+                    score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init)
+                    self.SetNewDistribution(G_initial, node, cases)
+                    cpt_matrix = self.BNet.v[node.name].distribution.cpt
+                    dim = self.BNet.Dimension(node)
+                    score = self.ScoreBIC(N, dim, cpt_matrix)
+                    var_score = score - score_init
+                    if var_score > prec_var_score:
+                        prec_var_score = var_score
+                        G_best = copy.deepcopy(self.BNet)
+                        G_best.InitDistributions()
+                        for vert in G_initial.all_v:
+                            G_best.v[vert.name].distribution.setParameters(self.BNet.v[vert.name].distribution.cpt)     
+                self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
+                self.BNet.InitDistributions()
+                for verti in G_initial.all_v:
+                    self.BNet.v[verti.name].distribution.setParameters(G_initial.v[verti.name].distribution.cpt)
         
         #self.BNet is the optimal graph structure
         self.BNet = copy.deepcopy(G_best)
@@ -365,8 +393,6 @@ class GreedyStructLearningTestCase(unittest.TestCase):
         print 'scoreG2testcase r: ', scoreG2
         struct_engine3 = GreedyStructLearningEngine(G3)
         struct_engine3.StructLearning(cases)
-        print struct_engine3.BNet
-        
         G4 = copy.deepcopy(self.BNet)
         for e in G4.v['c'].out_e:
             G4.del_e(e)

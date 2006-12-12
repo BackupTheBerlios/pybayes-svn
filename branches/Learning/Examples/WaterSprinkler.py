@@ -12,81 +12,86 @@
 all edges are pointing downwards
 
 """
-from OpenBayes import BNet, BVertex, DirEdge
+from OpenBayes import BNet, BVertex, DirEdge, Graph
 
 # create the network
 G = BNet( 'Water Sprinkler Bayesian Network' )
 c, s, r, w = [G.add_v( BVertex( nm, True, 2 ) ) for nm in 'c s r w'.split()]
-for ep in [( r, w ), ( s, w )]:
+for ep in [(c,r), (c,s), ( r, w ), ( s, w )]:
     G.add_e( DirEdge( len( G.e ), *ep ) )
     
 print G
 
+##for v in G.connex_components()[0]:
+##    print v.name
+##print 'tttttttt'
+##for v in G.connex_components()[1]:
+##    print v.name
 
-# finalize the bayesian network once all edges have been added   
-G.InitDistributions()
-
-# c | Pr(c)
-#---+------
-# 0 |  0.5
-# 1 |  0.5
-c.setDistributionParameters([0.5, 0.5])
-r.setDistributionParameters([0.5, 0.5])
-s.setDistributionParameters([0.5, 0.5])
-# c s | Pr(s|c)
-#-----+--------
-# 0 0 |   0.5
-# 1 0 |   0.9
-# 0 1 |   0.5
-# 1 1 |   0.1
-#s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-# c r | Pr(r|c)
-#-----+--------
-# 0 0 |   0.8
-# 1 0 |   0.2
-# 0 1 |   0.2
-# 1 1 |   0.8
-#r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-# s r w | Pr(w|c,s)
-#-------+------------
-# 0 0 0 |   1.0
-# 1 0 0 |   0.1
-# 0 1 0 |   0.1
-# 1 1 0 |   0.01
-# 0 0 1 |   0.0
-# 1 0 1 |   0.9
-# 0 1 1 |   0.9
-# 1 1 1 |   0.99
-# to verify the order of variables use :
-#>>> w.distribution.names_list
-#['w','s','r']
-
-# we can also set up the variables of a cpt with the following way
-# again the order is w.distribution.names_list
-w.distribution[:,0,0]=[0.99, 0.01]
-w.distribution[:,0,1]=[0.1, 0.9]
-w.distribution[:,1,0]=[0.1, 0.9]
-w.distribution[:,1,1]=[0.0, 1.0]
-
-# or even this way , using a dict:
-#w.distribution[{'s':0,'r':0}]=[0.99, 0.01]
-#w.distribution[{'s':0,'r':1}]=[0.1, 0.9]
-#w.distribution[{'s':1,'r':0}]=[0.1, 0.9]
-#w.distribution[{'s':1,'r':1}]=[0.0, 1.0]
-
-for v in G.all_v: 
-    print v.name, ' G: ', v.distribution.cpt,'\n'
-
-##import copy
-##G2 = copy.deepcopy(G)
-##G2.InitDistributions()
+### finalize the bayesian network once all edges have been added   
+##G.InitDistributions()
 ##
-##for v in G2.v.values():
-##        v.distribution.initializeCounts()
-##for v in G2.v.values():
-##    if v.distribution.isAdjustable:
-##        v.distribution.setCounts()
-##        v.distribution.normalize(dim=v.name)
+### c | Pr(c)
+###---+------
+### 0 |  0.5
+### 1 |  0.5
+##c.setDistributionParameters([0.5, 0.5])
+##r.setDistributionParameters([0.5, 0.5])
+##s.setDistributionParameters([0.5, 0.5])
+### c s | Pr(s|c)
+###-----+--------
+### 0 0 |   0.5
+### 1 0 |   0.9
+### 0 1 |   0.5
+### 1 1 |   0.1
+###s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+### c r | Pr(r|c)
+###-----+--------
+### 0 0 |   0.8
+### 1 0 |   0.2
+### 0 1 |   0.2
+### 1 1 |   0.8
+###r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+### s r w | Pr(w|c,s)
+###-------+------------
+### 0 0 0 |   1.0
+### 1 0 0 |   0.1
+### 0 1 0 |   0.1
+### 1 1 0 |   0.01
+### 0 0 1 |   0.0
+### 1 0 1 |   0.9
+### 0 1 1 |   0.9
+### 1 1 1 |   0.99
+### to verify the order of variables use :
+###>>> w.distribution.names_list
+###['w','s','r']
 ##
-##print G2.v['w'].distribution.cpt
-##print  G.v['w'].distribution.cpt
+### we can also set up the variables of a cpt with the following way
+### again the order is w.distribution.names_list
+##w.distribution[:,0,0]=[0.99, 0.01]
+##w.distribution[:,0,1]=[0.1, 0.9]
+##w.distribution[:,1,0]=[0.1, 0.9]
+##w.distribution[:,1,1]=[0.0, 1.0]
+##
+### or even this way , using a dict:
+###w.distribution[{'s':0,'r':0}]=[0.99, 0.01]
+###w.distribution[{'s':0,'r':1}]=[0.1, 0.9]
+###w.distribution[{'s':1,'r':0}]=[0.1, 0.9]
+###w.distribution[{'s':1,'r':1}]=[0.0, 1.0]
+##
+##for v in G.all_v: 
+##    print v.name, ' G: ', v.distribution.cpt,'\n'
+##
+####import copy
+####G2 = copy.deepcopy(G)
+####G2.InitDistributions()
+####
+####for v in G2.v.values():
+####        v.distribution.initializeCounts()
+####for v in G2.v.values():
+####    if v.distribution.isAdjustable:
+####        v.distribution.setCounts()
+####        v.distribution.normalize(dim=v.name)
+####
+####print G2.v['w'].distribution.cpt
+####print  G.v['w'].distribution.cpt

@@ -183,15 +183,11 @@ class BNet(graph.Graph):
             #add vertices to this new BNet
             for v in comp:
                 new.add_v(v)
-            print new
             #add all edges into this BNet
             for v in comp:
                 for e in v.out_e:
                     new.add_e(e)
-            
-            
             i+=1
-            
         return BNets
     
     def InitDistributions(self):

@@ -335,9 +335,26 @@ class Graph(delegate.Delegate):
                     del self.e[e]
 
             def connex_components(self):
-                """ returns a list of list of nodes that are conencted between
+                """ returns a list of list of nodes that are connected between
                  them"""
-                
+                unchecked = set(self.v.values())
+                groups = []
+                while len(unchecked):
+                            vcon = self.member_family(unchecked.pop())
+                            unchecked -= set(vcon)
+                            groups.append(set(vcon))
+                return groups
+                    
+            def member_family(self, node):
+                unprocessed = [node]
+                visited = []
+                while unprocessed:
+                            v = unprocessed.pop()
+                            if v not in visited:
+                                        visited.append(v)
+                                        unprocessed.extend(v.out_v)
+                                        unprocessed.extend(v.in_v)
+                return visited                
 
             def connected_components(self):
                     '''Return a list of lists.  Each holds transitively-connected vertices.'''
@@ -374,15 +391,15 @@ class Graph(delegate.Delegate):
                     return visited
 
             #@staticmethod
-            def topological_sort(self):
-                '''Return a topological sort list of vertices.'''
-                # unprocessed is a list of all nodes that have no parents
-                unprocessed = [v for v in self.v.values() if not v.in_v]
-                
-                return topological_sort_by_node(unprocessed)
+##            def topological_sort(self):
+##                '''Return a topological sort list of vertices.'''
+##                # unprocessed is a list of all nodes that have no parents
+##                unprocessed = [v for v in self.v.values() if not v.in_v]
+##                
+##                return topological_sort_by_node(unprocessed)
 
             @staticmethod
-            def topological_sort_by_node(start_v):
+            def topological_sort(start_v):
                 '''Return a topological sort list of vertices.'''
                 unprocessed = [start_v]
                 visited = []
