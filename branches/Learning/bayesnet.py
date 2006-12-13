@@ -115,6 +115,7 @@ class BNet(graph.Graph):
     def add_e(self, e):
         if e.__class__.__name__ == 'DirEdge':
             graph.Graph.add_e(self, e)
+            #e._v[1] = [e._v[1]] + [parent for parent in e._v[1].in_v]
             for v in e._v:
                 v.family = [v] + list(v.in_v)
         else:
