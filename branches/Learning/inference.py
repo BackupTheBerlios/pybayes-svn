@@ -631,7 +631,7 @@ class JoinTree(InferenceEngine, graph.Graph):
             print na.sum(c.cpt.flat)
             
     def ExtractCPT (self, v):
-        return copy.copy(self.Marginalise(v).cpt)
+        return self.Marginalise(v).cpt
         
 class ConnexeInferenceJTree(JoinTree):
     """ Accepts a non connexe BNet as entry.
@@ -646,11 +646,17 @@ class ConnexeInferenceJTree(JoinTree):
         """ trouver dans quel reseau appartient le noeud et faire l'inference 
         sur celui-ci"""
         for G in self.BNets:
-            if [v.name == vname for v in G.all_v]:
-                engine = JoinTree(G)
-                return engine.Marginalise(vname)
-            else:
-                assert(False), "The node is not in the BNet"
+            for v in G.all_v:
+                if v.name == vname:
+                    engine = JoinTree(G)
+                    return engine.Marginalise(vname)
+    
+##    def SetObs(self, ev = dict()):
+##        for G in self.BNets:
+##            for v in G.all_v:
+##                if v.name == ev.keys()[0]:
+##                    engine = JoinTree(G)
+##                    engine.SetObs(ev)
 
 class MCMCEngine(InferenceEngine):
         """ MCMC in the way described in the presentation by Rina Rechter """

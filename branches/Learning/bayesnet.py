@@ -112,6 +112,15 @@ class BNet(graph.Graph):
     def __init__(self, name = None):
         graph.Graph.__init__(self, name)
 
+    def copy(self):
+        ''' returns a deep copy of this BNet '''
+        G_new = copy.deepcopy(self)
+        G_new.InitDistributions()
+        for v in self.all_v:
+                G_new.v[v.name].distribution.setParameters(v.distribution.Convert_to_CPT())        
+       
+        return G_new
+
     def add_e(self, e):
         if e.__class__.__name__ == 'DirEdge':
             graph.Graph.add_e(self, e)
@@ -172,7 +181,7 @@ class BNet(graph.Graph):
     def split_into_components(self):
         """ returns a list of BNets with the connected components of this BNet
         """
-        components = self.connected_components()
+        components = self.connex_components()
 
         BNets = []
         i=0
@@ -223,7 +232,7 @@ class BNet(graph.Graph):
                 start_node = v
                 break
 
-        topological = self.topological_sort(start_node)
+        topological = self.topological_sort()
         
         for i in range(n):
             sample = {}

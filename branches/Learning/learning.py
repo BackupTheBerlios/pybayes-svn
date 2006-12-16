@@ -1,7 +1,7 @@
 import graph
 import bayesnet
 import distributions
-from inference import ConnexeInferenceJTree
+from inference import ConnexeInferenceJTree, JoinTree
 import random
 import unittest
 import copy
@@ -151,39 +151,25 @@ class GreedyStructLearningEngine:
     engine = None
     
     def __init__(self, BNet):
-        self.BNet = copy.deepcopy(BNet)
-        self.engine = ConnexeInferenceJTree(BNet)
-        self.BNet.InitDistributions()
-        for v in BNet.all_v:
-                self.BNet.v[v.name].distribution.setParameters(self.engine.ExtractCPT(v.name))       
-         
+        self.BNet = BNet.copy()
+        self.engine = ConnexeInferenceJTree(self.BNet)
+        self.converged = False
 
     def StructLearning(self, cases):
         N = len(cases)
-        new_score = self.GlobalBICScore(self.BNet, N)
-        old_score = None
-        while self.Converged(old_score, new_score):
-            old_score = copy.copy(new_score)
-            print 'old_score', iter, old_score
+        iter = 0
+        while (not self.converged):
             self.LearnStruct(cases, N)
-            self.engine = ConnexeInferenceJTree(self.BNet)
-            new_score = copy.copy(self.GlobalBICScore(self.BNet, N))
-            print 'new_score', iter, new_score
+            iter +=1
+            print 'Structure iteration:', iter
 
-    def Converged(self, old_score, new_score):
-        result = False
-        if not old_score:
-            result = True
-        if new_score > old_score:
-            result = True
-        return result
-
-    def GlobalBICScore(self, G, N, engine):
+    def GlobalBICScore(self, N, cases):
+        '''Computes the BIC score of self.BNet'''
         score = 0
-        for v in G.all_v:
-            cpt_matrix = engine.ExtractCPT(v.name)
-            dim = G.Dimension(v)
-            score = score + self.ScoreBIC(N, dim, cpt_matrix) 
+        for v in self.BNet.all_v:
+            cpt_matrix = v.distribution.Convert_to_CPT()
+            dim = self.BNet.Dimension(v)
+            score = score + self.ScoreBIC(N, dim, self.BNet, v, cases) 
         return score
 
     def LearnStruct(self, cases, N):
@@ -193,164 +179,134 @@ class GreedyStructLearningEngine:
         possible edge. It will compute the BIC score each time and keep the BNet
         with the highest score.
         """
-        G_initial = copy.deepcopy(self.BNet)
-        G_initial.InitDistributions()
-        for v in G_initial.all_v:
-                G_initial.v[v.name].distribution.setParameters(self.engine.ExtractCPT(v.name))
-        infengine_init = ConnexeInferenceJTree(G_initial)
-        G_best = copy.deepcopy(G_initial)
-        G_best.InitDistributions()
-        for v in G_initial.all_v:
-                G_best.v[v.name].distribution.setParameters(self.engine.ExtractCPT(v.name))        
-        infengine_best = ConnexeInferenceJTree(G_best)
-        engine_init =  GreedyStructLearningEngine(G_initial)
+        G_initial = self.BNet.copy()
+        engine_init = GreedyStructLearningEngine(G_initial)
+        G_best = self.BNet.copy()     
         prec_var_score = 0
         
         for v in self.BNet.all_v:
-            G = copy.deepcopy(G_initial)
+            G = copy.deepcopy(engine_init.BNet)
             edges = copy.deepcopy(G.v[v.name].out_e)
             
             # delete the outgoing edges
             while edges:
                 edge = edges.pop(0)
                 node = edge._v[1] #node is the child node, the only node for which the cpt table changes
-                cpt_matrix_init = copy.deepcopy(infengine_init.ExtractCPT(node.name))
                 dim_init = G_initial.Dimension(node)
-                score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init, infengine_init)
+                score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[node.name], cases)
                 self.ChangeStruct('del', edge) #delete the current edge
-                self.SetNewDistribution(G_initial, node, cases, infengine_init)
-                cpt_matrix = self.engine.ExtractCPT(node.name)
+                self.SetNewDistribution(engine_init.BNet, node, cases)
                 dim = self.BNet.Dimension(node)
-                score = self.ScoreBIC(N, dim, cpt_matrix, self.engine)
+                score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[node.name], cases)
                 var_score = score - score_init
                 if var_score > prec_var_score:
+                    print 'deleted:', v.name, node.name
                     prec_var_score = var_score
-                    G_best = copy.deepcopy(self.BNet)
-                    G_best.InitDistributions()
-                    for vert in G_initial.all_v:
-                        G_best.v[vert.name].distribution.setParameters(self.engine.ExtractCPT(vert.name)) 
-                    infengine_best = ConnexeInferenceJTree(G_best)
-                self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
-                self.BNet.InitDistributions()
-                for verti in G_initial.all_v:
-                    self.BNet.v[verti.name].distribution.setParameters(infengine_init.ExtractCPT(verti.name))
-                self.engine = ConnexeInferenceJTree(self.BNet)
+                    G_best = self.BNet.copy()
+                self.BNet = G_initial.copy()
             
             # Add all possible edges
-            G = copy.deepcopy(G_initial)
+            G = copy.deepcopy(engine_init.BNet)
             nodes = []
             for node in G.all_v:
-                if (not (node.name in [vv.name for vv in G.v[v.name].out_v])) and (not (node.name == v.name)):
+                if (not (node.name in [vv.name for vv in self.BNet.v[v.name].out_v])) and (not (node.name == v.name)):
                     nodes.append(node)
             while nodes:
                 node = nodes.pop(0)
                 if G.e.keys():
-                    edge = graph.DirEdge(max(G.e.keys())+1, copy.deepcopy(self.BNet.v[v.name]), copy.deepcopy(self.BNet.v[node.name]))
+                    edge = graph.DirEdge(max(G.e.keys())+1, self.BNet.v[v.name], self.BNet.v[node.name])
                 else:
-                    edge = graph.DirEdge(0, copy.deepcopy(self.BNet.v[v.name]), copy.deepcopy(self.BNet.v[node.name]))
+                    edge = graph.DirEdge(0, self.BNet.v[v.name], self.BNet.v[node.name])
                 self.ChangeStruct('add', edge)
-                if self.BNet.HasNoCycles(node):
-                    cpt_matrix_init = copy.deepcopy(infengine_init.ExtractCPT(node.name))
-                    dim_init = G_initial.Dimension(node)
-                    score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init, infengine_init)
-                    self.SetNewDistribution(G_initial, node, cases, infengine_init)
-                    cpt_matrix = self.engine.ExtractCPT(node.name)
+                if self.BNet.HasNoCycles(self.BNet.v[node.name]):
+                    dim_init = engine_init.BNet.Dimension(node)
+                    score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[node.name], cases)
+                    self.SetNewDistribution(engine_init.BNet, node, cases)
                     dim = self.BNet.Dimension(node)
-                    score = self.ScoreBIC(N, dim, cpt_matrix, self.engine)
+                    score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[node.name], cases)
                     var_score = score - score_init
                     if var_score > prec_var_score:
+                        print 'added: ', v.name, node.name
                         prec_var_score = var_score
-                        G_best = copy.deepcopy(self.BNet)
-                        G_best.InitDistributions()
-                        for vert in G_initial.all_v:
-                            G_best.v[vert.name].distribution.setParameters(self.engine.ExtractCPT(vert.name))
-                        infengine_best = ConnexeInferenceJTree(G_best)
-                self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
-                self.BNet.InitDistributions()
-                for verti in G_initial.all_v:
-                    self.BNet.v[verti.name].distribution.setParameters(infengine_init.ExtractCPT(verti.name))
-                self.engine = ConnexeInferenceJTree(self.BNet)
+                        G_best = self.BNet.copy()
+                self.BNet = G_initial.copy()
         
-##            # Invert all possible edges
-##            G = copy.deepcopy(G_initial)
-##            edges = copy.deepcopy(G.v[v.name].out_e)
-##            while edges:
-##                edge = edges.pop(0)
-##                node = self.BNet.v[edge._v[1].name] #node is the child node
-##                self.ChangeStruct('del', edge)
-##                self.SetNewDistribution(G_initial, node, cases, infengine_init)
-##                G_invert = copy.deepcopy(self.BNet)
-##                G_invert.InitDistributions()
-##                for vert in G_initial.all_v:
-##                    G_invert.v[vert.name].distribution.setParameters(self.engine.ExtractCPT(vert.name))     
-##                infengine_invert = ConnexeInferenceJTree(G_invert)
-##                inverted_edge = graph.DirEdge(max(G.e.keys())+1, copy.deepcopy(self.BNet.v[node.name]),copy.deepcopy(self.BNet.v[v.name]))
-##                self.ChangeStruct('add', inverted_edge)
-##                if self.BNet.HasNoCycles(node):
-##                    cpt_matrix_init = copy.deepcopy(infengine_init.ExtractCPT(v.name))
-##                    dim_init = G_initial.Dimension(v)
-##                    score_init = engine_init.ScoreBIC(N, dim_init, cpt_matrix_init, infengine_init)
-##                    self.SetNewDistribution(G_invert, v, cases, infengine_init)
-##                    cpt_matrix = self.engine.ExtractCPT(v.name)
-##                    dim = self.BNet.Dimension(v)
-##                    score = self.ScoreBIC(N, dim, cpt_matrix, self.engine)
-##                    var_score = score - score_init
-##                    if var_score > prec_var_score:
-##                        prec_var_score = var_score
-##                        G_best = copy.deepcopy(self.BNet)
-##                        G_best.InitDistributions()
-##                        for vert in G_initial.all_v:
-##                            G_best.v[vert.name].distribution.setParameters(self.engine.ExtractCPT(vert.name))     
-##                        infengine_best = ConnexeInferenceJTree(G_best)
-##                self.BNet = copy.deepcopy(G_initial) #re-initialise the BNet such that it deletes only one edge at a time
-##                self.BNet.InitDistributions()
-##                for verti in G_initial.all_v:
-##                    self.BNet.v[verti.name].distribution.setParameters(infengine_init.ExtractCPT(verti.name))
-##                self.engine = ConnexeInferenceJTree(self.BNet)
+            # Invert all possible edges
+            G = copy.deepcopy(G_initial)
+            edges = copy.deepcopy(G.v[v.name].out_e)
+            while edges:
+                edge = edges.pop(0)
+                node = self.BNet.v[edge._v[1].name] #node is the child node
+                dim_init1 = G_initial.Dimension(node)
+                score_init1 = engine_init.ScoreBIC(N, dim_init1, G_initial, G_initial.v[node.name], cases)
+                self.ChangeStruct('del', edge)
+                self.SetNewDistribution(engine_init.BNet, node, cases)
+                dim1 = self.BNet.Dimension(node)
+                score1 = self.ScoreBIC(N, dim1, self.BNet, self.BNet.v[node.name], cases)
+                G_invert = self.BNet.copy() 
+                engine_invert = GreedyStructLearningEngine(G_invert)  
+                inverted_edge = graph.DirEdge(max(G.e.keys())+1, self.BNet.v[node.name],self.BNet.v[v.name])
+                self.ChangeStruct('add', inverted_edge)
+                if self.BNet.HasNoCycles(self.BNet.v[node.name]):
+                    dim_init = G_initial.Dimension(v)
+                    score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[v.name], cases)
+                    self.SetNewDistribution(engine_invert.BNet, v, cases)
+                    dim = self.BNet.Dimension(v)
+                    score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[v.name], cases)
+                    var_score = score1 - score_init1 + score - score_init
+                    if var_score > prec_var_score + 5: #+ 5 is to avoid recalculation due to round errors
+                        print 'inverted:', v.name, node.name
+                        prec_var_score = var_score
+                        G_best = self.BNet.copy()
+                self.BNet = G_initial.copy()
         
         #self.BNet is the optimal graph structure
-        self.BNet = copy.deepcopy(G_best)
+        if prec_var_score == 0:
+            self.converged = True
+        self.BNet = G_best.copy()
+        self.engine = ConnexeInferenceJTree(self.BNet)
+    
+    def SetNewDistribution(self, G_initial, node, cases):
+        '''Set the new distribution of the node node. The other distributions
+        are the same as G_initial (only node has a new parent, so the other 
+        distributions don't change)'''
         self.BNet.InitDistributions()
         for v in G_initial.all_v:
-            self.BNet.v[v.name].distribution.setParameters(infengine_best.ExtractCPT(v.name))
+            if v.name != node.name:
+                cpt = G_initial.v[v.name].distribution.Convert_to_CPT()
+                self.BNet.v[v.name].distribution.setParameters(cpt)
+            else:
+                if self.BNet.v[node.name].distribution.isAdjustable:
+                    self.BNet.v[node.name].distribution.initializeCounts()
+                    for case in cases :
+                        self.BNet.v[node.name].distribution.incrCounts(case)#To change if case has unknown data
+                    self.BNet.v[node.name].distribution.setCounts()
+                    self.BNet.v[node.name].distribution.normalize(dim=node.name)
     
-    def SetNewDistribution(self, G_initial, node, cases, engine):#Refaire tout le EMLearning mais pour un seul noeud?
-        self.BNet.InitDistributions()
-        for v in G_initial.all_v:
-            if v != node:
-                self.BNet.v[v.name].distribution.setParameters(engine.ExtractCPT(v.name))
-        if self.BNet.v[node.name].distribution.isAdjustable:
-            self.BNet.v[node.name].distribution.initializeCounts()
-            for case in cases :
-                self.BNet.v[node.name].distribution.incrCounts(case)#To change if case has unknown data
-            self.BNet.v[node.name].distribution.setCounts()
-            self.BNet.v[node.name].distribution.normalize(dim=node.name)
-    
-    def ScoreBIC (self, N, dim, cpt_matrix):
+    def ScoreBIC (self, N, dim, G, node, data):
         ''' This function computes the BIC score of one node.
         N is the size of the data from which we learn the structure
         dim is the dimension of the node, = (nbr of state - 1)*nbr of state of the parents
-        cpt_matrix is the cpt table of the node
+        data is the list of cases
         return the BIC score
         '''
-        score = self.ForBIC(N, cpt_matrix)
-        score = score - 0.5*dim*math.log10(N)
+        score = self.ForBIC(G, data, node)
+        score = score - 0.5*dim*math.log(N)
         return score
 
-    
-    def ForBIC (self, N, cpt_matrix):
+    def ForBIC(self, G, cases, node):
+        ''' Computes for each case the probability to have node and his parents
+        in the case state, take the log of that probability and add them.'''
+        list = node.distribution.names_list # List of the node and his parents
         score = 0
-        if not isinstance(cpt_matrix[0],float):
-            for i in range(len(cpt_matrix)):
-                score = score + self.ForBIC(N, cpt_matrix[i])
-            return score
-        else :
-            for i in range(len(cpt_matrix)):
-                if cpt_matrix[i] != 0:
-                    score = score + N*cpt_matrix[i]*math.log10(cpt_matrix[i])
-                else:
-                    score = score - 100000000
-            return score
+        for case in cases : 
+            cpt = node.distribution.Convert_to_CPT()
+            for i in list:
+                cpt = cpt[case[i]] #P(X=xi|Pa(X)=xj)
+            if cpt == 0: # To avoid log(0)
+                cpt = math.exp(-700)
+            score = score + math.log(cpt)
+        return score
 
     def ChangeStruct(self, change, edge):
         """Changes the edge (add, remove or reverse)"""
@@ -367,160 +323,100 @@ class GreedyStructLearningEngine:
 
 
 class GreedyStructLearningTestCase(unittest.TestCase):
-##    #TEST SCORE
-##    def setUp(self):
-##        # create a discrete network
-##        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-##        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
-##        for ep in [(c,r), (c,s), (r,w), (s,w)]:
-##            G.add_e(graph.DirEdge(len(G.e), *ep))
-##        G.InitDistributions()
-##        c.setDistributionParameters([0.5, 0.5])
-##        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-##        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-##        w.distribution[:,0,0]=[0.99, 0.01]
-##        w.distribution[:,0,1]=[0.1, 0.9]
-##        w.distribution[:,1,0]=[0.1, 0.9]
-##        w.distribution[:,1,1]=[0.0, 1.0]
-##        
-##        self.c = c
-##        self.s = s
-##        self.r = r
-##        self.w = w
-##        self.BNet = G  
-##    
-##    def testStruct(self):
-##        N = 1000
-##        # sample the network N times
-##        cases = self.BNet.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
-##        G = copy.deepcopy(self.BNet)
-##        G.InitDistributions()
-##        for v in self.BNet.all_v:
-##            G.v[v.name].distribution.setParameters(self.BNet.v[v.name].distribution.cpt)
-##        struct_engine = GreedyStructLearningEngine(G)
-##        dim = G.Dimension(G.v['w'])
-##        cpt_matrix = G.v['w'].distribution.cpt
-##        score_calc = struct_engine.ScoreBIC(N,dim,cpt_matrix)
-##        s1 = N*G.v['w'].distribution.cpt[0][0][0]*math.log10(G.v['w'].distribution.cpt[0][0][0])
-##        s2 = N*G.v['w'].distribution.cpt[0][0][1]*math.log10(G.v['w'].distribution.cpt[0][0][1])
-##        s3 = N*G.v['w'].distribution.cpt[0][1][0]*math.log10(G.v['w'].distribution.cpt[0][1][0])
-##        #s4 = N*G.v['w'].distribution.cpt[0][1][1]*math.log10(G.v['w'].distribution.cpt[0][1][1])
-##        s5 = N*G.v['w'].distribution.cpt[1][0][0]*math.log10(G.v['w'].distribution.cpt[1][0][0])
-##        s6 = N*G.v['w'].distribution.cpt[1][0][1]*math.log10(G.v['w'].distribution.cpt[1][0][1])
-##        s7 = N*G.v['w'].distribution.cpt[1][1][0]*math.log10(G.v['w'].distribution.cpt[1][1][0])
-##        s8 = N*G.v['w'].distribution.cpt[1][1][1]*math.log10(G.v['w'].distribution.cpt[1][1][1])
-##        s9 = math.log10(N)*0.5*4
-##        score = s1+s2+s3+s5+s6+s7+s8-s9
-##        print 'score_calc',score_calc
-##        print 'score',score
-    
-    # TEST ASIA
+    #TEST SCORE
     def setUp(self):
-        # create the network
-        G = bayesnet.BNet( 'Asia Bayesian Network' )
-        visit, smoking, tuberculosis, bronchitis, lung, ou, Xray, dyspnoea = [G.add_v( bayesnet.BVertex( nm, True, 2 ) ) for nm in 'visit smoking tuberculosis bronchitis lung ou Xray dyspnoea'.split()]
-        for ep in [(visit,tuberculosis), (smoking,lung), (lung, ou), (tuberculosis, ou), (ou, Xray), (smoking, bronchitis), (bronchitis, dyspnoea), (ou, dyspnoea)]:
-            G.add_e( graph.DirEdge( len( G.e ), *ep ) )
-
+        # create a discrete network
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
         G.InitDistributions()
-        visit.setDistributionParameters([0.99, 0.01])
-        tuberculosis.distribution[:,0]=[0.99, 0.01]
-        tuberculosis.distribution[:,1]=[0.95, 0.05]
-        smoking.setDistributionParameters([0.5, 0.5])
-        lung.distribution[:,0]=[0.99, 0.01]
-        lung.distribution[:,1]=[0.9, 0.1]
-        ou.distribution[:,0,0]=[1, 0]
-        ou.distribution[:,0,1]=[0, 1]
-        ou.distribution[:,1,0]=[0, 1]
-        ou.distribution[:,1,1]=[0, 1]
-        Xray.distribution[:,0]=[0.95, 0.05]
-        Xray.distribution[:,1]=[0.02, 0.98]
-        bronchitis.distribution[:,0]=[0.7, 0.3]
-        bronchitis.distribution[:,1]=[0.4, 0.6]
-        dyspnoea.distribution[{'bronchitis':0,'ou':0}]=[0.9, 0.1]
-        dyspnoea.distribution[{'bronchitis':1,'ou':0}]=[0.2, 0.8]
-        dyspnoea.distribution[{'bronchitis':0,'ou':1}]=[0.3, 0.7]
-        dyspnoea.distribution[{'bronchitis':1,'ou':1}]=[0.1, 0.9]
-                
-        self.v = visit
-        self.t = tuberculosis
-        self.s = smoking
-        self.l = lung
-        self.o = ou
-        self.x = Xray
-        self.b = bronchitis
-        self.d = dyspnoea
-        self.BNet = G
+        c.setDistributionParameters([0.5, 0.5])
+        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+        w.distribution[:,0,0]=[0.99, 0.01]
+        w.distribution[:,0,1]=[0.1, 0.9]
+        w.distribution[:,1,0]=[0.1, 0.9]
+        w.distribution[:,1,1]=[0.0, 1.0]
+        self.c = c
+        self.s = s
+        self.r = r
+        self.w = w
+        self.BNet = G  
     
     def testStruct(self):
-        N = 1000
+        N = 10000
         # sample the network N times
         cases = self.BNet.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
-        
-        # create two new bayesian network with the same parameters as self.BNet
-        G1 = bayesnet.BNet( 'Asia Bayesian Network2' )
-        visit, smoking, tuberculosis, bronchitis, lung, ou, Xray, dyspnoea = [G1.add_v( bayesnet.BVertex( nm, True, 2 ) ) for nm in 'visit smoking tuberculosis bronchitis lung ou Xray dyspnoea'.split()]
-        G1.InitDistributions()
-        visit.setDistributionParameters([0.99, 0.01])
-        tuberculosis.setDistributionParameters([0.99, 0.01])
-        smoking.setDistributionParameters([0.5, 0.5])
-        lung.setDistributionParameters([0.95, 0.05])
-        ou.setDistributionParameters([0.94, 0.06])
-        Xray.setDistributionParameters([0.89, 0.11])
-        bronchitis.setDistributionParameters([0.55, 0.45])
-        dyspnoea.setDistributionParameters([0.56, 0.44])
-        
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network2')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+        G.InitDistributions()
+        c.setDistributionParameters([0.5, 0.5])
+        s.setDistributionParameters([0.7, 0.3])
+        r.setDistributionParameters([0.5, 0.5])
+        w.setDistributionParameters([0.35, 0.65])
         # Test StructLearning
-        struct_engine1 = GreedyStructLearningEngine(G1)
-        struct_engine1.StructLearning(cases)
-        print struct_engine1.BNet
-        
-##    #TEST DE DISTRIBUTION.CPT    
+        struct_engine = GreedyStructLearningEngine(G)
+        struct_engine.StructLearning(cases)
+        print 'learned structure: ', struct_engine.BNet
+
+##    # TEST ASIA
 ##    def setUp(self):
-##        # create a discrete network
-##        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-##        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
-##        for ep in [(c,r), (c,s), (r,w), (s,w)]:
-##            G.add_e(graph.DirEdge(len(G.e), *ep))
+##        # create the network
+##        G = bayesnet.BNet( 'Asia Bayesian Network' )
+##        visit, smoking, tuberculosis, bronchitis, lung, ou, Xray, dyspnoea = [G.add_v( bayesnet.BVertex( nm, True, 2 ) ) for nm in 'visit smoking tuberculosis bronchitis lung ou Xray dyspnoea'.split()]
+##        for ep in [(visit,tuberculosis), (tuberculosis, ou), (smoking,lung), (lung, ou), (ou, Xray), (smoking, bronchitis), (bronchitis, dyspnoea), (ou, dyspnoea)]:
+##            G.add_e( graph.DirEdge( len( G.e ), *ep ) )
 ##        G.InitDistributions()
-##        c.setDistributionParameters([0.5, 0.5])
-##        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-##        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-##        w.distribution[:,0,0]=[0.99, 0.01]
-##        w.distribution[:,0,1]=[0.1, 0.9]
-##        w.distribution[:,1,0]=[0.1, 0.9]
-##        w.distribution[:,1,1]=[0.0, 1.0]
-##        
-##        self.c = c
-##        self.s = s
-##        self.r = r
-##        self.w = w
+##        visit.setDistributionParameters([0.99, 0.01])
+##        tuberculosis.distribution[:,0]=[0.99, 0.01]
+##        tuberculosis.distribution[:,1]=[0.95, 0.05]
+##        smoking.setDistributionParameters([0.5, 0.5])
+##        lung.distribution[:,0]=[0.99, 0.01]
+##        lung.distribution[:,1]=[0.9, 0.1]
+##        ou.distribution[:,0,0]=[1, 0]
+##        ou.distribution[:,0,1]=[0, 1]
+##        ou.distribution[:,1,0]=[0, 1]
+##        ou.distribution[:,1,1]=[0, 1]
+##        Xray.distribution[:,0]=[0.95, 0.05]
+##        Xray.distribution[:,1]=[0.02, 0.98]
+##        bronchitis.distribution[:,0]=[0.7, 0.3]
+##        bronchitis.distribution[:,1]=[0.4, 0.6]
+##        dyspnoea.distribution[{'bronchitis':0,'ou':0}]=[0.9, 0.1]
+##        dyspnoea.distribution[{'bronchitis':1,'ou':0}]=[0.2, 0.8]
+##        dyspnoea.distribution[{'bronchitis':0,'ou':1}]=[0.3, 0.7]
+##        dyspnoea.distribution[{'bronchitis':1,'ou':1}]=[0.1, 0.9]
+##        self.visit = visit
+##        self.tuberculosis = tuberculosis
+##        self.smoking = smoking
+##        self.lung = lung
+##        self.ou = ou
+##        self.Xray = Xray
+##        self.bronchitis = bronchitis
+##        self.dyspnoea = dyspnoea
 ##        self.BNet = G
-##        
+##    
 ##    def testStruct(self):
-##        cases = self.BNet.Sample(2000)
-##        G = copy.deepcopy(self.BNet)
-##        G.InitDistributions()
-##        for v in self.BNet.all_v:
-##            G.v[v.name].distribution.setParameters(self.BNet.v[v.name].distribution.cpt)
-##        G1 = copy.deepcopy(self.BNet)
-##        G1.add_e(graph.DirEdge(len(G1.e), G1.v['c'], G1.v['w']))
+##        N = 10000
+##        # sample the network N times
+##        cases = self.BNet.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
+##        # create two new bayesian network with the same parameters as self.BNet
+##        G1 = bayesnet.BNet( 'Asia Bayesian Network2' )
+##        visit, smoking, tuberculosis, bronchitis, lung, ou, Xray, dyspnoea = [G1.add_v( bayesnet.BVertex( nm, True, 2 ) ) for nm in 'visit smoking tuberculosis bronchitis lung ou Xray dyspnoea'.split()]
 ##        G1.InitDistributions()
-##        G1.v['c'].distribution.setParameters(self.BNet.v['c'].distribution.cpt)
-##        G1.v['s'].distribution.setParameters(self.BNet.v['s'].distribution.cpt)
-##        G1.v['r'].distribution.setParameters(self.BNet.v['r'].distribution.cpt)
-##        if G1.v['w'].distribution.isAdjustable:
-##            G1.v['w'].distribution.initializeCounts()
-##        for case in cases :
-##            if G1.v['w'].distribution.isAdjustable:
-##                G1.v['w'].distribution.incrCounts(case)
-##        if G1.v['w'].distribution.isAdjustable:
-##            G1.v['w'].distribution.setCounts()
-##            G1.v['w'].distribution.normalize(dim='w')   
-##        for v in self.BNet.all_v: 
-##            print v.name, ' self: ', v.distribution.cpt,'\n'
-##            print G.v[v.name].name, ' G: ', G.v[v.name].distribution.cpt,'\n'
-##            print G1.v[v.name].name, ' G1: ', G1.v[v.name].distribution.cpt,'\n'
+##        visit.setDistributionParameters([0.99, 0.01])
+##        tuberculosis.setDistributionParameters([0.99, 0.01])
+##        smoking.setDistributionParameters([0.5, 0.5])
+##        lung.setDistributionParameters([0.95, 0.05])
+##        ou.setDistributionParameters([0.94, 0.06])
+##        Xray.setDistributionParameters([0.89, 0.11])
+##        bronchitis.setDistributionParameters([0.55, 0.45])
+##        dyspnoea.setDistributionParameters([0.56, 0.44])
+##        # Test StructLearning
+##        struct_engine1 = GreedyStructLearningEngine(G1)
+##        struct_engine1.StructLearning(cases)
+##        print struct_engine1.BNet
+    
 
 class EMLearningTestCase(unittest.TestCase):
     def setUp(self):
@@ -547,7 +443,6 @@ class EMLearningTestCase(unittest.TestCase):
     def testEM(self):
         # sample the network 2000 times
         cases = self.BNet.Sample(2000)
-        
         # delete some observations
         for i in range(500):
             case = cases[3*i]

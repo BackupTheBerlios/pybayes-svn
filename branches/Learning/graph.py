@@ -391,17 +391,17 @@ class Graph(delegate.Delegate):
                     return visited
 
             #@staticmethod
-##            def topological_sort(self):
-##                '''Return a topological sort list of vertices.'''
-##                # unprocessed is a list of all nodes that have no parents
-##                unprocessed = [v for v in self.v.values() if not v.in_v]
-##                
-##                return topological_sort_by_node(unprocessed)
+            def topological_sort(self):
+                '''Return a topological sort list of vertices.'''
+                # unprocessed is a list of all nodes that have no parents
+                unprocessed = [v for v in self.v.values() if not v.in_v]
+                
+                return Graph.topological_sort_by_node(unprocessed)
 
             @staticmethod
-            def topological_sort(start_v):
+            def topological_sort_by_node(start_v):
                 '''Return a topological sort list of vertices.'''
-                unprocessed = [start_v]
+                unprocessed = start_v
                 visited = []
                 while unprocessed:
                     v = unprocessed.pop(0)
@@ -421,15 +421,33 @@ class Graph(delegate.Delegate):
                 while unprocessed:
                             i += 1
                             v = unprocessed.pop(0)
-                            if start_v in visited:
+                            if i ==1:
+                                unprocessed.extend(v.out_v)
+                            elif start_v in visited:
                                 result = False
                                 break
-                            elif i != 1 and v not in visited:
+                            elif v not in visited:
                                 visited.append(v)
                                 unprocessed.extend(v.out_v)
-                            elif i == 1:
-                                unprocessed.extend(v.out_v)
                 return result
+
+##            def HasNoCycles(self, start_v):
+##                ''' Return True if the node start_v is not in a cycle
+##                '''
+##                unprocessed = [start_v]
+##                visited = []
+##                result = True
+##                i = 0
+##                while unprocessed:
+##                            i += 1
+##                            v = unprocessed.pop(0)
+##                            if v not in visited:
+##                                visited.append(v)
+##                                unprocessed.extend(v.out_v)
+##                            else:
+##                                result = False
+##                                break
+##                return result
 
 #================================================================================
 
