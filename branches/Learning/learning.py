@@ -19,11 +19,11 @@ class EMLearningEngine:
     Learns the parameters of a known bayesian structure from incomplete data.
     """   
     BNet = None # The underlying bayesian network
-    engine = None
+    #engine = None
     
     def __init__(self, BNet):
         self.BNet = BNet
-        self.engine = JoinTree(BNet)
+        #self.engine = JoinTree(BNet)
         #self.engine = MCMCEngine(BNet)
     
     def EMLearning(self, cases, max_iter):
@@ -40,8 +40,8 @@ class EMLearningEngine:
             old = copy.deepcopy(new)
             self.LearnEMParams(cases)
             # reinitialize the JunctionTree to take effect of new parameters learned
-            self.engine.Initialization()
-            self.engine.GlobalPropagation()
+            #self.engine.Initialization()
+            #self.engine.GlobalPropagation()
             new = copy.deepcopy(self.BNet)
             print 'EM iteration: ', iter
     
@@ -83,7 +83,7 @@ class EMLearningEngine:
                 v.distribution.setCounts()
                 v.distribution.normalize(dim=v.name)
     
-    def DetermineLikelihood(self, known, states_list):
+    def DetermineLikelihood2(self, known, states_list):
         """ 
         Give a list with the likelihood to have the states in states_list
         I think this function could be optimized
@@ -106,10 +106,32 @@ class EMLearningEngine:
                 del copy_states[key]
                 if len(copy_states) != 0:
                     self.engine.SetObs(copy_states)
-                like = like*self.engine.CPT(key)[temp_dic[key]]
+                #like = like*self.BNet.v[key].distribution.Convert_to_CPT()[temp_dic[key]]
+                like = like*self.engine.ExtractCPT(key)[temp_dic[key]]
                 copy_states.update(temp_dic)               
                 del temp_dic[key]
                 self.engine.Initialization()
+            likelihood.append(like)
+        return likelihood
+    
+    def DetermineLikelihood(self, known, states_list):
+        """ 
+        Give a list with the likelihood to have the states in states_list.
+        6 to 10 time faster than the DetermineLikelihood function above, but 
+        has to be tested more...
+        """        
+        likelihood = []
+        for states in states_list:
+            # states = {'c':0,'r':1} for example (c and r were unknown in the beginning)
+            like = 1
+            parents_state = copy.copy(known)
+            parents_state.update(copy.copy(states))
+            for key in states.iterkeys():
+                parents = self.BNet.v[key].distribution.names_list # List of the node 'key' and his parents
+                cpt = self.BNet.v[key].distribution.Convert_to_CPT()
+                for i in parents:
+                    cpt = cpt[parents_state[i]] #P(X=xi|Pa(X)=xj)
+                like = like * cpt               
             likelihood.append(like)
         return likelihood
 
@@ -145,14 +167,15 @@ class EMLearningEngine:
 
 class GreedyStructLearningEngine:
     """ Greedy Structural learning algorithm
-    Learns the structure of a bayesian network from the known parameters.
+    Learns the structure of a bayesian network from known parameters and an 
+    initial structure.
     """   
     BNet = None # The underlying bayesian network
     engine = None
     
     def __init__(self, BNet):
         self.BNet = BNet.copy()
-        self.engine = ConnexeInferenceJTree(self.BNet)
+        #self.engine = ConnexeInferenceJTree(self.BNet)
         self.converged = False
 
     def StructLearning(self, cases):
@@ -200,7 +223,7 @@ class GreedyStructLearningEngine:
                 score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[node.name], cases)
                 var_score = score - score_init
                 if var_score > prec_var_score:
-                    print 'deleted:', v.name, node.name
+                    print 'deleted:', v.name, node.name, var_score
                     prec_var_score = var_score
                     G_best = self.BNet.copy()
                 self.BNet = G_initial.copy()
@@ -226,7 +249,7 @@ class GreedyStructLearningEngine:
                     score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[node.name], cases)
                     var_score = score - score_init
                     if var_score > prec_var_score:
-                        print 'added: ', v.name, node.name
+                        print 'added: ', v.name, node.name, var_score
                         prec_var_score = var_score
                         G_best = self.BNet.copy()
                 self.BNet = G_initial.copy()
@@ -255,7 +278,7 @@ class GreedyStructLearningEngine:
                     score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[v.name], cases)
                     var_score = score1 - score_init1 + score - score_init
                     if var_score > prec_var_score + 5: #+ 5 is to avoid recalculation due to round errors
-                        print 'inverted:', v.name, node.name
+                        print 'inverted:', v.name, node.name, var_score
                         prec_var_score = var_score
                         G_best = self.BNet.copy()
                 self.BNet = G_initial.copy()
@@ -264,7 +287,7 @@ class GreedyStructLearningEngine:
         if prec_var_score == 0:
             self.converged = True
         self.BNet = G_best.copy()
-        self.engine = ConnexeInferenceJTree(self.BNet)
+        #self.engine = ConnexeInferenceJTree(self.BNet)
     
     def SetNewDistribution(self, G_initial, node, cases):
         '''Set the new distribution of the node node. The other distributions
@@ -319,11 +342,67 @@ class GreedyStructLearningEngine:
         else:
             assert(False), "The asked change of structure is not possible. Only 'del' for delete, 'add' for add, and 'inv' for invert"
 
+class SEMLearningEngine(GreedyStructLearningEngine, EMLearningEngine):  
+    """ Structural EM learning algorithm
+    Learns the structure and the parameters of a bayesian network from 
+    unknown parameters and an initial structure.
+    """ 
+    def __init__(self, BNet):
+        self.BNet = BNet
+        self.engine = ConnexeInferenceJTree(self.BNet)
     
+    def SEMLearning(self, cases, max_iter):
+        #First we estimate the distributions of the initial structure
+        self.BNet.InitDistributions()
+        self.EMLearning(cases, 10)
 
+class SEMLearningTestCase(unittest.TestCase):
+    def setUp(self):
+        # create a discrete network
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+            G.add_e(graph.DirEdge(len(G.e), *ep))
+        G.InitDistributions()
+        c.setDistributionParameters([0.5, 0.5])
+        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+        w.distribution[:,0,0]=[0.99, 0.01]
+        w.distribution[:,0,1]=[0.1, 0.9]
+        w.distribution[:,1,0]=[0.1, 0.9]
+        w.distribution[:,1,1]=[0.0, 1.0]
+        self.c = c
+        self.s = s
+        self.r = r
+        self.w = w
+        self.BNet = G 
+
+    def testSEM(self):
+        # sample the network 2000 times
+        cases = self.BNet.Sample(2000)
+        # delete some observations
+        for i in range(500):
+            case = cases[3*i]
+            rand = random.sample(['c','s','r','w'],1)[0]
+            case[rand] = '?' 
+        for i in range(50):
+            case = cases[3*i]
+            rand = random.sample(['c','s','r','w'],1)[0]
+            case[rand] = '?'
+        # create a new BNet with same nodes as self.BNet but all parameters
+        # set to 1s
+        G = copy.deepcopy(self.BNet)
+        G.InitDistributions()
+        engine = SEMLearningEngine(G)
+        engine.SEMLearning(cases, 10)
+        tol = 0.08
+        assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
+               for v in G.all_v])), \
+                " Learning does not converge to true values "
+        print 'ok!!!!!!!!!!!!'
 
 class GreedyStructLearningTestCase(unittest.TestCase):
-    #TEST SCORE
+    #TEST Waterspringler
     def setUp(self):
         # create a discrete network
         G = bayesnet.BNet('Water Sprinkler Bayesian Network')
@@ -345,7 +424,7 @@ class GreedyStructLearningTestCase(unittest.TestCase):
         self.BNet = G  
     
     def testStruct(self):
-        N = 10000
+        N = 1000
         # sample the network N times
         cases = self.BNet.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
         G = bayesnet.BNet('Water Sprinkler Bayesian Network2')
@@ -359,6 +438,7 @@ class GreedyStructLearningTestCase(unittest.TestCase):
         struct_engine = GreedyStructLearningEngine(G)
         struct_engine.StructLearning(cases)
         print 'learned structure: ', struct_engine.BNet
+        print 'total bic score: ', struct_engine.GlobalBICScore(N, cases)
 
 ##    # TEST ASIA
 ##    def setUp(self):
@@ -462,16 +542,20 @@ class EMLearningTestCase(unittest.TestCase):
         engine = EMLearningEngine(G)
         engine.EMLearning(cases, 10)
         
-        tol = 0.05
+        tol = 0.08
         assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
-               for v in G.all_v])), \
+               for v in engine.BNet.all_v])), \
                 " Learning does not converge to true values "
         print 'ok!!!!!!!!!!!!'
 
 if __name__ == '__main__':
-    suite = unittest.makeSuite(GreedyStructLearningTestCase, 'test')
+    suite = unittest.makeSuite(SEMLearningTestCase, 'test')
     runner = unittest.TextTestRunner()
-    runner.run(suite)    
+    runner.run(suite) 
+
+##    suite = unittest.makeSuite(GreedyStructLearningTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)    
     
 ##    suite = unittest.makeSuite(EMLearningTestCase, 'test')
 ##    runner = unittest.TextTestRunner()
