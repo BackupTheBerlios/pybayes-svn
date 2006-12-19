@@ -127,10 +127,7 @@ class EMLearningEngine:
             parents_state = copy.copy(known)
             parents_state.update(copy.copy(states))
             for key in states.iterkeys():
-                parents = self.BNet.v[key].distribution.names_list # List of the node 'key' and his parents
-                cpt = self.BNet.v[key].distribution.Convert_to_CPT()
-                for i in parents:
-                    cpt = cpt[parents_state[i]] #P(X=xi|Pa(X)=xj)
+                cpt = self.BNet.v[key].distribution[parents_state]
                 like = like * cpt               
             likelihood.append(like)
         return likelihood
