@@ -162,7 +162,7 @@ class EMLearningEngine:
             return not  na.alltrue([na.allclose(v.distribution, new.v[v.name].distribution, atol=precision) for v in old.v.values()])
     
 
-class GreedyStructLearningEngine:
+class GreedyStructLearningEngine(EMLearningEngine):
     """ Greedy Structural learning algorithm
     Learns the structure of a bayesian network from known parameters and an 
     initial structure.
@@ -289,7 +289,7 @@ class GreedyStructLearningEngine:
     def SetNewDistribution(self, G_initial, node, cases):
         '''Set the new distribution of the node node. The other distributions
         are the same as G_initial (only node has a new parent, so the other 
-        distributions don't change)'''
+        distributions don't change). Works also with incomplete data'''
         self.BNet.InitDistributions()
         for v in G_initial.all_v:
             if v.name != node.name:
@@ -299,7 +299,22 @@ class GreedyStructLearningEngine:
                 if self.BNet.v[node.name].distribution.isAdjustable:
                     self.BNet.v[node.name].distribution.initializeCounts()
                     for case in cases :
-                        self.BNet.v[node.name].distribution.incrCounts(case)#To change if case has unknown data
+                        known={} # will contain all the known data of case
+                        unknown=[] # will contain all the unknown keys of case
+                        for key in case.iterkeys():
+                            if case[key] != '?': # It's the only part of code you have to change if you want to have another 'unknown sign' instead of '?'
+                                known[key] = case[key]
+                            else:
+                                unknown.append(key)
+                        if len(case) == len(known): # Then all the data is known -> proceed as LearnMLParams (inference.py)
+                            self.BNet.v[node.name].distribution.incrCounts(case)
+                        else:
+                            states_list = self.Combinations(unknown) # Give a dictionary list of all the possible states of the unknown parameters
+                            likelihood_list = self.DetermineLikelihood(known, states_list) # Give a list with the likelihood to have the states in states_list                
+                            for j, index_unknown in enumerate(states_list):
+                                index = copy.copy(known)
+                                index.update(index_unknown)
+                                self.BNet.v[node.name].distribution.addToCounts(index, likelihood_list[j])
                     self.BNet.v[node.name].distribution.setCounts()
                     self.BNet.v[node.name].distribution.normalize(dim=node.name)
     
@@ -309,6 +324,7 @@ class GreedyStructLearningEngine:
         dim is the dimension of the node, = (nbr of state - 1)*nbr of state of the parents
         data is the list of cases
         return the BIC score
+        Works also with incomplete data!
         '''
         score = self.ForBIC(G, data, node)
         score = score - 0.5*dim*math.log(N)
@@ -317,12 +333,25 @@ class GreedyStructLearningEngine:
     def ForBIC(self, G, cases, node):
         ''' Computes for each case the probability to have node and his parents
         in the case state, take the log of that probability and add them.'''
-        list = node.distribution.names_list # List of the node and his parents
         score = 0
-        for case in cases : 
-            cpt = node.distribution.Convert_to_CPT()
-            for i in list:
-                cpt = cpt[case[i]] #P(X=xi|Pa(X)=xj)
+        for case in cases :
+            cpt = 0 
+            known={} # will contain all the known data of case
+            unknown=[] # will contain all the unknown data of case
+            for key in case.iterkeys():
+                if case[key] != '?': # It's the only part of code you have to change if you want to have another 'unknown sign' instead of '?'
+                    known[key] = case[key]
+                else:
+                    unknown.append(key)
+            if len(case) == len(known): # Then all the data is known
+                cpt = node.distribution[case]
+            else:
+                states_list = self.Combinations(unknown) # Give a dictionary list of all the possible states of the unknown parameters
+                likelihood_list = self.DetermineLikelihood(known, states_list) # Give a list with the likelihood to have the states in states_list                
+                for j, index_unknown in enumerate(states_list):
+                    index = copy.copy(known)
+                    index.update(index_unknown)
+                    cpt = cpt + likelihood_list[j]*node.distribution[index]
             if cpt == 0: # To avoid log(0)
                 cpt = math.exp(-700)
             score = score + math.log(cpt)
@@ -347,11 +376,23 @@ class SEMLearningEngine(GreedyStructLearningEngine, EMLearningEngine):
     def __init__(self, BNet):
         self.BNet = BNet
         self.engine = ConnexeInferenceJTree(self.BNet)
+        self.converged = False
     
-    def SEMLearning(self, cases, max_iter):
-        #First we estimate the distributions of the initial structure
-        self.BNet.InitDistributions()
-        self.EMLearning(cases, 10)
+    def SEMLearning(self, cases, max_iter = 30):
+        """Structural EM for optimal structure and parameters if some of the 
+        data is unknown (put '?' for unknown data).
+        """
+        N = len(cases)
+        iter = 0
+        while (not self.converged) and iter < max_iter:
+            #First we estimate the distributions of the initial structure
+            self.BNet.InitDistributions()
+            self.EMLearning(cases, 10)
+            #Then we find a better structure in the neighborhood of self.BNet
+            self.LearnStruct(cases, N)
+            iter +=1
+            print 'Structure Expectation-Maximisation iteration:', iter
+  
 
 class SEMLearningTestCase(unittest.TestCase):
     def setUp(self):
@@ -375,9 +416,9 @@ class SEMLearningTestCase(unittest.TestCase):
         self.BNet = G 
 
     def testSEM(self):
-        # sample the network 2000 times
-        cases = self.BNet.Sample(2000)
-        # delete some observations
+        N = 2000
+        # sample the network N times, delete some data
+        cases = self.BNet.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]       
         for i in range(500):
             case = cases[3*i]
             rand = random.sample(['c','s','r','w'],1)[0]
@@ -385,18 +426,15 @@ class SEMLearningTestCase(unittest.TestCase):
         for i in range(50):
             case = cases[3*i]
             rand = random.sample(['c','s','r','w'],1)[0]
-            case[rand] = '?'
-        # create a new BNet with same nodes as self.BNet but all parameters
-        # set to 1s
-        G = copy.deepcopy(self.BNet)
+            case[rand] = '?' 
+        G = bayesnet.BNet('Water Sprinkler Bayesian Network2')
+        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
         G.InitDistributions()
-        engine = SEMLearningEngine(G)
-        engine.SEMLearning(cases, 10)
-        tol = 0.08
-        assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
-               for v in G.all_v])), \
-                " Learning does not converge to true values "
-        print 'ok!!!!!!!!!!!!'
+        # Test SEMLearning
+        struct_engine = SEMLearningEngine(G)
+        struct_engine.SEMLearning(cases)
+        print 'learned structure: ', struct_engine.BNet
+        print 'total bic score: ', struct_engine.GlobalBICScore(N, cases)
 
 class GreedyStructLearningTestCase(unittest.TestCase):
     #TEST Waterspringler
@@ -421,9 +459,17 @@ class GreedyStructLearningTestCase(unittest.TestCase):
         self.BNet = G  
     
     def testStruct(self):
-        N = 1000
-        # sample the network N times
-        cases = self.BNet.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
+        N = 2000
+        # sample the network N times, delete some data
+        cases = self.BNet.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]       
+        for i in range(500):
+            case = cases[3*i]
+            rand = random.sample(['c','s','r','w'],1)[0]
+            case[rand] = '?' 
+        for i in range(50):
+            case = cases[3*i]
+            rand = random.sample(['c','s','r','w'],1)[0]
+            case[rand] = '?' 
         G = bayesnet.BNet('Water Sprinkler Bayesian Network2')
         c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
         G.InitDistributions()
@@ -436,6 +482,7 @@ class GreedyStructLearningTestCase(unittest.TestCase):
         struct_engine.StructLearning(cases)
         print 'learned structure: ', struct_engine.BNet
         print 'total bic score: ', struct_engine.GlobalBICScore(N, cases)
+
 
 ##    # TEST ASIA
 ##    def setUp(self):
