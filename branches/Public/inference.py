@@ -16,9 +16,9 @@ from potentials import DiscretePotential
 from table import Table
 
 # show INFO messages
-logging.basicConfig(level= logging.INFO)
+#logging.basicConfig(level= logging.INFO)
 #uncomment the following to remove all messages
-#logging.basicConfig(level = logging.NOTSET)
+logging.basicConfig(level = logging.NOTSET)
 
 class InferenceEngine:
     """ General Inference Engine class
@@ -70,6 +70,7 @@ class InferenceEngine:
                 v.distribution.setCounts()
                 v.distribution.normalize(dim=v.name)
     
+
         
 class Cluster(graph.Vertex):
     """
@@ -629,7 +630,33 @@ class JoinTree(InferenceEngine, graph.Graph):
             print c.cpt.shape
             print na.sum(c.cpt.flat)
             
-
+    def ExtractCPT (self, v):
+        return self.Marginalise(v).cpt
+        
+class ConnexeInferenceJTree(JoinTree):
+    """ Accepts a non connexe BNet as entry.
+        Creates an JoinTree Inference engine for each component of the BNet
+        and acts transparently to the user
+    """
+    def __init__(self, BNet):
+        self.BNet = BNet
+        self.BNets = BNet.split_into_components()
+        
+    def Marginalise(self, vname):
+        """ trouver dans quel reseau appartient le noeud et faire l'inference 
+        sur celui-ci"""
+        for G in self.BNets:
+            for v in G.all_v:
+                if v.name == vname:
+                    engine = JoinTree(G)
+                    return engine.Marginalise(vname)
+    
+##    def SetObs(self, ev = dict()):
+##        for G in self.BNets:
+##            for v in G.all_v:
+##                if v.name == ev.keys()[0]:
+##                    engine = JoinTree(G)
+##                    engine.SetObs(ev)
 
 class MCMCEngine(InferenceEngine):
         """ MCMC in the way described in the presentation by Rina Rechter """
@@ -837,13 +864,13 @@ class JTreeTestCase(InferenceEngineTestCase):
     
     
 if __name__=='__main__':
-    suite = unittest.makeSuite(MCMCTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-
-    suite = unittest.makeSuite(JTreeTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+##    suite = unittest.makeSuite(MCMCTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
+##
+##    suite = unittest.makeSuite(JTreeTestCase, 'test')
+##    runner = unittest.TextTestRunner()
+##    runner.run(suite)
 
     suite = unittest.makeSuite(LearningTestCase, 'test')
     runner = unittest.TextTestRunner()

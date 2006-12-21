@@ -329,6 +329,33 @@ class Graph(delegate.Delegate):
                     self.e[e.name] = e
                     return e
 
+            def del_e(self, e):
+                    '''delete an edge (e is the name of the edge)'''
+                    assert(self.e.has_key(e)), "The edge is not in the BNet"
+                    del self.e[e]
+
+            def connex_components(self):
+                """ returns a list of list of nodes that are connected between
+                 them"""
+                unchecked = set(self.v.values())
+                groups = []
+                while len(unchecked):
+                            vcon = self.member_family(unchecked.pop())
+                            unchecked -= set(vcon)
+                            groups.append(set(vcon))
+                return groups
+                    
+            def member_family(self, node):
+                unprocessed = [node]
+                visited = []
+                while unprocessed:
+                            v = unprocessed.pop()
+                            if v not in visited:
+                                        visited.append(v)
+                                        unprocessed.extend(v.out_v)
+                                        unprocessed.extend(v.in_v)
+                return visited                
+
             def connected_components(self):
                     '''Return a list of lists.  Each holds transitively-connected vertices.'''
                     unchecked = set(self.v.values())
@@ -368,6 +395,13 @@ class Graph(delegate.Delegate):
                 '''Return a topological sort list of vertices.'''
                 # unprocessed is a list of all nodes that have no parents
                 unprocessed = [v for v in self.v.values() if not v.in_v]
+                
+                return Graph.topological_sort_by_node(unprocessed)
+
+            @staticmethod
+            def topological_sort_by_node(start_v):
+                '''Return a topological sort list of vertices.'''
+                unprocessed = start_v
                 visited = []
                 while unprocessed:
                     v = unprocessed.pop(0)
@@ -376,6 +410,44 @@ class Graph(delegate.Delegate):
                         visited.append(v)
                         unprocessed.extend(v.out_v)
                 return visited
+
+            def HasNoCycles(self, start_v):
+                ''' Return True if the node start_v is not in a cycle
+                '''
+                unprocessed = [start_v]
+                visited = []
+                result = True
+                i = 0
+                while unprocessed:
+                            i += 1
+                            v = unprocessed.pop(0)
+                            if i ==1:
+                                unprocessed.extend(v.out_v)
+                            elif start_v in visited:
+                                result = False
+                                break
+                            elif v not in visited:
+                                visited.append(v)
+                                unprocessed.extend(v.out_v)
+                return result
+
+##            def HasNoCycles(self, start_v):
+##                ''' Return True if the node start_v is not in a cycle
+##                '''
+##                unprocessed = [start_v]
+##                visited = []
+##                result = True
+##                i = 0
+##                while unprocessed:
+##                            i += 1
+##                            v = unprocessed.pop(0)
+##                            if v not in visited:
+##                                visited.append(v)
+##                                unprocessed.extend(v.out_v)
+##                            else:
+##                                result = False
+##                                break
+##                return result
 
 #================================================================================
 

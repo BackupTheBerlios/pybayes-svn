@@ -109,17 +109,40 @@ class BVertex(graph.Vertex):
 class BNet(graph.Graph):
     log = logging.getLogger('BNet')
     log.setLevel(logging.ERROR)
-    def __init__(self, name = ''):
+    def __init__(self, name = None):
         graph.Graph.__init__(self, name)
+
+    def copy(self):
+        ''' returns a deep copy of this BNet '''
+        G_new = copy.deepcopy(self)
+        G_new.InitDistributions()
+        for v in self.all_v:
+                G_new.v[v.name].distribution.setParameters(v.distribution.Convert_to_CPT())        
+       
+        return G_new
 
     def add_e(self, e):
         if e.__class__.__name__ == 'DirEdge':
             graph.Graph.add_e(self, e)
+            #e._v[1] = [e._v[1]] + [parent for parent in e._v[1].in_v]
             for v in e._v:
                 v.family = [v] + list(v.in_v)
         else:
             raise "All edges should be directed"
 
+    def del_e(self, edge):
+        # remove the parent from the child node
+        edge._v[1].family.pop(edge._v[1].family.index(edge._v[0]))
+        graph.Graph.del_e(self, edge.name)
+        
+        
+    
+    def inv_e(self, e):
+        self.e[e].invert()
+        # change the families of the corresponding nodes
+        e._v[0].family.append(e._v[1])
+        e._v[1].family.pop(e._v[1].family.index(e._v[0]))
+    
     def Moralize(self):
         logging.info('Moralising Tree')
         G = inference.MoralGraph(name = 'Moralized ' + str(self.name))
@@ -155,9 +178,32 @@ class BNet(graph.Graph):
     def observed(self):
         return [v for v in self.v.values() if v.observed]
 
+    def split_into_components(self):
+        """ returns a list of BNets with the connected components of this BNet
+        """
+        components = self.connex_components()
+
+        BNets = []
+        i=0
+        # create a BNet for each element in components
+        for comp in components:
+            new = BNet(self.name+' ('+str(i+1)+'/'+str(len(components))+')')
+            BNets.append(new)
+            
+            #add vertices to this new BNet
+            for v in comp:
+                new.add_v(v)
+            #add all edges into this BNet
+            for v in comp:
+                for e in v.out_e:
+                    new.add_e(e)
+            i+=1
+        return BNets
+    
     def InitDistributions(self):
         """ Finalizes the network, all edges must be added. A distribution (unknown)
         is added to each node of the network"""
+        #---TODO: test if DAG (fdebrouc)
         # this replaces the InitCPTs() function
         for v in self.v.values(): v.InitDistribution()
     
@@ -175,6 +221,17 @@ class BNet(graph.Graph):
         assert(len(self.v) > 0)
         samples = []
 
+        # find a node without parents and start from there.
+        # There is always at least one node without parents
+        # because a BNet is a Directed Acyclic Graph
+        # this is critical in small networks:
+        # e.g. A--> B
+        #      starting at B will produce an empty output...
+        for v in self.v.values():
+            if len(v.in_v) == 0:
+                start_node = v
+                break
+
         topological = self.topological_sort()
         
         for i in range(n):
@@ -185,6 +242,16 @@ class BNet(graph.Graph):
             samples.append(sample)
 
         return samples
+
+    def Dimension(self, node):
+        ''' Computes the dimension of node
+        = (nbr of state - 1)*nbr of state of the parents
+        '''
+        q = 1
+        for Pa in self.v[node.name].distribution.parents:
+            q = q * self.v[Pa.name].nvalues
+        dim = (self.v[node.name].nvalues-1)*q
+        return dim
     
 
 class BNetTestCase(unittest.TestCase):
@@ -192,34 +259,14 @@ class BNetTestCase(unittest.TestCase):
     """
     def setUp(self):
         G = BNet('Water Sprinkler Bayesian Network')
-        
-        c,s,r,w = [G.add_v(BVertex(name,True,2)) for name in 'c s r w'.split()]
-        
+        c,s,r,w = [G.add_v(BVertex(name,2,True)) for name in 'c s r w'.split()]
         for ep in [(c,r), (c,s), (r,w), (s,w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
-            
-        G.InitDistributions()
-
-        c.setDistributionParameters([0.5, 0.5])
-        # the following 2 lines are equivalent
-        c.distribution.cpt = na.array([0.5,0.5])
-        c.distribution[:]  = na.array([0.5,0.5])
-        
-        s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-        r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-        
-        w.setDistributionParameters([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
-        # this is equivalent, we access directly the cpt property of the distribution
-        w.distribution[:,0,0]=[0.99, 0.01]
-        w.distribution[:,0,1]=[0.1, 0.9]
-        w.distribution[:,1,0]=[0.1, 0.9]
-        w.distribution[:,1,1]=[0.0, 1.0]
-        
-        # same thing using dictionnaries
-        w.distribution[{'s':0,'r':0}]=[0.99, 0.01]
-        w.distribution[{'s':0,'r':1}]=[0.1, 0.9]
-        w.distribution[{'s':1,'r':0}]=[0.1, 0.9]
-        w.distribution[{'s':1,'r':1}]=[0.0, 1.0]
+        G.InitCPTs()
+        c.setCPT([0.5, 0.5])
+        s.setCPT([0.5, 0.9, 0.5, 0.1])
+        r.setCPT([0.8, 0.2, 0.2, 0.8])
+        w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
         
         self.c = c
         self.s = s
@@ -228,26 +275,73 @@ class BNetTestCase(unittest.TestCase):
         self.BNet = G
 
     def testTopoSort(self):
-        sorted = self.BNet.topological_sort(self.c)
-
+        sorted = self.BNet.topological_sort(self.s)
         assert(sorted[0] == self.c and \
                sorted[1] == self.s and \
                sorted[2] == self.r and \
                sorted[3] == self.w), \
                "Sorted was not in proper topological order"
 
+    def testSample(self):
+        cCPT = distributions.MultinomialDistribution(self.c)
+        sCPT = distributions.MultinomialDistribution(self.s)
+        rCPT = distributions.MultinomialDistribution(self.r)
+        wCPT = distributions.MultinomialDistribution(self.w)
+        for i in range(1000):
+            sample = self.BNet.Sample
+            # Can use sample in all of these, it will ignore extra variables
+            cCPT[sample] += 1
+            sCPT[sample] += 1
+            rCPT[sample] += 1
+            wCPT[sample] += 1
+        assert(na.allclose(cCPT,self.c.cpt,atol=.1) and \
+               na.allclose(sCPT,self.s.cpt,atol-.1) and \
+               na.allclose(rCPT,self.r.cpt,atol-.1) and \
+               na.allclose(wCPT,self.w.cpt,atol-.1)), \
+               "Samples did not generate appropriate CPTs"
     
     def testFamily(self):
-        cFamily = set(self.BNet.v['c'].distribution.names_list[1:])
-        sFamily = set(self.BNet.v['s'].distribution.names_list[1:])
-        rFamily = set(self.BNet.v['r'].distribution.names_list[1:])
-        wFamily = set(self.BNet.v['w'].distribution.names_list[1:])
-
+        cFamily = self.BNet.v.values['c'].family
+        sFamily = self.BNet.v.values['s'].family
+        rFamily = self.BNet.v.values['r'].family
+        wFamily = self.BNet.v.values['w'].family
+        
         assert(cFamily == set([]) and sFamily == set(['c']) and \
                rFamily == set(['c']) and wFamily == set(['r','s'])),\
               "Families are not set correctly"
     
-if __name__=='__main__':
-    suite = unittest.makeSuite(BNetTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+if __name__ == '__main__':
+    from graph import DirEdge
+    
+    # create the network
+    G = BNet( 'Water Sprinkler Bayesian Network' )
+    c, s, r, w = [G.add_v( BVertex( nm, True, 2 ) ) for nm in 'c s r w'.split()]
+    for ep in [( r, w ), ( s, w )]:
+        G.add_e( DirEdge( len( G.e ), *ep ) )
+        
+    print G
+
+
+    # finalize the bayesian network once all edges have been added   
+    G.InitDistributions()
+
+    # c | Pr(c)
+    #---+------
+    # 0 |  0.5
+    # 1 |  0.5
+    c.setDistributionParameters([0.5, 0.5])
+    r.setDistributionParameters([0.5, 0.5])
+    s.setDistributionParameters([0.5, 0.5])
+    
+    w.distribution[:,0,0]=[0.99, 0.01]
+    w.distribution[:,0,1]=[0.1, 0.9]
+    w.distribution[:,1,0]=[0.1, 0.9]
+    w.distribution[:,1,1]=[0.0, 1.0]
+    
+    print 'SPLITTING'
+    #gg = G.split_into_components()
+    
+    #for g in gg:print g
+    
+    for v in G.topological_sort(r):
+        print v
