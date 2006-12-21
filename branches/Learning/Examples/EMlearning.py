@@ -1,88 +1,39 @@
-from OpenBayes import BNet, BVertex, DirEdge, JoinTree, MCMCEngine, MultinomialDistribution
-G = BNet( 'debordement de la Seine si il pleut' )
-pluie = G.add_v( BVertex('pluie', True, 2))
-seine = G.add_v( BVertex('seine', True, 2))
-G.add_e( DirEdge( len(G.e), pluie, seine) )
-print G
+""" this example shows how to Learn parameters from a set of incomplete 
+ observations using Maximum Likelihood Estimator """
+ 
+from OpenBayes import learning
+from copy import deepcopy
+from time import time
+import random
 
-G.InitDistributions()
-pluie.setDistributionParameters([0.5, 0.5])
-seine.distribution[{'pluie':1}]=[0.7, 0.3]
-seine.distribution[{'pluie':0}]=[0.6, 0.4]
-print seine.distribution.cpt
+# first create a bayesian network
+from WaterSprinkler import *
 
-old = seine.distribution.cpt
-#Algo commence ici
-ie = JoinTree(G)
-old_bnet = G 
-cases=[{'pluie':1, 'seine':'?'},{'pluie':0, 'seine':'?'},{'pluie':1, 'seine':0},{'pluie':0, 'seine':0},{'pluie':1, 'seine':1}]    
-for v in G.v.values():
-    v.distribution.initializeCounts()
+N = 2000
+# sample the network N times
+cases = G.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
+# delete some observations
+for i in range(500):
+    case = cases[3*i]
+    rand = random.sample(['c','s','r','w'],1)[0]
+    case[rand] = '?' 
+for i in range(50):
+    case = cases[3*i]
+    rand = random.sample(['c','s','r','w'],1)[0]
+    case[rand] = '?'
 
-temp = 0
-for case in cases:
-    if case['seine'] != '?' :
-        for v in G.v.values():
-            if v.distribution.isAdjustable:
-                v.distribution.incrCounts(case)
-    else:
-        ie.SetObs({'pluie':case['pluie']})
-        temp = ie.Marginalise('seine').cpt
-        for v in G.v.values():
-            for state in range(v.nvalues):
-                v.distribution.addToCounts({'pluie':case['pluie'],'seine':state}, temp[state])
+# create a new bayesian network with all parameters set to 1
+G2 = deepcopy(G)
+# set all parameters to 1s
+G2.InitDistributions()
 
-for v in G.v.values():
-            if v.distribution.isAdjustable:
-                v.distribution.setCounts()
-                v.distribution.normalize(dim=v.name)
+# Learn the parameters from the set of cases
+engine = learning.EMLearningEngine(G2)
+t = time()
+engine.EMLearning(cases, 10)
+print 'Learned from %d cases in %1.3f secs' %(N,(time()-t))
 
-##for v in G.v.values():
-##    v.distribution.setCounts()
-##
-# reinitialize the JunctionTree to take effect of new parameters learned
-ie.Initialization()
-ie.GlobalPropagation()
-##dis = seine.distribution.cpt
-##print dis 
-##t = dis[1][1]/(dis[1][1]+dis[0][1])
-##u = dis[1][0]/(dis[1][0]+dis[0][0])
-##print t
-##print u
-###G.InitDistributions()
-##seine.distribution[{'pluie':1}]=[1-t, t]
-##seine.distribution[{'pluie':0}]=[1-u, u]
-print seine.distribution.cpt
-print pluie.distribution.cpt
-##print old-seine.distribution.cpt
-##test = old-seine.distribution.cpt
-##print max(abs(test[0]))
-##print len(seine.distribution.parents)
-##test2 = test[0]
-##print max(abs(test2))
-test1 = {}
-test2 = {}
-i = 0
-j = 0
-m = 0
-final = 0
-for v in G.v.values():
-    test1[i]=v.distribution.cpt
-    i += 1
-for v in old_bnet.v.values():
-    test2[j]=v.distribution.cpt
-    j += 1
-for v in G.v.values():
-    temp1 = test1[m]
-    if len(v.distribution.family) != 1:
-        for k in range(len(v.distribution.parents)):
-            temp1 = temp1[0]
-    temp2 = test2[m]
-    if len(v.distribution.family) != 1:
-        for k in range(len(v.distribution.parents)):
-            temp2 = temp2[0]
-    temp3 = temp1-temp2
-    final = max(max(abs(temp3)),final)
-    m += 1
-print final
-#ON RECOMMENCE
+# print the learned parameters
+for v in G2.all_v: 
+    print v.name, v.distribution.cpt,'\n'
+
