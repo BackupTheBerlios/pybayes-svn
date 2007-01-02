@@ -1,4 +1,5 @@
 setup.py
+./LICENSE.TXT
 ./__init__.py
 ./bayesnet.py
 ./delegate.py
@@ -18,3 +19,7 @@ setup.py
 ./Examples/Learning.py
 ./Examples/WaterSprinkler.py
 ./Examples/WetGrass.py
+./Examples/EMlearning.py
+./Examples/SEMLearning.py
+./Examples/StructLearning.py
+./Examples/WetGrass.xbn
