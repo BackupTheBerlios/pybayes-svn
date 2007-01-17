@@ -641,7 +641,7 @@ class ConnexeInferenceJTree(JoinTree):
     def __init__(self, BNet):
         self.BNet = BNet
         self.BNets = BNet.split_into_components()
-        
+
     def Marginalise(self, vname):
         """ trouver dans quel reseau appartient le noeud et faire l'inference 
         sur celui-ci"""
@@ -651,10 +651,19 @@ class ConnexeInferenceJTree(JoinTree):
                     engine = JoinTree(G)
                     return engine.Marginalise(vname)
     
+    def Initialization(self):
+        """ trouver dans quel reseau appartient le noeud et faire l'inference 
+        sur celui-ci"""
+        for G in self.BNets:
+            engine = JoinTree(G)
+            engine.Initialization()
+
 ##    def SetObs(self, ev = dict()):
+##        """ trouver dans quel reseau appartient le noeud et faire l'inference 
+##        sur celui-ci"""
 ##        for G in self.BNets:
 ##            for v in G.all_v:
-##                if v.name == ev.keys()[0]:
+##                if v.name == vname:
 ##                    engine = JoinTree(G)
 ##                    engine.SetObs(ev)
 
