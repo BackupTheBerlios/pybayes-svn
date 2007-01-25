@@ -398,7 +398,7 @@ class JoinTree(InferenceEngine, graph.Graph):
         logging.info('Constructing Optimal Tree')
         self.ConstructOptimalJTree()
 
-        self.Initialization()
+        JoinTree.Initialization(self)
 
         self.GlobalPropagation()
         
@@ -639,7 +639,7 @@ class ConnexeInferenceJTree(JoinTree):
         and acts transparently to the user
     """
     def __init__(self, BNet):
-        self.BNet = BNet
+        JoinTree.__init__(self, BNet)
         self.BNets = BNet.split_into_components()
 
     def Marginalise(self, vname):
