@@ -55,9 +55,6 @@ class Potential:
         """ Retrieves and returns some variables """
         raise "Method is not yet implemented at child level"
     
-    def Normalise(self):
-        """ normalizes the distribution """
-        raise "Method is not yet implemented at child level"
     
     def __mul__(a,b):
         """ multiplication, returns a new potential """
@@ -83,7 +80,7 @@ class DiscretePotential(table.Table, Potential):
     and Marginalise().
     """
     def __init__(self, names, shape, elements=None):
-        order = Potential.__init__(self, names)
+        Potential.__init__(self, names)
 
         # sort shape in the same way names are sorted
         #print names, self.names_list,order
@@ -109,7 +106,7 @@ class DiscretePotential(table.Table, Potential):
         returns a new DiscretePotential instance
         the variables keep their relative order
         """
-        temp = self.cpt.view()
+        temp = copy(self.cpt)
         ax = [self.assocdim[v] for v in varnames]
         ax.sort(reverse=True)  # sort and reverse list to avoid inexistent dimensions
         newnames = copy(self.names_list)
@@ -117,13 +114,12 @@ class DiscretePotential(table.Table, Potential):
             temp = na.sum(temp, axis = a)
             newnames.pop(a)
 
-        #=================================================
-        #---ERROR : In which order ?????
-        #remainingNames = self.names - set(varnames)
-        #remainingNames_list = [name for name in self.names_list if name in remainingNames]
+        return DiscretePotential(newnames, temp.shape, temp)
 
-        return self.__class__(newnames, temp.shape, temp)
-
+    def Normalize(self):
+        """ All values are normalized Sum(Pr(A)) = 1     """
+        self.cpt /= na.sum(self.cpt.flat)   
+        
     def Retrieve(self, varnames):
         """ Retrieves the dimensions specified in varnames.
         To do this, we marginalise all the variables EXCEPT those specified
@@ -138,7 +134,7 @@ class DiscretePotential(table.Table, Potential):
         """
         sum(X\S)phiX
 
-        marginalise the variables contained in BOTH SepSet AND in Cluster
+        sum out the variables contained in self but NOT in other
         returns a new DiscretePotential instance
 
         eg: a = Pr(A,B,C)
@@ -148,13 +144,14 @@ class DiscretePotential(table.Table, Potential):
             = Sum(A)a = Pr(B,C)
 
         only the names of the variables contained in b are relevant!
-        no operation with b is done in practice
+        no operation with the values of b is performed
+        
+        The result is a new potential containing the variables of other with
+        the values of these variables found in self.
         """
-        var = set(v for v in self.names) - set(v for v in other.names)
+        
+        var = self.names - other.names
         return self.Marginalise(var)
-
-    def Normalise(self):
-        self.cpt /= na.sum(self.cpt.flat)
 
             
     #================================
@@ -308,8 +305,6 @@ class DiscretePotentialTestCase(unittest.TestCase):
 
         cr = c*r        # Pr(C,R)     = Pr(R|C) * Pr(C)
         crs = cr*s      # Pr(C,S,R)   = Pr(S|C) * Pr(C,R)
-        print crs,crs.names_list
-        print crs[:,0,0]
         crsw = crs*w    # Pr(C,S,R,W) = Pr(W|S,R) * Pr(C,R,S)
 
         # this can be verified using any bayesian network software
@@ -331,29 +326,5 @@ if __name__ == '__main__':
     runner = unittest.TextTestRunner()
     runner.run(suite)
     
-#    names = ('a','b','c')
-#    shape = (2,3,4)
-#    a = DiscretePotential(names,shape,na.arange(24))
-#
-#    names = ('a','d','b')
-#    shape = (2,5,3)
-#    b = DiscretePotential(names,shape,na.arange(2*5*3))
-#
-#    c = DiscretePotential(['c'],[2],[0.5,0.5])
-#    s = DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1])
-#    r = DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])
-#    w = DiscretePotential(['w','s','r'],[2,2,2])
-#    w[:,0,0]=[0.99, 0.01]
-#    w[:,0,1]=[0.1, 0.9]
-#    w[:,1,0]=[0.1, 0.9]
-#    w[:,1,1]=[0.0, 1.0]
-#
-#    cr = c*r
-#    crs = cr*s
-#    crsw = crs*w
-#
-#    print 'c:', crsw.Marginalise('s r w'.split())
-#    print 's:', crsw.Marginalise('c r w'.split())
-#    print 'r:', crsw.Marginalise('c s w'.split())
-#    print 'w:', crsw.Marginalise('c s r'.split())
+
 

@@ -39,7 +39,7 @@ import unittest
 import types
 import numarray as na
 from copy import copy
-from numarray.ieeespecial import getnan
+from numarray.ieeespecial import getnan,getinf
 
 # avoid divide by zero warnings...
 na.Error.setMode(invalid='ignore', dividebyzero='ignore')
@@ -69,22 +69,10 @@ class Table:
       self.assocname = dict(enumerate(self.names_list))
 
 #===============================================================================
-#    def normalize(self, dim=-1):
-#        """ If dim=-1 all elements sum to 1.  Otherwise sum to specific dimension, such that 
-#        sum(Pr(x=i|Pa(x))) = 1 for all values of i and a specific set of values for Pa(x)
-#        """
-#        if dim == -1 or len(self.cpt.shape) == 1:
-#            self.cpt /= self.cpt.sum()            
-#        else:
-#            ndim = self.assocdim[dim]
-#            order = range(len(self.names_list))
-#            order[0] = ndim
-#            order[ndim] = 0
-#            tcpt = na.transpose(self.cpt, order)
-#            t1cpt = na.sum(tcpt, axis=0)
-#            t1cpt = na.resize(t1cpt,tcpt.shape)
-#            tcpt = tcpt/t1cpt
-#            self.cpt = na.transpose(tcpt, order)
+    def Normalize(self):
+        """ All values are normalized Sum(Pr(A)) = 1     """
+        self.cpt /= na.sum(self.cpt.flat)           
+
 #    #======================================================
 #    #=== Sampling
 #    def sample(self, index={}):
@@ -274,9 +262,9 @@ class Table:
         cptb = a.prepareOther(b)
 
         # multiply in place, a's values are changed
-        a.cpt *= cptb  # this does not work correctly for some reason...
+        #a.cpt *= cptb  # this does not work correctly for some reason...
         #na.multiply(a.cpt,cptb,a.cpt) # does not work either
-        #a.cpt = a.cpt * cptb    #this one works fine
+        a.cpt = a.cpt * cptb    #this one works fine
                                 #is this a numarray BUG????
 
         return a
@@ -313,7 +301,8 @@ class Table:
 
         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
         # replace INFs by 0s
-        a.cpt[getnan(a.cpt)] = 0
+        a.cpt[getnan(a.cpt)] = 0.0
+        a.cpt[getinf(a.cpt)] = 0.0
         #---TODO: replace this very SLOW function with a ufunc
         
         return a 
@@ -388,7 +377,8 @@ class Table:
 
         ## WARNING, division by zero, avoided using na.Error.setMode(invalid='ignore')
         # replace INFs by 0s
-        new.cpt[getnan(new.cpt)] = 0
+        new.cpt[getnan(new.cpt)] = 0.0
+        new.cpt[getinf(new.cpt)] = 0.0
         #---TODO: replace this very SLOW function with a ufunc
 
         return new
@@ -413,13 +403,13 @@ class Table:
             a=Pr(X),b=Pr(Y); Y entirely included in X
         """
         #self contains all variables found in other
-        if len(other.names - self.names) > 0:
+        if len(other.names - self.names) != 0:
             raise "ERROR :"+str((other.names-self.names))+"not in"+str(self.names)
 
         # add new dimensions to b
         bcpt = other.cpt.view()
         b_assocdim = copy(other.assocdim)
-        for var in (self.names-other.names):
+        for var in (self.names - other.names):
             #for all variables found in self and not in other
             #add a new dimension to other
             bcpt = bcpt[...,na.NewAxis]
@@ -432,6 +422,7 @@ class Table:
 
         bcpt_trans = na.transpose(bcpt, axes=trans)
 
+        #print 'Table.prepareOther',self.names_list, other.names_list, trans
         # transpose and return bcpt
         return bcpt_trans
         
@@ -500,8 +491,10 @@ class TableTestCase(unittest.TestCase):
    def setUp(self):
       names = ('a','b','c')
       shape = (2,3,4)
-      self.a = ones(names,shape,type='Float32')
-      self.b = ones(names[1:],shape[1:],type='Float32')
+      self.a = Table(names,shape,type='Float32')
+      self.b = Table(names[1:],shape[1:],type='Float32')
+      self.a.AllOnes()
+      self.b.AllOnes()
       self.names = names
       self.shape = shape
    
@@ -532,19 +525,44 @@ class TableTestCase(unittest.TestCase):
               " InPlace Multiplication does not work"
 
    def testIDiv(self):
-       """ test inplace division """
-       b = Table(['c','b','e'],[4,3,6],range(12*6))
-       c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
+        """ test inplace division """
+        a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+        b = Table(['c','b','a'],[4,3,2],range(4*3*2))
+        c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
    
-       bcpt = b.cpt[...,na.NewAxis,na.NewAxis]
-       bcpt.transpose([3,1,0,4,2])
-       res = c.cpt/bcpt
-       res[getnan(res)] = 0.0
+        acpt = copy(a.cpt)
+        bcpt = copy(b.cpt)[...,na.NewAxis]
+        bcpt.transpose([2,1,0,3])
+       
 
-       c /= b
-
-       assert (na.all(c.cpt == res)), \
-              " InPlace Division does not work"
+        cres = na.ones(2*3*4*5*6)
+        cres[0] = 0.0
+        bres = na.ones(4*3*2)
+        bres[0] = 0.0
+        ares = acpt/bcpt
+        ares[getnan(ares)] = 0.0
+        ares[getinf(ares)] = 0.0
+        
+        a /= b
+        c /= c
+        b /= b
+        
+        assert (a == Table(['a','b','c','d'],[2,3,4,5],ares) and \
+                c == Table(['a','b','c','d','e'],[2,3,4,5,6],cres) and \
+                b == Table(['c','b','a'],[4,3,2],bres) ), \
+                " Division does not work"
+##       b = Table(['c','b','e'],[4,3,6],range(12*6))
+##       c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
+##   
+##       bcpt = b.cpt[...,na.NewAxis,na.NewAxis]
+##       bcpt.transpose([3,1,0,4,2])
+##       res = c.cpt/bcpt
+##       res[getnan(res)] = 0.0
+##
+##       c /= b
+##
+##       assert (na.all(c.cpt == res)), \
+##              " InPlace Division does not work"
        
    def testMul(self):
        """ test multiplication """
@@ -567,30 +585,31 @@ class TableTestCase(unittest.TestCase):
               " Multiplication does not work"
 
    def testDiv(self):
-       """ test division """
-       a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
-       b = Table(['c','b','e'],[4,3,6],range(12*6))
-       c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
+        """ test division """
+        a  = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+        b = Table(['c','b','e'],[4,3,6],range(12*6))
+        c = Table(['a','b','c','d','e'],[2,3,4,5,6],range(2*3*4*5*6))
    
-       acpt = copy(a.cpt)[...,na.NewAxis]
-       bcpt = copy(b.cpt)[...,na.NewAxis,na.NewAxis]
-       bcpt.transpose([3,1,0,4,2])
+        acpt = copy(a.cpt)[...,na.NewAxis]
+        bcpt = copy(b.cpt)[...,na.NewAxis,na.NewAxis]
+        bcpt.transpose([3,1,0,4,2])
        
-       ab = a/b
-       cc = c/c
-       bb = b/b
+        ab = a/b
+        cc = c/c
+        bb = b/b
 
-       cres = na.ones(2*3*4*5*6)
-       cres[0] = 0
-       bres = na.ones(12*6)
-       bres[0] = 0
-       ares = acpt/bcpt
-       ares[getnan(ares)] = 0.0
+        cres = na.ones(2*3*4*5*6)
+        cres[0] = 0
+        bres = na.ones(12*6)
+        bres[0] = 0
+        ares = acpt/bcpt
+        ares[getnan(ares)] = 0.0
+        ares[getinf(ares)] = 0.0
 
-       assert (ab == Table(['a','b','c','d','e'],[2,3,4,5,6],ares) and \
-               cc == Table(['a','b','c','d','e'],[2,3,4,5,6],cres) and \
-               bb == Table(['c','b','e'],[4,3,6],bres) ), \
-              " Division does not work"
+        assert (ab == Table(['a','b','c','d','e'],[2,3,4,5,6],ares) and \
+                cc == Table(['a','b','c','d','e'],[2,3,4,5,6],cres) and \
+                bb == Table(['c','b','e'],[4,3,6],bres) ), \
+                " Division does not work"
        
    def testDelegate(self):
        assert (na.alltrue(self.a.flat == self.a.cpt.flat)), \
@@ -662,28 +681,21 @@ class TableTestCase(unittest.TestCase):
                na.all(dc[0,:,0,0,:] == na.transpose(c.cpt, axes=[1,0])) and \
                cr_.shape == (1,3,4)), \
                """ problem with prepareOther"""
-       
+            
+   def testUpdate(self):
+        a = Table(['a','b','c','d'],[2,3,4,5],range(2*3*4*5))
+        b = Table(['d','b','c','a'],[5,3,4,2],range(2*3*4*5))
+        
+        a.Update(b)
+        
+        assert(a==b,
+        'Update does not work !!!')
       
 if __name__ == '__main__':
     suite = unittest.makeSuite(TableTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
 
-    a = Table(['a','b'],[2,3],range(6))
-    b = Table(['b'],[3],range(3))
-    c = Table(['e','b'],[2,3],range(6))
-    d = Table(['a','b','c','d','e'],[2,3,2,2,2],range(3*2**4))
-
-    ac,cc = a.union(c)
-
-
-##    a*c
-##    print a
-##    print c
-
-    #a*b
-    #print 'mul'
-    #print a
 
     
 

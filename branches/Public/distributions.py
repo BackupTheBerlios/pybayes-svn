@@ -328,9 +328,12 @@ class Gaussian_Distribution(Distribution):
         # set sigma to ones along the diagonal  
         eye = na.identity(self.nvalues, type = 'Float32')[...,na.NewAxis]
         if len(self.discrete_parents) > 0:
-			q = reduce(lambda a,b:a*b,self.discrete_parents_shape) # number of different configurations for the parents
-			sigma = na.concatenate([eye]*q, axis=2)
-			self.sigma = na.array(sigma,shape=[self.nvalues,self.nvalues]+self.discrete_parents_shape) 
+            def mull(a,b):
+                return a*b
+            q = reduce(mull, self.discrete_parents_shape) # number of different configurations for the parents
+
+            sigma = na.concatenate([eye]*q, axis=2)
+            self.sigma = na.array(sigma,shape=[self.nvalues,self.nvalues]+self.discrete_parents_shape) 
 
         # set weights to 
         self.weights = na.ones(shape=[self.nvalues]+self.parents_shape, type='Float32')
@@ -609,15 +612,15 @@ class GaussianTestCase(unittest.TestCase):
                " Wi does not have the correct shape for no parents "
  
     def testContinuousParents(self):
-		 """ test a gaussian with continuous parents """
-		 cd = self.cd
-		 #c has two continuous parents
-		 assert(cd.mean.shape == (cd.nvalues,)), \
-				"mean does not have correct shape for continous parents"
-		 assert(cd.sigma.shape == (cd.nvalues,cd.nvalues)), \
-				"sigma does not have correct shape for continous parents"
-		 assert(cd.weights.shape == tuple([cd.nvalues]+cd.parents_shape)), \
-				"weights does not have correct shape for continous parents"
+        """ test a gaussian with continuous parents """
+        cd = self.cd
+        #c has two continuous parents
+        assert(cd.mean.shape == (cd.nvalues,)), \
+                "mean does not have correct shape for continous parents"
+        assert(cd.sigma.shape == (cd.nvalues,cd.nvalues)), \
+                "sigma does not have correct shape for continous parents"
+        assert(cd.weights.shape == tuple([cd.nvalues]+cd.parents_shape)), \
+                "weights does not have correct shape for continous parents"
 
     def testDiscreteParents(self):
         """ test a gaussian with discrete parents """
@@ -663,16 +666,18 @@ class GaussianTestCase(unittest.TestCase):
         
         fd.setParameters(mu=range(6),sigma=range(6))
         
-#        # test normal indexing
-#        assert(na.allclose(fd[0][0].flat, na.array(range(3),type='Float32')) and \
-#               na.allclose(fd[0][1].flat, na.array(range(3), type='Float32')) and \
-#               na.allclose(fd[1,2][0].flat, na.array(5, type='Float32')) and \
-#               na.allclose(fd[1,2][1].flat, na.array(5, type='Float32'))), \
-#        "Normal indexing does not seem to work..."
+## NOT SUPPORTED
+##        # test normal indexing
+##        assert(na.allclose(fd[0][0].flat, na.array(range(3),type='Float32')) and \
+##               na.allclose(fd[0][1].flat, na.array(range(3), type='Float32')) and \
+##               na.allclose(fd[1,2][0].flat, na.array(5, type='Float32')) and \
+##               na.allclose(fd[1,2][1].flat, na.array(5, type='Float32'))), \
+##        "Normal indexing does not seem to work..."
         
         # test dict indexing
-        assert(na.allclose(fd[{'d':0}][0].flat, na.array(range(3),type='Float32')) and \
-               na.allclose(fd[{'d':0}][1].flat, na.array(range(3), type='Float32')) and \
+       
+        assert(na.allclose(fd[{'d':0}][0].flat, na.array([0,2,4],type='Float32')) and \
+               na.allclose(fd[{'d':0}][1].flat, na.array([0,2,4], type='Float32')) and \
                na.allclose(fd[{'d':1,'e':2}][0].flat, na.array(5, type='Float32')) and \
                na.allclose(fd[{'d':1,'e':2}][1].flat, na.array(5, type='Float32'))), \
         "Dictionary indexing does not seem to work..." 
@@ -703,7 +708,7 @@ class GaussianTestCase(unittest.TestCase):
         a.setParameters(mu=5, sigma=1)
         
         # take 1000 samples from distribution
-        samples = [a.sample() for i in range(1000)]
+        samples = [a.sample() for i in range(3000)]
         
         # verify values
         b = self.a.GetSamplingDistribution()
@@ -772,7 +777,7 @@ class DistributionTestCase(unittest.TestCase):
 #   Test case for Multinomial_Distribution class
 #=================================================================
 class MultinomialTestCase(unittest.TestCase):
-    """ Unit tests for general distribution class
+    """ Unit tests for discrete distribution class
     """
     def setUp(self):
         from bayesnet import BNet, BVertex, graph
@@ -799,7 +804,7 @@ class MultinomialTestCase(unittest.TestCase):
         a.normalize()
         
     def testSizes(self):
-        assert (self.a.distribution.sizes == [2,3,4,2]), "Error with self.sizes"
+        assert (self.a.distribution.sizes == [v.nvalues for v in self.a.family]), "Error with self.sizes"
 
 
     # test the indexing of the cpt
@@ -813,19 +818,19 @@ class MultinomialTestCase(unittest.TestCase):
     def testSetCPT(self):
         """ Violate abstraction and check that we can actually set elements.
         """
-        self.a.distribution.cpt[0,1,0,:] = na.array([4,5])
-        assert(na.all(self.a.distribution[0,1,0,:] == na.array([4,5]))), \
+        self.a.distribution.cpt[:,0,1,0] = na.array([4,5])
+        assert(na.all(self.a.distribution[:,0,1,0] == na.array([4,5]))), \
               "Error setting the array when violating abstraction"
 
     
-    def testDictIndex(self):
-        """ test that an index using a dictionary works correctly
-        """
-        index = {'a':0,'b':0,'c':0}
-        index2 = {'a':1,'b':0,'c':0}
-        assert(na.all(self.a.distribution[0,0,0,:] == self.a.distribution[index]) and \
-               na.all(self.a.distribution[1,0,0,:] == self.a.distribution[index2])), \
-              "Error getting with dict index"
+##    def testDictIndex(self):
+##        """ test that an index using a dictionary works correctly
+##        """
+##        index = {'a':0,'b':0,'c':0}
+##        index2 = {'a':1,'b':0,'c':0}
+##        assert(na.all(self.a.distribution[0,0,0,:] == self.a.distribution[index]) and \
+##               na.all(self.a.distribution[1,0,0,:] == self.a.distribution[index2])), \
+##              "Error getting with dict index"
     
     def testDictSet(self):
         """ test that an index using a dictionary can set a value within the cpt 
@@ -836,9 +841,9 @@ class MultinomialTestCase(unittest.TestCase):
         self.a.distribution[index] = -1
         self.a.distribution[index2] = 100
         self.a.distribution[index3] = na.array([-2, -3])
-        assert(na.all(self.a.distribution[0,0,0,:] == na.array([-1, -1])) and \
-               na.all(self.a.distribution[1,0,0,:] == na.array([100, 100])) and \
-               na.all(self.a.distribution[1,1,0,:] == na.array([-2, -3]))), \
+        assert(na.all(self.a.distribution[index] == na.array([-1, -1])) and \
+               na.all(self.a.distribution[index2] == na.array([100, 100])) and \
+               na.all(self.a.distribution[index3] == na.array([-2, -3]))), \
               "Error setting cpt with dict"
     
     def testNumIndex(self):
@@ -866,38 +871,14 @@ if __name__ == '__main__':
     suite = unittest.makeSuite(GaussianTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)    
-##    from bayesnet import *
-##
-##    suite = unittest.makeSuite(DistributionTestCase, 'test')
-##    runner = unittest.TextTestRunner()
-##    runner.run(suite)
-####
-##
-##    suite = unittest.makeSuite(MultinomialTestCase, 'test')
-##    runner = unittest.TextTestRunner()
-##    runner.run(suite)
-##    
-##    # create a small BayesNet
-##    G = BNet('Water Sprinkler Bayesian Network')
-##    
-##    c,s,r,w = [G.add_v(BVertex(nm,discrete=True,nvalues=nv)) for nm,nv in zip('c s r w'.split(),[2,2,2,0])]
-##    w.discrete = False
-##    w.nvalues = 0
-##    
-##    
-##    for ep in [(c,r), (c,s), (r,w), (s,w)]:
-##        G.add_e(graph.DirEdge(len(G.e), *ep))
-##
-##    print G
-##
-##    G.InitDistributions()
-##    c.setDistributionParameters([0.5, 0.5])
-##    s.distribution.setParameters([0.5, 0.9, 0.5, 0.1])
-##    r.distribution.cpt=na.array([0.8, 0.2, 0.2, 0.8])
-####    w.distribution[:,0,0]=[0.99, 0.01]
-####    w.distribution[:,0,1]=[0.1, 0.9]
-####    w.distribution[:,1,0]=[0.1, 0.9]
-####    w.distribution[:,1,1]=[0.0, 1.0]
-##    wd = w.distribution
-##    print wd.mean
+
+    suite = unittest.makeSuite(DistributionTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+
+
+    suite = unittest.makeSuite(MultinomialTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+
     

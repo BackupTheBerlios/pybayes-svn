@@ -35,9 +35,10 @@ import distributions
 from potentials import DiscretePotential
 from table import Table
 
-# show INFO messages
+# uncomment to show INFO messages
 #logging.basicConfig(level= logging.INFO)
-#uncomment the following to remove all messages
+# uncomment to show DEBUG messages
+#logging.basicConfig(level= logging.DEBUG)
 logging.basicConfig(level = logging.NOTSET)
 
 class InferenceEngine:
@@ -112,7 +113,7 @@ class Cluster(graph.Vertex):
         # weight
         self.weight = reduce(lambda x,y: x*y, [v.nvalues for v in self.vertices])
         
-    def NotSetSepOf(self, clusters):
+    def NotSepSetOf(self, clusters):
         """
         returns True if this cluster is not a sepset of any of the clusters
         """
@@ -143,6 +144,7 @@ class Cluster(graph.Vertex):
 
     def other(self,v):
         """ set of all variables contained in cluster except v, only one at a time... """
+        #--TODO: what's this shit???
         allVertices = set(vv.name for vv in self.vertices)
         if isinstance(v, (list, set, tuple)):
             setV = set(v)
@@ -163,7 +165,8 @@ class Cluster(graph.Vertex):
         
         # Projection
         oldphiR = copy.copy(e.potential)                # oldphiR = phiR
-        newphiR = self.potential+e.potential            # phiR = sum(X/R)phiX
+        newphiR = self.potential + e.potential            # phiR = sum(X/R)phiX
+        #newphiR.Normalize()
 
         #e.potential = newphiR
         e.potential.Update(newphiR)
@@ -171,9 +174,6 @@ class Cluster(graph.Vertex):
         # Absorption
         newphiR /= oldphiR
 
-        #print 'ABSORPTION'
-        #print newphiR
-        
         c.potential *= newphiR
 
 
@@ -245,6 +245,9 @@ class SepSet(graph.UndirEdge):
 #=======================================================================
 
 class MoralGraph(graph.Graph):
+    def __init__(self, name):
+        graph.Graph.__init__(self,name)
+        
     def ChooseVertex(self):
         """
         Chooses a vertex from the list according to criterion :
@@ -253,8 +256,7 @@ class MoralGraph(graph.Graph):
         Choose the node that causes the least number of edges to be added in
         step 2b, breaking ties by choosing the nodes that induces the cluster with
         the smallest weight
-        Implementation in Graph.ChooseVertex()
-        
+                
         The WEIGHT of a node V is the nmber of values V can take (BVertex.nvalues)
         The WEIGHT of a CLUSTER is the product of the weights of its
         constituent nodes
@@ -326,38 +328,39 @@ class MoralGraph(graph.Graph):
         """
         logging.info('Triangulating Tree and extracting Clusters')
         # don't touch this graph, create a copy of it
-        Gt = copy.deepcopy(self)
+        Gt = copy.copy(self)
         Gt.name = 'Triangulised ' + str(Gt.name)
         
         # make a copy of Gt
-        G2 = copy.deepcopy(Gt)
+        G2 = copy.copy(Gt)
         G2.name = 'Copy of '+ Gt.name
     
         clusters = []
     
         while len(G2.v):
             v = G2.ChooseVertex()
-            #logging.debug('Triangulating: chosen '+str(v))
+            logging.debug('Triangulating: chosen '+str(v))
             cluster = list(v.adjacent_v)
             cluster.append(v)
+            
         
-            #logging.debug('Cluster: '+str([str(c) for c in cluster]))
+            logging.debug('Cluster: '+str([str(c) for c in cluster]))
         
             c = Cluster(cluster)
-            if c.NotSetSepOf(clusters):
-                #logging.debug('Appending cluster')
+            if c.NotSepSetOf(clusters):
+                logging.debug('Appending cluster %s'%c.name)
                 clusters.append(c)
             
             clusterleft = copy.copy(cluster)
             
             for v1 in cluster:
-                clusterleft.pop(0)
-            for v2 in clusterleft:
-                if not (v1 in v2.adjacent_v):
-                    v1g = Gt.v[v1.name]
-                    v2g = Gt.v[v2.name]
-                    Gt.add_e(graph.UndirEdge(max(Gt.e.keys())+1,v1g,v2g))
-                    G2.add_e(graph.UndirEdge(max(G2.e.keys())+1,v1,v2))
+                #clusterleft.pop(0)
+                for v2 in cluster:
+                    if not (v1 in v2.adjacent_v) and v1 != v2:
+                        v1g = Gt.v[v1.name]
+                        v2g = Gt.v[v2.name]
+                        Gt.add_e(graph.UndirEdge(max(Gt.e.keys())+1,v1g,v2g))
+                        G2.add_e(graph.UndirEdge(max(G2.e.keys())+1,v1,v2))
                     
             # remove from G2
             del G2.v[v.name]
@@ -425,7 +428,7 @@ class JoinTree(InferenceEngine, graph.Graph):
     def ConstructOptimalJTree(self):
         # Moralize Graph
         Gm = self.BNet.Moralize()
-
+        
         # triangulate graph and extract clusters
         Gt, clusters = Gm.Triangulate()
         
@@ -478,17 +481,18 @@ class JoinTree(InferenceEngine, graph.Graph):
         
         # assign a cluster to each variable
         # multiply cluster potential by v.cpt,
+        self.clusterdict = {}
         for v in self.BNet.all_v:
             for c in self.all_v:
                 if c.ContainsVar(v.family):
                     # assign a cluster for each variable
                     self.clusterdict[v.name] = c
                     v.parentcluster = c
-
+                    
                     # in place multiplication!
                     #logging.debug('JT:initialisation '+c.name+' *= '+v.name)
                     c.potential *= v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
-
+                    
                     # stop here for this node otherwise we count it
                     # more than once, bug reported by Michael Munie
                     break
@@ -502,7 +506,7 @@ class JoinTree(InferenceEngine, graph.Graph):
 
     def GlobalPropagation(self, start = None):
         if start == None: start = self.v.values()[0]    # first cluster found
-        
+
         logging.info('Global Propagation, starting at :'+ str(start))
         logging.info('      Collect Evidence')
         
@@ -519,11 +523,14 @@ class JoinTree(InferenceEngine, graph.Graph):
         # find a cluster containing v
         # v.parentcluster is a convenient choice, can make better...
         c = self.clusterdict[v]
-        res = c.potential.Marginalise(c.other(v))
-        res.Normalise()
+        
+        #res = c.potential.Marginalise(c.other(v))
+        res = c.potential.Retrieve([v])
+        res.Normalize()
         
         vDist = self.BNet.v[v].GetSamplingDistribution()
-        vDist.setParameters(res)
+        #vDist.setParameters(res)
+        vDist.Update(res)
         return vDist
     
     def MarginaliseFamily(self, v):
@@ -696,6 +703,7 @@ class MCMCEngine(InferenceEngine):
             # 1.Sample the network N times
             if not samples:
                 # if no samples are given, get them
+                #---TODO:should sample according to the evidence
                 samples = self.BNet.Sample(self.N)
             
             # 2. Create the distribution that will be returned
@@ -706,6 +714,7 @@ class MCMCEngine(InferenceEngine):
             # 3.Count number of occurences of vname = i
             #    for each possible value of i, that respects the evidence
             for s in samples:
+                
                 if na.alltrue([s[e] == i for e,i in self.evidence.items()]): 
                     # this samples respects the evidence
                     # add one to the corresponding instance of the variable
@@ -884,9 +893,9 @@ class JTreeTestCase(InferenceEngineTestCase):
     
     
 if __name__=='__main__':
-##    suite = unittest.makeSuite(MCMCTestCase, 'test')
-##    runner = unittest.TextTestRunner()
-##    runner.run(suite)
+    suite = unittest.makeSuite(MCMCTestCase, 'test')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
 ##
 ##    suite = unittest.makeSuite(JTreeTestCase, 'test')
 ##    runner = unittest.TextTestRunner()

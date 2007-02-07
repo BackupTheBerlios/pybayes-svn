@@ -123,10 +123,14 @@ class Vertex(delegate.Delegate):
 
             @_roprop('Set of adjacent vertices.  Edge direction ignored.')
             def adjacent_v(self):
-                    adj = set(v for e in self._e for v in e.all_v)
-                    try: adj.remove(self)
-                    except: pass
-                    return adj
+                ''' returns a set containing all parents and all children, this 
+                node is not in the set of vertices returned '''
+                adj = set(v for e in self._e for v in e.all_v)
+                # remove self from list
+                try: adj.remove(self)
+                except: pass
+                
+                return adj
 
             @_roprop('Set of vertices connected by incoming edges.')
             def in_v(self):
@@ -317,12 +321,27 @@ class Graph(delegate.Delegate):
                     self.v = VertexDict(self)
                     self.e = EdgeDict()
 
+            def __copy__(self):
+                ''' returns a deep copy of this BNet '''
+                G_new = self.__class__(self.name)
+                for v in self.all_v:
+                    G_new.add_v(v.__class__(v.name,v.discrete,v.nvalues))
+                
+                for e in self.e.values():
+                    v0 = G_new.v[e._v[0].name]
+                    v1 = G_new.v[e._v[1].name]
+                    
+                    G_new.add_e(e.__class__(len(G_new.e),v0,v1))
+            
+                return G_new
+
             def __str__(self):
                     return self.__class__.__name__ + \
                                 _condop(self.name, ' ' + str(self.name), '') + '\nVertices:\n' + \
                                 '\n'.join([str(v) for v in self.v.values()]) + \
                                 '\n\nEdges:\n' + \
                                 '\n'.join([str(e) for e in self.e.values()]) + '\n'
+                
 
 
 
