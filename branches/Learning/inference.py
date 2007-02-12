@@ -651,12 +651,12 @@ class ConnexeInferenceJTree(JoinTree):
                     engine = JoinTree(G)
                     return engine.Marginalise(vname)
     
-    def Initialization(self):
-        """ trouver dans quel reseau appartient le noeud et faire l'inference 
-        sur celui-ci"""
-        for G in self.BNets:
-            engine = JoinTree(G)
-            engine.Initialization()
+##    def Initialization(self):
+##        """ trouver dans quel reseau appartient le noeud et faire l'inference 
+##        sur celui-ci"""
+##        for G in self.BNets:
+##            engine = JoinTree(G)
+##            engine.Initialization()
 
 ##    def SetObs(self, ev = dict()):
 ##        """ trouver dans quel reseau appartient le noeud et faire l'inference 

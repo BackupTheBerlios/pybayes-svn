@@ -150,7 +150,7 @@ class EMLearningEngine:
 						v.distribution.addToCounts(newknown,cumPr*thisPr)
 					else:
 						self.calcExpectation(v,newknown,newnames,newnvals,cumPr*thisPr)
-	
+
 	def LearnEMParams(self, cases):
 		""" 
 		First part of the algorithm : Estimation of the unknown 
@@ -217,9 +217,9 @@ class EMLearningEngine:
 					self.engine.SetObs(copy_states)
 				else:
 					self.engine.SetObs(known) # Has to be done at each iteration because of the self.engine.Initialization() below 
-					
-				#like = like*self.BNet.v[key].distribution.Convert_to_CPT()[temp_dic[key]]
-				like = like*self.engine.ExtractCPT(key)[temp_dic[key]]
+				#print 'finished	to try setobs'
+				like = self.engine.Marginalise(key)[temp_dic[key]]#like = like*self.BNet.v[key].distribution.Convert_to_CPT()[temp_dic[key]]
+				#like = like*self.engine.ExtractCPT(key)[temp_dic[key]]
 				if str(like) == 'nan':
 					like = 0
 					
@@ -278,210 +278,256 @@ class EMLearningEngine:
 	
 
 class GreedyStructLearningEngine(EMLearningEngine):
-	""" Greedy Structural learning algorithm
-	Learns the structure of a bayesian network from known parameters and an 
-	initial structure.
-	"""	  
-	BNet = None # The underlying bayesian network
-	engine = None
+        """ Greedy Structural learning algorithm
+        Learns the structure of a bayesian network from known parameters and an 
+        initial structure.
+        """	  
+        BNet = None # The underlying bayesian network
+        engine = None
+        
+        def __init__(self, BNet):
+            self.BNet = BNet.copy()
+            #print 'begin connexeInferenceJTree'
+            self.engine = ConnexeInferenceJTree(self.BNet)
+            #print 'end connexeInferenceJTree'
+            self.converged = False
+
+        def StructLearning(self, cases):
+            N = len(cases)
+            iter = 0
+            print 'begin iteration'
+            while (not self.converged):
+                self.LearnStruct(cases, N)
+                iter +=1
+                print 'Structure iteration:', iter
+
+        def GlobalBICScore(self, N, cases):
+            '''Computes the BIC score of self.BNet'''
+            score = 0
+            for v in self.BNet.all_v:
+                cpt_matrix = v.distribution.Convert_to_CPT()
+                dim = self.BNet.Dimension(v)
+                score = score + self.ScoreBIC(N, dim, self.BNet, v, cases) 
+            return score
+
+        def LearnStruct(self, cases, N):
+            """Greedy search for optimal structure (all the data in cases are known).
+            It will go through every node of the BNet. At each node, it will delete 
+            every outgoing edge, or add every possible edge, or reverse every 
+            possible edge. It will compute the BIC score each time and keep the BNet
+            with the highest score.
+            """
+            G_initial = self.BNet.copy()
+            engine_init = GreedyStructLearningEngine(G_initial)
+            G_best = self.BNet.copy()	  
+            prec_var_score = 0
+            
+            for v in self.BNet.all_v:
+                G = copy.deepcopy(engine_init.BNet)
+                edges = copy.deepcopy(G.v[v.name].out_e)
+                
+                # delete the outgoing edges
+                while edges:
+                    print 'try to delete an edge'
+                    edge = edges.pop(0)
+                    node = edge._v[1] #node is the child node, the only node for which the cpt table changes
+                    dim_init = G_initial.Dimension(node)
+                    #print 'try calculating score init'
+                    score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[node.name], cases)
+                    self.ChangeStruct('del', edge) #delete the current edge
+                    self.SetNewDistribution2(engine_init.BNet, node, cases)
+                    dim = self.BNet.Dimension(node)
+                    #print 'try calculating score'
+                    score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[node.name], cases)
+                    var_score = score - score_init
+                    if var_score > prec_var_score:
+                        print 'deleted:', v.name, node.name, var_score
+                        prec_var_score = var_score
+                        G_best = self.BNet.copy()
+                    self.BNet = G_initial.copy()
+                    print 'finish trying deleting an edge'
+                
+                # Add all possible edges
+                G = copy.deepcopy(engine_init.BNet)
+                nodes = []
+                for node in G.all_v:
+                    if (not (node.name in [vv.name for vv in self.BNet.v[v.name].out_v])) and (not (node.name == v.name)):
+                        nodes.append(node)
+                while nodes:
+                    print 'try to add an edge'
+                    node = nodes.pop(0)
+                    if G.e.keys():
+                        edge = graph.DirEdge(max(G.e.keys())+1, self.BNet.v[v.name], self.BNet.v[node.name])
+                    else:
+                        edge = graph.DirEdge(0, self.BNet.v[v.name], self.BNet.v[node.name])
+                    self.ChangeStruct('add', edge)
+                    if self.BNet.HasNoCycles(self.BNet.v[node.name]):
+                        dim_init = engine_init.BNet.Dimension(node)
+                        score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[node.name], cases)
+                        self.SetNewDistribution2(engine_init.BNet, node, cases)
+                        dim = self.BNet.Dimension(node)
+                        score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[node.name], cases)
+                        var_score = score - score_init
+                        if var_score > prec_var_score:
+                            print 'added: ', v.name, node.name, var_score
+                            prec_var_score = var_score
+                            G_best = self.BNet.copy()
+                    self.BNet = G_initial.copy()
+                    print 'finish trying adding an edge'
+            
+                # Invert all possible edges
+                G = copy.deepcopy(G_initial)
+                edges = copy.deepcopy(G.v[v.name].out_e)
+                while edges:
+                    print 'try to invert an edge'
+                    edge = edges.pop(0)
+                    node = self.BNet.v[edge._v[1].name] #node is the child node
+                    dim_init1 = G_initial.Dimension(node)
+                    score_init1 = engine_init.ScoreBIC(N, dim_init1, G_initial, G_initial.v[node.name], cases)
+                    self.ChangeStruct('del', edge)
+                    self.SetNewDistribution2(engine_init.BNet, node, cases)
+                    dim1 = self.BNet.Dimension(node)
+                    score1 = self.ScoreBIC(N, dim1, self.BNet, self.BNet.v[node.name], cases)
+                    G_invert = self.BNet.copy() 
+                    engine_invert = GreedyStructLearningEngine(G_invert)  
+                    inverted_edge = graph.DirEdge(max(G.e.keys())+1, self.BNet.v[node.name],self.BNet.v[v.name])
+                    self.ChangeStruct('add', inverted_edge)
+                    if self.BNet.HasNoCycles(self.BNet.v[node.name]):
+                        dim_init = G_initial.Dimension(v)
+                        score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[v.name], cases)
+                        self.SetNewDistribution2(engine_invert.BNet, v, cases)
+                        dim = self.BNet.Dimension(v)
+                        score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[v.name], cases)
+                        var_score = score1 - score_init1 + score - score_init
+                        if var_score > prec_var_score + 5: #+ 5 is to avoid recalculation due to round errors
+                            print 'inverted:', v.name, node.name, var_score
+                            prec_var_score = var_score
+                            G_best = self.BNet.copy()
+                    self.BNet = G_initial.copy()
+                    print 'finish trying inverting an edge'
+            
+            #self.BNet is the optimal graph structure
+            if prec_var_score == 0:
+                self.converged = True
+            self.BNet = G_best.copy()
+            #self.engine = ConnexeInferenceJTree(self.BNet)
+        
+        def SetNewDistribution2(self, G_initial, node, cases):
+            '''Set the new distribution of the node node. The other distributions
+            are the same as G_initial (only node has a new parent, so the other 
+            distributions don't change). Works also with incomplete data'''
+            self.BNet.InitDistributions()
+            for v in G_initial.all_v:
+                if v.name != node.name:
+                    cpt = G_initial.v[v.name].distribution.Convert_to_CPT()
+                    self.BNet.v[v.name].distribution.setParameters(cpt)
+                #else:
+            if self.BNet.v[node.name].distribution.isAdjustable:
+                self.BNet.v[node.name].distribution.initializeCounts()
+                for case in cases :
+                    known = dict() # will contain al the known data of the case
+                    for key in case.iterkeys():
+                        if case[key] != '?':
+                            known[key] = case[key]
+                    for v in self.BNet.v.values():
+                        if v.distribution.isAdjustable:
+                            names = [parent.name for parent in self.BNet.v[node.name].family[1:]]
+                            nvals = [parent.nvalues for parent in self.BNet.v[node.name].family[1:]]
+                            names.append(self.BNet.v[node.name].name)
+                            nvals.append(self.BNet.v[node.name].nvalues)
+                            self.calcExpectation(self.BNet.v[node.name],known,names,nvals)
+                    self.BNet.v[node.name].distribution.setAugmentedAndCounts()
+                    self.BNet.v[node.name].distribution.normalize(dim=self.BNet.v[node.name].name)
+
+        def SetNewDistribution(self, G_initial, node, cases):
+            '''Set the new distribution of the node node. The other distributions
+            are the same as G_initial (only node has a new parent, so the other 
+            distributions don't change). Works also with incomplete data'''
+            self.BNet.InitDistributions()
+            for v in G_initial.all_v:
+                if v.name != node.name:
+                    cpt = G_initial.v[v.name].distribution.Convert_to_CPT()
+                    self.BNet.v[v.name].distribution.setParameters(cpt)
+                else:
+                    if self.BNet.v[node.name].distribution.isAdjustable:
+                        self.BNet.v[node.name].distribution.initializeCounts()
+                        for case in cases :
+                            known={} # will contain all the known data of case
+                            unknown=[] # will contain all the unknown keys of case
+                            for key in case.iterkeys():
+                                if case[key] != '?': # It's the only part of code you have to change if you want to have another 'unknown sign' instead of '?'
+                                    known[key] = case[key]
+                                else:
+                                    unknown.append(key)
+                            if len(case) == len(known): # Then all the data is known -> proceed as LearnMLParams (inference.py)
+                                self.BNet.v[node.name].distribution.incrCounts(case)
+                            else:
+                                states_list = self.Combinations(unknown) # Give a dictionary list of all the possible states of the unknown parameters
+                                likelihood_list = self.DetermineLikelihood(known, states_list) # Give a list with the likelihood to have the states in states_list				  
+                                for j, index_unknown in enumerate(states_list):
+                                    index = copy.copy(known)
+                                    index.update(index_unknown)
+                                    self.BNet.v[node.name].distribution.addToCounts(index, likelihood_list[j])
+                        self.BNet.v[node.name].distribution.setCounts()
+                        self.BNet.v[node.name].distribution.normalize(dim=node.name)
 	
-	def __init__(self, BNet):
-		self.BNet = BNet.copy()
-		#self.engine = ConnexeInferenceJTree(self.BNet)
-		self.converged = False
+        def ScoreBIC (self, N, dim, G, node, data):
+            ''' This function computes the BIC score of one node.
+            N is the size of the data from which we learn the structure
+            dim is the dimension of the node, = (nbr of state - 1)*nbr of state of the parents
+            data is the list of cases
+            return the BIC score
+            Works also with incomplete data!
+            '''
+            #print 'begin forbic'
+            score = self.ForBIC(G, data, node)
+            #print 'end forbic, score = ', score
+            score = score - 0.5*dim*math.log(N)
+            return score
 
-	def StructLearning(self, cases):
-		N = len(cases)
-		iter = 0
-		while (not self.converged):
-			self.LearnStruct(cases, N)
-			iter +=1
-			print 'Structure iteration:', iter
+        def ForBIC (self, G, cases, node):
+            ''' Computes for each case the probability to have node and his parents
+            in the case state, take the log of that probability and add them.'''
+            score = 0
+            for case in cases :
+                cpt = 0 
+                known={} # will contain all the known data of case
+                unknown=[] # will contain all the unknown data of case
+                for key in case.iterkeys():
+                    if case[key] != '?': # It's the only part of code you have to change if you want to have another 'unknown sign' instead of '?'
+                        known[key] = case[key]
+                    else:
+                        unknown.append(key)
+                if len(case) == len(known): # Then all the data is known
+                    #print 'all the data is known, node.distribution'
+                    cpt = node.distribution[case]
+                    #print 'cpt, all data is known: ', cpt
+                else:
+                    #print 'begin Combinations'
+                    states_list = self.Combinations(unknown) # Give a dictionary list of all the possible states of the unknown parameters
+                    #print 'begin determinelikelihood'
+                    likelihood_list = self.DetermineLikelihood(known, states_list) # Give a list with the likelihood to have the states in states_list	
+                    #print 'end determinelikelihood'			  
+                    for j, index_unknown in enumerate(states_list):
+                        index = copy.copy(known)
+                        index.update(index_unknown)
+                        cpt = cpt + likelihood_list[j]*node.distribution[index]
+                        #print 'cpt: ', cpt
+                if cpt == 0: # To avoid log(0)
+                    cpt = math.exp(-700)
+                score = score + math.log(cpt)
+            return score
 
-	def GlobalBICScore(self, N, cases):
-		'''Computes the BIC score of self.BNet'''
-		score = 0
-		for v in self.BNet.all_v:
-			cpt_matrix = v.distribution.Convert_to_CPT()
-			dim = self.BNet.Dimension(v)
-			score = score + self.ScoreBIC(N, dim, self.BNet, v, cases) 
-		return score
-
-	def LearnStruct(self, cases, N):
-		"""Greedy search for optimal structure (all the data in cases are known).
-		It will go through every node of the BNet. At each node, it will delete 
-		every outgoing edge, or add every possible edge, or reverse every 
-		possible edge. It will compute the BIC score each time and keep the BNet
-		with the highest score.
-		"""
-		G_initial = self.BNet.copy()
-		engine_init = GreedyStructLearningEngine(G_initial)
-		G_best = self.BNet.copy()	  
-		prec_var_score = 0
-		
-		for v in self.BNet.all_v:
-			G = copy.deepcopy(engine_init.BNet)
-			edges = copy.deepcopy(G.v[v.name].out_e)
-			
-			# delete the outgoing edges
-			while edges:
-				edge = edges.pop(0)
-				node = edge._v[1] #node is the child node, the only node for which the cpt table changes
-				dim_init = G_initial.Dimension(node)
-				score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[node.name], cases)
-				self.ChangeStruct('del', edge) #delete the current edge
-				self.SetNewDistribution(engine_init.BNet, node, cases)
-				dim = self.BNet.Dimension(node)
-				score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[node.name], cases)
-				var_score = score - score_init
-				if var_score > prec_var_score:
-					print 'deleted:', v.name, node.name, var_score
-					prec_var_score = var_score
-					G_best = self.BNet.copy()
-				self.BNet = G_initial.copy()
-			
-			# Add all possible edges
-			G = copy.deepcopy(engine_init.BNet)
-			nodes = []
-			for node in G.all_v:
-				if (not (node.name in [vv.name for vv in self.BNet.v[v.name].out_v])) and (not (node.name == v.name)):
-					nodes.append(node)
-			while nodes:
-				node = nodes.pop(0)
-				if G.e.keys():
-					edge = graph.DirEdge(max(G.e.keys())+1, self.BNet.v[v.name], self.BNet.v[node.name])
-				else:
-					edge = graph.DirEdge(0, self.BNet.v[v.name], self.BNet.v[node.name])
-				self.ChangeStruct('add', edge)
-				if self.BNet.HasNoCycles(self.BNet.v[node.name]):
-					dim_init = engine_init.BNet.Dimension(node)
-					score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[node.name], cases)
-					self.SetNewDistribution(engine_init.BNet, node, cases)
-					dim = self.BNet.Dimension(node)
-					score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[node.name], cases)
-					var_score = score - score_init
-					if var_score > prec_var_score:
-						print 'added: ', v.name, node.name, var_score
-						prec_var_score = var_score
-						G_best = self.BNet.copy()
-				self.BNet = G_initial.copy()
-		
-			# Invert all possible edges
-			G = copy.deepcopy(G_initial)
-			edges = copy.deepcopy(G.v[v.name].out_e)
-			while edges:
-				edge = edges.pop(0)
-				node = self.BNet.v[edge._v[1].name] #node is the child node
-				dim_init1 = G_initial.Dimension(node)
-				score_init1 = engine_init.ScoreBIC(N, dim_init1, G_initial, G_initial.v[node.name], cases)
-				self.ChangeStruct('del', edge)
-				self.SetNewDistribution(engine_init.BNet, node, cases)
-				dim1 = self.BNet.Dimension(node)
-				score1 = self.ScoreBIC(N, dim1, self.BNet, self.BNet.v[node.name], cases)
-				G_invert = self.BNet.copy() 
-				engine_invert = GreedyStructLearningEngine(G_invert)  
-				inverted_edge = graph.DirEdge(max(G.e.keys())+1, self.BNet.v[node.name],self.BNet.v[v.name])
-				self.ChangeStruct('add', inverted_edge)
-				if self.BNet.HasNoCycles(self.BNet.v[node.name]):
-					dim_init = G_initial.Dimension(v)
-					score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[v.name], cases)
-					self.SetNewDistribution(engine_invert.BNet, v, cases)
-					dim = self.BNet.Dimension(v)
-					score = self.ScoreBIC(N, dim, self.BNet, self.BNet.v[v.name], cases)
-					var_score = score1 - score_init1 + score - score_init
-					if var_score > prec_var_score + 5: #+ 5 is to avoid recalculation due to round errors
-						print 'inverted:', v.name, node.name, var_score
-						prec_var_score = var_score
-						G_best = self.BNet.copy()
-				self.BNet = G_initial.copy()
-		
-		#self.BNet is the optimal graph structure
-		if prec_var_score == 0:
-			self.converged = True
-		self.BNet = G_best.copy()
-		#self.engine = ConnexeInferenceJTree(self.BNet)
-	
-	def SetNewDistribution(self, G_initial, node, cases):
-		'''Set the new distribution of the node node. The other distributions
-		are the same as G_initial (only node has a new parent, so the other 
-		distributions don't change). Works also with incomplete data'''
-		self.BNet.InitDistributions()
-		for v in G_initial.all_v:
-			if v.name != node.name:
-				cpt = G_initial.v[v.name].distribution.Convert_to_CPT()
-				self.BNet.v[v.name].distribution.setParameters(cpt)
-			else:
-				if self.BNet.v[node.name].distribution.isAdjustable:
-					self.BNet.v[node.name].distribution.initializeCounts()
-					for case in cases :
-						known={} # will contain all the known data of case
-						unknown=[] # will contain all the unknown keys of case
-						for key in case.iterkeys():
-							if case[key] != '?': # It's the only part of code you have to change if you want to have another 'unknown sign' instead of '?'
-								known[key] = case[key]
-							else:
-								unknown.append(key)
-						if len(case) == len(known): # Then all the data is known -> proceed as LearnMLParams (inference.py)
-							self.BNet.v[node.name].distribution.incrCounts(case)
-						else:
-							states_list = self.Combinations(unknown) # Give a dictionary list of all the possible states of the unknown parameters
-							likelihood_list = self.DetermineLikelihood(known, states_list) # Give a list with the likelihood to have the states in states_list				  
-							for j, index_unknown in enumerate(states_list):
-								index = copy.copy(known)
-								index.update(index_unknown)
-								self.BNet.v[node.name].distribution.addToCounts(index, likelihood_list[j])
-					self.BNet.v[node.name].distribution.setCounts()
-					self.BNet.v[node.name].distribution.normalize(dim=node.name)
-	
-	def ScoreBIC (self, N, dim, G, node, data):
-		''' This function computes the BIC score of one node.
-		N is the size of the data from which we learn the structure
-		dim is the dimension of the node, = (nbr of state - 1)*nbr of state of the parents
-		data is the list of cases
-		return the BIC score
-		Works also with incomplete data!
-		'''
-		score = self.ForBIC(G, data, node)
-		score = score - 0.5*dim*math.log(N)
-		return score
-
-	def ForBIC(self, G, cases, node):
-		''' Computes for each case the probability to have node and his parents
-		in the case state, take the log of that probability and add them.'''
-		score = 0
-		for case in cases :
-			cpt = 0 
-			known={} # will contain all the known data of case
-			unknown=[] # will contain all the unknown data of case
-			for key in case.iterkeys():
-				if case[key] != '?': # It's the only part of code you have to change if you want to have another 'unknown sign' instead of '?'
-					known[key] = case[key]
-				else:
-					unknown.append(key)
-			if len(case) == len(known): # Then all the data is known
-				cpt = node.distribution[case]
-			else:
-				states_list = self.Combinations(unknown) # Give a dictionary list of all the possible states of the unknown parameters
-				likelihood_list = self.DetermineLikelihood(known, states_list) # Give a list with the likelihood to have the states in states_list				  
-				for j, index_unknown in enumerate(states_list):
-					index = copy.copy(known)
-					index.update(index_unknown)
-					cpt = cpt + likelihood_list[j]*node.distribution[index]
-			if cpt == 0: # To avoid log(0)
-				cpt = math.exp(-700)
-			score = score + math.log(cpt)
-		return score
-
-	def ChangeStruct(self, change, edge):
-		"""Changes the edge (add, remove or reverse)"""
-		if change == 'del':
-			self.BNet.del_e(edge)
-		elif change == 'add':
-			self.BNet.add_e(edge)
-		elif change == 'inv':
-			self.BNet.inv_e(edge)
-		else:
-			assert(False), "The asked change of structure is not possible. Only 'del' for delete, 'add' for add, and 'inv' for invert"
+        def ChangeStruct(self, change, edge):
+            """Changes the edge (add, remove or reverse)"""
+            if change == 'del':
+                self.BNet.del_e(edge)
+            elif change == 'add':
+                self.BNet.add_e(edge)
+            elif change == 'inv':
+                self.BNet.inv_e(edge)
+            else:
+                assert(False), "The asked change of structure is not possible. Only 'del' for delete, 'add' for add, and 'inv' for invert"
 
 class SEMLearningEngine(GreedyStructLearningEngine, EMLearningEngine):	
 	""" Structural EM learning algorithm
@@ -574,25 +620,37 @@ class GreedyStructLearningTestCase(unittest.TestCase):
 		self.BNet = G  
 	
 	def testStruct(self):
-		N = 2000
+		N = 50
 		# sample the network N times, delete some data
 		cases = self.BNet.Sample(N)	   # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]		 
-		for i in range(500):
+		for i in range(10):
 			case = cases[3*i]
 			rand = random.sample(['c','s','r','w'],1)[0]
 			case[rand] = '?' 
-		for i in range(50):
+		for i in range(5):
 			case = cases[3*i]
 			rand = random.sample(['c','s','r','w'],1)[0]
 			case[rand] = '?' 
-		G = bayesnet.BNet('Water Sprinkler Bayesian Network2')
+##		G = bayesnet.BNet('Water Sprinkler Bayesian Network2')
+##		c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+##		G.InitDistributions()
+##		c.setDistributionParameters([0.5, 0.5])
+##		s.setDistributionParameters([0.7, 0.3])
+##		r.setDistributionParameters([0.5, 0.5])
+##		w.setDistributionParameters([0.35, 0.65])
+		# Test StructLearning
+		G = bayesnet.BNet('Water Sprinkler Bayesian Network')
 		c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+		for ep in [(c,r), (c,s), (r,w), (s,w)]:
+			G.add_e(graph.DirEdge(len(G.e), *ep))
 		G.InitDistributions()
 		c.setDistributionParameters([0.5, 0.5])
-		s.setDistributionParameters([0.7, 0.3])
-		r.setDistributionParameters([0.5, 0.5])
-		w.setDistributionParameters([0.35, 0.65])
-		# Test StructLearning
+		s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+		r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+		w.distribution[:,0,0]=[0.99, 0.01]
+		w.distribution[:,0,1]=[0.1, 0.9]
+		w.distribution[:,1,0]=[0.1, 0.9]
+		w.distribution[:,1,1]=[0.0, 1.0]
 		struct_engine = GreedyStructLearningEngine(G)
 		struct_engine.StructLearning(cases)
 		print 'learned structure: ', struct_engine.BNet
@@ -708,13 +766,13 @@ class EMLearningTestCase(unittest.TestCase):
 		print 'ok!!!!!!!!!!!!'
 
 if __name__ == '__main__':
-	suite = unittest.makeSuite(SEMLearningTestCase, 'test')
-	runner = unittest.TextTestRunner()
-	runner.run(suite) 
+##	suite = unittest.makeSuite(SEMLearningTestCase, 'test')
+##	runner = unittest.TextTestRunner()
+##	runner.run(suite) 
 
-##	  suite = unittest.makeSuite(GreedyStructLearningTestCase, 'test')
-##	  runner = unittest.TextTestRunner()
-##	  runner.run(suite)	   
+	  suite = unittest.makeSuite(GreedyStructLearningTestCase, 'test')
+	  runner = unittest.TextTestRunner()
+	  runner.run(suite)	   
 	
 ##	  suite = unittest.makeSuite(EMLearningTestCase, 'test')
 ##	  runner = unittest.TextTestRunner()
