@@ -639,8 +639,10 @@ class ConnexeInferenceJTree(JoinTree):
         and acts transparently to the user
     """
     def __init__(self, BNet):
-        JoinTree.__init__(self, BNet)
+        #JoinTree.__init__(self, BNet)
         self.BNets = BNet.split_into_components()
+        for G in self.BNets:
+            JoinTree.__init__(self, G)
 
     def Marginalise(self, vname):
         """ trouver dans quel reseau appartient le noeud et faire l'inference 
@@ -650,22 +652,17 @@ class ConnexeInferenceJTree(JoinTree):
                 if v.name == vname:
                     engine = JoinTree(G)
                     return engine.Marginalise(vname)
-    
-##    def Initialization(self):
-##        """ trouver dans quel reseau appartient le noeud et faire l'inference 
-##        sur celui-ci"""
-##        for G in self.BNets:
-##            engine = JoinTree(G)
-##            engine.Initialization()
 
-##    def SetObs(self, ev = dict()):
-##        """ trouver dans quel reseau appartient le noeud et faire l'inference 
-##        sur celui-ci"""
-##        for G in self.BNets:
-##            for v in G.all_v:
-##                if v.name == vname:
-##                    engine = JoinTree(G)
-##                    engine.SetObs(ev)
+    def SetObs(self, ev = dict()):
+        """ trouver dans quel reseau appartient le noeud et faire l'inference 
+        sur celui-ci"""
+        for vert in ev:
+            for G in self.BNets:
+                for v in G.all_v:
+                    if v.name == vert:
+                        evidence = {vert:ev[vert]}
+                        engine = JoinTree(G)
+                        engine.SetObs(evidence)
 
 class MCMCEngine(InferenceEngine):
         """ MCMC in the way described in the presentation by Rina Rechter """

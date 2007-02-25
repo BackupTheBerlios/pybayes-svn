@@ -335,6 +335,7 @@ class GreedyStructLearningEngine(EMLearningEngine):
                     #print 'try calculating score init'
                     score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[node.name], cases)
                     self.ChangeStruct('del', edge) #delete the current edge
+                    self.engine = ConnexeInferenceJTree(self.BNet)
                     self.SetNewDistribution2(engine_init.BNet, node, cases)
                     dim = self.BNet.Dimension(node)
                     #print 'try calculating score'
@@ -361,6 +362,7 @@ class GreedyStructLearningEngine(EMLearningEngine):
                     else:
                         edge = graph.DirEdge(0, self.BNet.v[v.name], self.BNet.v[node.name])
                     self.ChangeStruct('add', edge)
+                    self.engine = ConnexeInferenceJTree(self.BNet)
                     if self.BNet.HasNoCycles(self.BNet.v[node.name]):
                         dim_init = engine_init.BNet.Dimension(node)
                         score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[node.name], cases)
@@ -385,6 +387,7 @@ class GreedyStructLearningEngine(EMLearningEngine):
                     dim_init1 = G_initial.Dimension(node)
                     score_init1 = engine_init.ScoreBIC(N, dim_init1, G_initial, G_initial.v[node.name], cases)
                     self.ChangeStruct('del', edge)
+                    self.engine = ConnexeInferenceJTree(self.BNet)
                     self.SetNewDistribution2(engine_init.BNet, node, cases)
                     dim1 = self.BNet.Dimension(node)
                     score1 = self.ScoreBIC(N, dim1, self.BNet, self.BNet.v[node.name], cases)
@@ -392,6 +395,7 @@ class GreedyStructLearningEngine(EMLearningEngine):
                     engine_invert = GreedyStructLearningEngine(G_invert)  
                     inverted_edge = graph.DirEdge(max(G.e.keys())+1, self.BNet.v[node.name],self.BNet.v[v.name])
                     self.ChangeStruct('add', inverted_edge)
+                    self.engine = ConnexeInferenceJTree(self.BNet)
                     if self.BNet.HasNoCycles(self.BNet.v[node.name]):
                         dim_init = G_initial.Dimension(v)
                         score_init = engine_init.ScoreBIC(N, dim_init, G_initial, G_initial.v[v.name], cases)
@@ -577,14 +581,14 @@ class SEMLearningTestCase(unittest.TestCase):
 		self.BNet = G 
 
 	def testSEM(self):
-		N = 2000
+		N = 20
 		# sample the network N times, delete some data
 		cases = self.BNet.Sample(N)	   # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]		 
-		for i in range(500):
+		for i in range(5):
 			case = cases[3*i]
 			rand = random.sample(['c','s','r','w'],1)[0]
 			case[rand] = '?' 
-		for i in range(50):
+		for i in range(3):
 			case = cases[3*i]
 			rand = random.sample(['c','s','r','w'],1)[0]
 			case[rand] = '?' 
@@ -631,26 +635,26 @@ class GreedyStructLearningTestCase(unittest.TestCase):
 			case = cases[3*i]
 			rand = random.sample(['c','s','r','w'],1)[0]
 			case[rand] = '?' 
-##		G = bayesnet.BNet('Water Sprinkler Bayesian Network2')
-##		c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
-##		G.InitDistributions()
-##		c.setDistributionParameters([0.5, 0.5])
-##		s.setDistributionParameters([0.7, 0.3])
-##		r.setDistributionParameters([0.5, 0.5])
-##		w.setDistributionParameters([0.35, 0.65])
-		# Test StructLearning
-		G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+		G = bayesnet.BNet('Water Sprinkler Bayesian Network2')
 		c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
-		for ep in [(c,r), (c,s), (r,w), (s,w)]:
-			G.add_e(graph.DirEdge(len(G.e), *ep))
 		G.InitDistributions()
 		c.setDistributionParameters([0.5, 0.5])
-		s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
-		r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-		w.distribution[:,0,0]=[0.99, 0.01]
-		w.distribution[:,0,1]=[0.1, 0.9]
-		w.distribution[:,1,0]=[0.1, 0.9]
-		w.distribution[:,1,1]=[0.0, 1.0]
+		s.setDistributionParameters([0.7, 0.3])
+		r.setDistributionParameters([0.5, 0.5])
+		w.setDistributionParameters([0.35, 0.65])
+		# Test StructLearning
+##		G = bayesnet.BNet('Water Sprinkler Bayesian Network')
+##		c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
+##		for ep in [(c,r), (c,s), (r,w), (s,w)]:
+##			G.add_e(graph.DirEdge(len(G.e), *ep))
+##		G.InitDistributions()
+##		c.setDistributionParameters([0.5, 0.5])
+##		s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
+##		r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
+##		w.distribution[:,0,0]=[0.99, 0.01]
+##		w.distribution[:,0,1]=[0.1, 0.9]
+##		w.distribution[:,1,0]=[0.1, 0.9]
+##		w.distribution[:,1,1]=[0.0, 1.0]
 		struct_engine = GreedyStructLearningEngine(G)
 		struct_engine.StructLearning(cases)
 		print 'learned structure: ', struct_engine.BNet
@@ -766,13 +770,13 @@ class EMLearningTestCase(unittest.TestCase):
 		print 'ok!!!!!!!!!!!!'
 
 if __name__ == '__main__':
-##	suite = unittest.makeSuite(SEMLearningTestCase, 'test')
-##	runner = unittest.TextTestRunner()
-##	runner.run(suite) 
+	suite = unittest.makeSuite(SEMLearningTestCase, 'test')
+	runner = unittest.TextTestRunner()
+	runner.run(suite) 
 
-	  suite = unittest.makeSuite(GreedyStructLearningTestCase, 'test')
-	  runner = unittest.TextTestRunner()
-	  runner.run(suite)	   
+##	  suite = unittest.makeSuite(GreedyStructLearningTestCase, 'test')
+##	  runner = unittest.TextTestRunner()
+##	  runner.run(suite)	   
 	
 ##	  suite = unittest.makeSuite(EMLearningTestCase, 'test')
 ##	  runner = unittest.TextTestRunner()
