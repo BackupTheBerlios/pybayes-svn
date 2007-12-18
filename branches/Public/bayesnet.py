@@ -1,35 +1,14 @@
-###############################################################################
-## OpenBayes
-## OpenBayes for Python is a free and open source Bayesian Network library
-## Copyright (C) 2006  Gaitanis Kosta
-##
-## This library is free software; you can redistribute it and/or
-## modify it under the terms of the GNU Lesser General Public
-## License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-##
-## This library is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-## Lesser General Public License for more details.
-##
-## You should have received a copy of the GNU Lesser General Public
-## License along with this library (LICENSE.TXT); if not, write to the 
-## Free Software Foundation, 
-## Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-###############################################################################
+"""Bayesian network implementation.  Influenced by Cecil Huang's and 
+Adnan Darwiche's "Inference in Belief Networks: A Procedural Guide," 
+International Journal of Approximate Reasoning, 1994.
 
-"""Bayesian network implementation.  Influenced by Cecil Huang's and Adnan
-Darwiche's "Inference in Belief Networks: A Procedural Guide," International
-Journal of Approximate Reasoning, 1994.
-
-Copyright 2005, Kosta Gaitanis (gaitanis@tele.ucl.ac.be).  Please see the
-license file for legal information.
+Copyright 2005, Kosta Gaitanis (gaitanis@tele.ucl.ac.be).  Please see 
+the license file for legal information.
 """
 
-__all__ = ['BVertex','BNet']
+__all__ = ['BVertex', 'BNet']
 __version__ = '0.1'
-__author__ = 'Kosta Gaitanis  & Elliot Cohen'
+__author__ = 'Kosta Gaitanis & Elliot Cohen'
 __author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
 #Python Standard Distribution Packages
 import sys
@@ -40,35 +19,32 @@ import copy
 #import profile
 import bisect       # for appending elements to a sorted list
 import logging
+
 #Major Packages
 import numarray as na
 import numarray.mlab
 from numarray.random_array import randint, seed
 from numarray.ieeespecial import setnan, getnan
+
 #Library Specific Modules
 import graph
 import delegate
-
 import distributions
 import potentials
 import inference
 
 seed()
-
-# uncomment to show INFO messages
 #logging.basicConfig(level= logging.INFO)
-# uncomment to show DEBUG messages
-#logging.basicConfig(level= logging.DEBUG)
-logging.basicConfig(level = logging.NOTSET)
 
 class BVertex(graph.Vertex):
-    def __init__(self, name, discrete = True, nvalues = 2, observed = True):
+    def __init__(self, name, discrete=True, nvalues=2, observed=True):
         '''
-        Name neen't be a string but must be hashable and immutable.
+        Name needn't be a string but must be hashable and immutable.
         if discrete = True:
-                nvalues = number of possible values for variable contained in Vertex
+            nvalues = number of possible values for variable contained \
+                      in Vertex
         if discrete = False:
-                nvalues is not relevant = 0
+            nvalues is not relevant = 0
         observed = True means that this node CAN be observed
         '''
         graph.Vertex.__init__(self, name)
@@ -86,21 +62,21 @@ class BVertex(graph.Vertex):
 
     def InitDistribution(self, *args, **kwargs):
         """ Initialise the distribution, all edges must be added"""
-        #first decide which type of Distribution
-        #if all nodes are discrete, then Multinomial)
+        # first decide which type of Distribution
+        # if all nodes are discrete, then Multinomial)
         if na.alltrue([v.discrete for v in self.family]):
-            #print self.name,'Multinomial'
-            #FIX: should be able to pass through 'isAdjustable=True' and it work
+            # print self.name,'Multinomial'
+            # FIX: should be able to pass through 'isAdjustable=True' and it work
             self.distribution = distributions.MultinomialDistribution(self, *args, **kwargs) 
             return
 
-        #gaussian distribution
+        # gaussian distribution
         if not self.discrete:
-            #print self.name,'Gaussian'
+            # print self.name,'Gaussian'
             self.distribution = distributions.Gaussian_Distribution(self, *args, **kwargs)
             return
         
-        #other cases go here
+        # other cases go here
     
     def setDistributionParameters(self, *args, **kwargs):
         # sets any parameters for the distribution of this node
@@ -108,9 +84,9 @@ class BVertex(graph.Vertex):
         
     def __str__(self):
         if self.discrete:
-            return graph.Vertex.__str__(self)+'    (discrete, %d)' %self.nvalues
+            return graph.Vertex.__str__(self) + '    (discrete, %d)' %self.nvalues
         else:
-            return graph.Vertex.__str__(self)+'    (continuous)'
+            return graph.Vertex.__str__(self) + '    (continuous)'
 
     #============================================================
     # This is used for the MCMC engine
@@ -123,8 +99,7 @@ class BVertex(graph.Vertex):
             d = distributions.Gaussian_Distribution(self, ignoreFamily = True)
         
         return d
-            
-    
+     
     # This function is necessary for correct Message Pass
     # we fix the order of variables, by using a cmp function
     def __cmp__(a,b):
@@ -135,18 +110,16 @@ class BVertex(graph.Vertex):
 class BNet(graph.Graph):
     log = logging.getLogger('BNet')
     log.setLevel(logging.ERROR)
-    def __init__(self, name = None):
+    def __init__(self, name=None):
         graph.Graph.__init__(self, name)
 
-    def __copy__(self):
+    def copy(self):
         ''' returns a deep copy of this BNet '''
-        G_new = graph.Graph.__copy__(self) # this is the Graph.__copy__() method in graph.py
-
+        G_new = copy.deepcopy(self)
         G_new.InitDistributions()
-
         for v in self.all_v:
-            G_new.v[v.name].distribution.Update(v.distribution)
-
+                G_new.v[v.name].distribution.setParameters(v.distribution.Convert_to_CPT())        
+       
         return G_new
 
     def add_e(self, e):
@@ -162,9 +135,7 @@ class BNet(graph.Graph):
         # remove the parent from the child node
         edge._v[1].family.pop(edge._v[1].family.index(edge._v[0]))
         graph.Graph.del_e(self, edge.name)
-        
-        
-    
+  
     def inv_e(self, e):
         self.e[e].invert()
         # change the families of the corresponding nodes
@@ -173,8 +144,7 @@ class BNet(graph.Graph):
     
     def Moralize(self):
         logging.info('Moralising Tree')
-        # make a copy of the existing BNet
-        G = inference.MoralGraph(name = 'Moralized ' + str(self.name))
+        G = inference.MoralGraph(name='Moralized '+str(self.name))
         
         # for each vertice, create a corresponding vertice
         for v in self.v.values():
@@ -191,17 +161,16 @@ class BNet(graph.Graph):
         # connect all pairs of parents for each node
         for v in self.v.values():
             # get parents for each vertex
-            logging.debug('Node : ' + str(v))
+            self.log.debug('Node : ' + str(v))
             parents = [G.v[p.name] for p in list(v.in_v)]
-            logging.debug('parents: ' + str([p.name for p in list(v.in_v)]))
+            self.log.debug('parents: ' + str([p.name for p in list(v.in_v)]))
             
-            for p1,i in zip(parents, range(len(parents))):
+            for p1, i in zip(parents, range(len(parents))):
                 for p2 in parents[i+1:]:
                     if not p1.connecting_e(p2):
-                        logging.debug('adding edge '+ str(p1) + ' -- ' + str(p2))
+                        self.log.debug('adding edge '+ str(p1) + ' -- ' + str(p2))
                         G.add_e(graph.UndirEdge(len(G.e), p1, p2))
 
-        
         return G
     
     @graph._roprop('List of observed vertices.')
@@ -214,10 +183,11 @@ class BNet(graph.Graph):
         components = self.connex_components()
 
         BNets = []
-        i=0
+        i = 0
         # create a BNet for each element in components
         for comp in components:
-            new = BNet(self.name+' ('+str(i+1)+'/'+str(len(components))+')')
+            new = BNet(self.name + ' (' + str(i+1) + '/' + \
+                       str(len(components)) + ')')
             BNets.append(new)
             
             #add vertices to this new BNet
@@ -227,12 +197,13 @@ class BNet(graph.Graph):
             for v in comp:
                 for e in v.out_e:
                     new.add_e(e)
-            i+=1
+            i += 1
         return BNets
     
     def InitDistributions(self):
-        """ Finalizes the network, all edges must be added. A distribution (unknown)
-        is added to each node of the network"""
+        """ Finalizes the network, all edges must be added. A 
+        distribution (unknown) is added to each node of the network
+        """
         #---TODO: test if DAG (fdebrouc)
         # this replaces the InitCPTs() function
         for v in self.v.values(): v.InitDistribution()
@@ -245,8 +216,9 @@ class BNet(graph.Graph):
             v.rand()
             v.makecpt()
     
-    def Sample(self,n=1):
-        """ Generate a sample of the network, n is the number of samples to generate
+    def Sample(self, n=1):
+        """ Generate a sample of the network, n is the number of 
+        samples to generate
         """
         assert(len(self.v) > 0)
         samples = []
@@ -267,7 +239,8 @@ class BNet(graph.Graph):
         for i in range(n):
             sample = {}
             for v in topological:
-                assert(not v.distribution == None), "vertex's distribution is not initialized"
+                assert(not v.distribution == None), \
+                "vertex's distribution is not initialized"
                 sample[v.name] = v.distribution.sample(sample)
             samples.append(sample)
 
@@ -280,7 +253,7 @@ class BNet(graph.Graph):
         q = 1
         for Pa in self.v[node.name].distribution.parents:
             q = q * self.v[Pa.name].nvalues
-        dim = (self.v[node.name].nvalues-1)*q
+        dim = (self.v[node.name].nvalues-1) * q
         return dim
     
 
@@ -289,18 +262,22 @@ class BNetTestCase(unittest.TestCase):
     """
     def setUp(self):
         G = BNet('Water Sprinkler Bayesian Network')
-        c,s,r,w = [G.add_v(BVertex(name,True,2)) for name in 'c s r w'.split()]
-        
-        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+        c, s, r, w = [G.add_v(BVertex(name, True, 2)) for name in 'c s r w'.split()]
+        for ep in [(c, r), (c, s), (r, w), (s, w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
-            
+##        G.InitCPTs()
+##        c.setCPT([0.5, 0.5])
+##        s.setCPT([0.5, 0.9, 0.5, 0.1])
+##        r.setCPT([0.8, 0.2, 0.2, 0.8])
+##        w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
+
         G.InitDistributions()
 
         c.setDistributionParameters([0.5, 0.5])
         s.setDistributionParameters([0.5, 0.9, 0.5, 0.1])
         r.setDistributionParameters([0.8, 0.2, 0.2, 0.8])
-        w.setDistributionParameters([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
-        
+        w.setDistributionParameters([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])    
+
         self.c = c
         self.s = s
         self.r = r
@@ -308,7 +285,7 @@ class BNetTestCase(unittest.TestCase):
         self.BNet = G
 
     def testTopoSort(self):
-        sorted = self.BNet.topological_sort()
+        sorted = self.BNet.topological_sort() #xue deleted self
         assert(sorted[0] == self.c and \
                sorted[1] == self.s and \
                sorted[2] == self.r and \
@@ -316,46 +293,49 @@ class BNetTestCase(unittest.TestCase):
                "Sorted was not in proper topological order"
 
     def testSample(self):
-        cCPT = self.c.GetSamplingDistribution()
-        sCPT = self.s.GetSamplingDistribution()
-        rCPT = self.r.GetSamplingDistribution()
-        wCPT = self.w.GetSamplingDistribution()
+##        cCPT = distributions.MultinomialDistribution(self.c)
+##        sCPT = distributions.MultinomialDistribution(self.s)
+##        rCPT = distributions.MultinomialDistribution(self.r)
+##        wCPT = distributions.MultinomialDistribution(self.w)
+
+        cCPT = self.c.distribution
+        sCPT = self.s.distribution
+        rCPT = self.r.distribution
+        wCPT = self.w.distribution
         
         cCPT.initializeCounts() 
         sCPT.initializeCounts()
         rCPT.initializeCounts()
         wCPT.initializeCounts()
-        
-        samples = self.BNet.Sample(1000)
-        
-        for sample in samples:
+
+        for i in range(1000):
+            sample = self.BNet.Sample()[0]
             # Can use sample in all of these, it will ignore extra variables
             cCPT.incrCounts(sample) 
             sCPT.incrCounts(sample) 
             rCPT.incrCounts(sample) 
-            wCPT.incrCounts(sample) 
-        
-        assert(1,"Samples did not generate appropriate CPTs")
-        # if no errors occurred then it should be correct
-        # MCMCEngine will test if the sampling is done correctly
+            wCPT.incrCounts(sample)        
+##            cCPT[sample] += 1
+##            sCPT[sample] += 1
+##            rCPT[sample] += 1
+##            wCPT[sample] += 1
+        assert(na.allclose(cCPT,self.c.distribution.cpt,atol=.1) and \
+               na.allclose(sCPT,self.s.distribution.cpt,atol=.1) and \
+               na.allclose(rCPT,self.r.distribution.cpt,atol=.1) and \
+               na.allclose(wCPT,self.w.distribution.cpt,atol=.1)), \
+               "Samples did not generate appropriate CPTs"
     
     def testFamily(self):
         cFamily = self.BNet.v['c'].family
         sFamily = self.BNet.v['s'].family
         rFamily = self.BNet.v['r'].family
         wFamily = self.BNet.v['w'].family
-
-        assert(set(cFamily) == set([self.c]) and set(sFamily) == set([self.s,self.c]) and \
-               set(rFamily) == set([self.r,self.c]) and set(wFamily) == set([self.w,self.c,self.s]),\
-              "Families are not set correctly")
-            
-    def testCopy(self):
-        from copy import copy
         
-        G = copy(self.BNet)
-        assert(set([v.name for v in G.v.values()]) == set([v.name for v in self.BNet.v.values()])                
-                and [cv.distribution == self.BNet.v[cv.name].distribution for cv in G.v.values()] == [1,1,1,1]
-                ,"Copy is not correct")
+        assert(set(cFamily) == set([self.c]) and \
+               set(sFamily) == set([self.s, self.c]) and \
+               set(rFamily) == set([self.r, self.c]) and \
+               set(wFamily) == set([self.w, self.r, self.s])), \
+              "Families are not set correctly"
     
 if __name__ == '__main__':
     suite = unittest.makeSuite(BNetTestCase, 'test')
@@ -367,7 +347,7 @@ if __name__ == '__main__':
 ##    G = BNet( 'Water Sprinkler Bayesian Network' )
 ##    c, s, r, w = [G.add_v( BVertex( nm, True, 2 ) ) for nm in 'c s r w'.split()]
 ##    for ep in [( r, w ), ( s, w )]:
-##        G.add_e( DirEdge( len( G.e ), *ep ) )
+####        G.add_e( DirEdge( len( G.e ), *ep ) )
 ##        
 ##    print G
 ##
@@ -393,5 +373,5 @@ if __name__ == '__main__':
 ##    
 ##    #for g in gg:print g
 ##    
-##    for v in G.topological_sort(r):
-##        print v
+####    for v in G.topological_sort(r):
+####        print v

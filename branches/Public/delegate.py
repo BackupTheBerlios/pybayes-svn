@@ -32,7 +32,8 @@ class's metaclass.  For example:
     __metaclass__ = sip_meta_join
     ...
 
-Please see the license file for legal information.'''
+Please see the license file for legal information.
+'''
 
 
 __version__ = '0.1'
@@ -40,25 +41,27 @@ __author__ = 'Robert Dick (dickrp@ece.northwestern.edu)'
 
 
 def should_call(obj, pos, supr):
-	'''Returns bool.  Should 'self' delegate to 'super' at 'pos'?
-	
-	Determines whether pos is left-most derived of super in MRO.'''
+    '''Returns bool.  Should 'self' delegate to 'super' at 'pos'?
 
-	for c in type(obj).__mro__:
-		if supr in c.__bases__:
-			return pos is c
-	return False
+    Determines whether pos is left-most derived of super in MRO.
+    '''
+
+    for c in type(obj).__mro__:
+        if supr in c.__bases__:
+            return pos is c
+    return False
+
 
 class _no_delegation(object):
-	'''All class's attributes are null callable's.'''
-	
-	_to_base = set(['__bases__', '__name__', '__mro__', '__module__'])
+    '''All class's attributes are null callable's.'''
+    
+    _to_base = set(['__bases__', '__name__', '__mro__', '__module__'])
 
-	def __getattribute__(self, attr):
-		if attr in _no_delegation._to_base:
-			return getattr(object, attr)
-		def no_action(*pargs, **kargs): pass
-		return no_action
+    def __getattribute__(self, attr):
+        if attr in _no_delegation._to_base:
+            return getattr(object, attr)
+        def no_action(*pargs, **kargs): pass
+        return no_action
 
 '''Whatever'''
 no_delegation = _no_delegation()
@@ -67,80 +70,81 @@ no_delegation = _no_delegation()
 
 class _delegate_meta(type):
 
-	'''Sets up delegation private variables.
-	
-	Traverses inheritance graph on class construction.  Creates a private
-	__base variable for each base class.  If delegating to the base class is
-	inappropriate, uses _no_delegation class.'''
+    '''Sets up delegation private variables.
 
-	def __init__(cls, name, bases, dict):
-		type.__init__(cls, name, bases, dict)
-		visited_supr = set()
-		for sub in cls.__mro__[:-1]:
-			subnm = sub.__name__.split('.')[-1]
-			for supr in sub.__bases__:
-				suprnm = supr.__name__.split('.')[-1]
-				if supr not in visited_supr:
-					visited_supr.add(supr)
-					deleg = supr
-				else:
-					deleg = no_delegation
-				setattr(cls, '_%s__%s' % (subnm, suprnm), deleg)
+    Traverses inheritance graph on class construction.  Creates a private
+    __base variable for each base class.  If delegating to the base class is
+    inappropriate, uses _no_delegation class.'''
+
+    def __init__(cls, name, bases, dict):
+        type.__init__(cls, name, bases, dict)
+        visited_supr = set()
+        for sub in cls.__mro__[:-1]:
+            subnm = sub.__name__.split('.')[-1]
+            for supr in sub.__bases__:
+                suprnm = supr.__name__.split('.')[-1]
+                if supr not in visited_supr:
+                    visited_supr.add(supr)
+                    deleg = supr
+                else:
+                    deleg = no_delegation
+                setattr(cls, '_%s__%s' % (subnm, suprnm), deleg)
 
 
 class Delegate(object):
-	'''Inherit from Delegate to get delegation variables on class construction.'''
-	__metaclass__ = _delegate_meta
+    '''Inherit from Delegate to get delegation variables on class construction.
+    '''
+    __metaclass__ = _delegate_meta
 
 
 if __name__ == '__main__':
-	class Base(Delegate):
-		def __init__(self, basearg):
-			self.__Delegate.__init__(self)
-			self.basearg = basearg
-			print 'base'
+    class Base(Delegate):
+        def __init__(self, basearg):
+            self.__Delegate.__init__(self)
+            self.basearg = basearg
+            print 'base'
 
-		def __str__(self): return 'BASE'
-
-
-	class Left(Base):
-		def __init__(self, basearg, leftarg):
-			self.__Base.__init__(self, basearg)
-			self.leftarg = leftarg
-			print 'left'
-
-		def __str__(self):
-			return ' '.join(filter(None, (self.__Base.__str__(self), 'LEFT')))
+        def __str__(self): return 'BASE'
 
 
-	class Right(Base):
-		def __init__(self, basearg):
-			self.__Base.__init__(self, basearg)
-			print 'right'
+    class Left(Base):
+        def __init__(self, basearg, leftarg):
+            self.__Base.__init__(self, basearg)
+            self.leftarg = leftarg
+            print 'left'
 
-		def __str__(self):
-			return ' '.join(filter(None, (self.__Base.__str__(self), 'RIGHT')))
-
-
-	class Der(Left, Right):
-		def __init__(self, basearg, leftarg):
-			self.__Left.__init__(self, basearg, leftarg)
-			self.__Right.__init__(self, basearg)
-			print 'der'
-
-		def __str__(self):
-			return ' '.join(filter(None, (self.__Left.__str__(self),
-				self.__Right.__str__(self), 'DER')))
+        def __str__(self):
+            return ' '.join(filter(None, (self.__Base.__str__(self), 'LEFT')))
 
 
-	print 'should print base, left, right, der'
-	der = Der('basearg', 'leftarg')
+    class Right(Base):
+        def __init__(self, basearg):
+            self.__Base.__init__(self, basearg)
+            print 'right'
 
-	print '\nshould print base, left'
-	left = Left('basearg', 'leftarg')
-	
-	print '\nshould print base right'
-	right = Right('basearg')
+        def __str__(self):
+            return ' '.join(filter(None, (self.__Base.__str__(self), 'RIGHT')))
 
-	print '\nshould print BASE LEFT RIGHT DER'
-	print der
+
+    class Der(Left, Right):
+        def __init__(self, basearg, leftarg):
+            self.__Left.__init__(self, basearg, leftarg)
+            self.__Right.__init__(self, basearg)
+            print 'der'
+
+        def __str__(self):
+            return ' '.join(filter(None, (self.__Left.__str__(self),
+                            self.__Right.__str__(self), 'DER')))
+
+
+    print 'should print base, left, right, der'
+    der = Der('basearg', 'leftarg')
+
+    print '\nshould print base, left'
+    left = Left('basearg', 'leftarg')
+
+    print '\nshould print base right'
+    right = Right('basearg')
+
+    print '\nshould print BASE LEFT RIGHT DER'
+    print der

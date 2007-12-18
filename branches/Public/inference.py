@@ -1,32 +1,13 @@
-###############################################################################
-## OpenBayes
-## OpenBayes for Python is a free and open source Bayesian Network library
-## Copyright (C) 2006  Gaitanis Kosta, Elliot Cohen
-##
-## This library is free software; you can redistribute it and/or
-## modify it under the terms of the GNU Lesser General Public
-## License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-##
-## This library is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-## Lesser General Public License for more details.
-##
-## You should have received a copy of the GNU Lesser General Public
-## License along with this library (LICENSE.TXT); if not, write to the 
-## Free Software Foundation, 
-## Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-###############################################################################
 __all__ = ['JoinTree','MCMCEngine']
 
-import numarray as na
-from numarray.ieeespecial import getnan
 import logging
 import copy
 import unittest
 import types
 import random
+
+import numarray as na
+from numarray.ieeespecial import getnan
 
 #Library Specific Modules
 import graph
@@ -35,11 +16,11 @@ import distributions
 from potentials import DiscretePotential
 from table import Table
 
-# uncomment to show INFO messages
+# show INFO messages
 #logging.basicConfig(level= logging.INFO)
-# uncomment to show DEBUG messages
-#logging.basicConfig(level= logging.DEBUG)
+#uncomment the following to remove all messages
 logging.basicConfig(level = logging.NOTSET)
+
 
 class InferenceEngine:
     """ General Inference Engine class
@@ -82,7 +63,8 @@ class InferenceEngine:
             if v.distribution.isAdjustable:
                 v.distribution.initializeCounts()
         for case in cases:
-            assert(set(case.keys()) == set(self.BNet.v.keys())), "Not all values of 'case' are set"
+            assert(set(case.keys()) == set(self.BNet.v.keys())), \
+                   "Not all values of 'case' are set"
             for v in self.BNet.v.values():
                 if v.distribution.isAdjustable:
                     v.distribution.incrCounts(case)
@@ -90,7 +72,6 @@ class InferenceEngine:
             if v.distribution.isAdjustable:
                 v.distribution.setCounts()
                 v.distribution.normalize(dim=v.name)
-    
 
         
 class Cluster(graph.Vertex):
@@ -111,9 +92,9 @@ class Cluster(graph.Vertex):
         self.potential = DiscretePotential(names, shape)
         
         # weight
-        self.weight = reduce(lambda x,y: x*y, [v.nvalues for v in self.vertices])
+        self.weight = reduce(lambda x, y:x * y, [v.nvalues for v in self.vertices])
         
-    def NotSepSetOf(self, clusters):
+    def NotSetSepOf(self, clusters):
         """
         returns True if this cluster is not a sepset of any of the clusters
         """
@@ -142,9 +123,8 @@ class Cluster(graph.Vertex):
         return set(self.potential.names) - set(sepset.potential.names)
         #return set(v.name for v in self.vertices) - set(v.name for v in sepset.vertices)
 
-    def other(self,v):
+    def other(self, v):
         """ set of all variables contained in cluster except v, only one at a time... """
-        #--TODO: what's this shit???
         allVertices = set(vv.name for vv in self.vertices)
         if isinstance(v, (list, set, tuple)):
             setV = set(v)
@@ -160,13 +140,12 @@ class Cluster(graph.Vertex):
         logging.debug('Message Pass from '+ str(self)+' to '+str(c))
         # c must be connected to self by a sepset
         e = self.connecting_e(c)    # sepset that connects the two clusters
-        if not e: raise 'Clusters '+str(self)+' and '+ str(c)+ ' are not connected'
+        if not e: raise 'Clusters ' + str(self) + ' and ' + str(c) + ' are not connected'
         e = e[0]    # only one edge should connect 2 clusters
         
         # Projection
         oldphiR = copy.copy(e.potential)                # oldphiR = phiR
         newphiR = self.potential + e.potential            # phiR = sum(X/R)phiX
-        #newphiR.Normalize()
 
         #e.potential = newphiR
         e.potential.Update(newphiR)
@@ -174,8 +153,10 @@ class Cluster(graph.Vertex):
         # Absorption
         newphiR /= oldphiR
 
+        #print 'ABSORPTION'
+        #print newphiR
+        
         c.potential *= newphiR
-
 
     def CollectEvidence(self, X=None):
         """
@@ -229,8 +210,9 @@ class SepSet(graph.UndirEdge):
         
     def __str__(self):
         # this also prints mass and cost
-        #return '%s: %s -- %s -- %s, mass: %s, cost: %s' % (str(self.name), str(self._v[0]),
-        #       str(self.label), str(self._v[1]), str(self.mass), str(self.cost))
+        # return '%s: %s -- %s -- %s, mass: %s, cost: %s' % 
+        # (str(self.name), str(self._v[0]), str(self.label), 
+        # str(self._v[1]), str(self.mass), str(self.cost))
         return '%s: %s -- %s -- %s' % (str(self.name), str(self._v[0]),
                                        str(self.label), str(self._v[1]))
     
@@ -245,19 +227,18 @@ class SepSet(graph.UndirEdge):
 #=======================================================================
 
 class MoralGraph(graph.Graph):
-    def __init__(self, name):
-        graph.Graph.__init__(self,name)
-        
     def ChooseVertex(self):
         """
         Chooses a vertex from the list according to criterion :
         
         Selection Criterion :
         Choose the node that causes the least number of edges to be added in
-        step 2b, breaking ties by choosing the nodes that induces the cluster with
-        the smallest weight
-                
-        The WEIGHT of a node V is the nmber of values V can take (BVertex.nvalues)
+        step 2b, breaking ties by choosing the nodes that induces the 
+        cluster with the smallest weight
+        Implementation in Graph.ChooseVertex()
+        
+        The WEIGHT of a node V is the nmber of values V can take 
+        (BVertex.nvalues)
         The WEIGHT of a CLUSTER is the product of the weights of its
         constituent nodes
         
@@ -268,7 +249,7 @@ class MoralGraph(graph.Graph):
         edgestoadd = [0 for v in vertices]
         clusterweight = [1 for v in vertices]
         
-        for v,i in zip(vertices,range(len(vertices))):
+        for v,i in zip(vertices, range(len(vertices))):
             cluster = [a.name for a in v.adjacent_v]
             cluster.append(v.name)
             clusterleft = copy.copy(cluster)
@@ -285,7 +266,8 @@ class MoralGraph(graph.Graph):
 
         # keep only the smallest ones, the index
         minedges = min(edgestoadd)
-        mini = [vertices[i] for e,i in zip(edgestoadd,range(len(edgestoadd))) if e == minedges]
+        mini = [vertices[i] for e, i in zip(edgestoadd, \
+                range(len(edgestoadd))) if e == minedges]
         
         # from this list, pick the one that has the smallest clusterweight = nvalues
         # this only works with BVertex instances
@@ -328,46 +310,45 @@ class MoralGraph(graph.Graph):
         """
         logging.info('Triangulating Tree and extracting Clusters')
         # don't touch this graph, create a copy of it
-        Gt = copy.copy(self)
+        Gt = copy.deepcopy(self)
         Gt.name = 'Triangulised ' + str(Gt.name)
         
         # make a copy of Gt
-        G2 = copy.copy(Gt)
+        G2 = copy.deepcopy(Gt)
         G2.name = 'Copy of '+ Gt.name
     
         clusters = []
     
         while len(G2.v):
             v = G2.ChooseVertex()
-            logging.debug('Triangulating: chosen '+str(v))
+            #logging.debug('Triangulating: chosen '+str(v))
             cluster = list(v.adjacent_v)
             cluster.append(v)
-            
         
-            logging.debug('Cluster: '+str([str(c) for c in cluster]))
+            #logging.debug('Cluster: '+str([str(c) for c in cluster]))
         
             c = Cluster(cluster)
-            if c.NotSepSetOf(clusters):
-                logging.debug('Appending cluster %s'%c.name)
+            if c.NotSetSepOf(clusters):
+                #logging.debug('Appending cluster')
                 clusters.append(c)
             
             clusterleft = copy.copy(cluster)
             
             for v1 in cluster:
-                #clusterleft.pop(0)
-                for v2 in cluster:
-                    if not (v1 in v2.adjacent_v) and v1 != v2:
-                        v1g = Gt.v[v1.name]
-                        v2g = Gt.v[v2.name]
-                        Gt.add_e(graph.UndirEdge(max(Gt.e.keys())+1,v1g,v2g))
-                        G2.add_e(graph.UndirEdge(max(G2.e.keys())+1,v1,v2))
+                clusterleft.pop(0)
+            for v2 in clusterleft:
+                if not (v1 in v2.adjacent_v):
+                    v1g = Gt.v[v1.name]
+                    v2g = Gt.v[v2.name]
+                    Gt.add_e(graph.UndirEdge(max(Gt.e.keys())+1, v1g, v2g))
+                    G2.add_e(graph.UndirEdge(max(G2.e.keys())+1, v1, v2))
                     
             # remove from G2
             del G2.v[v.name]
         return Gt, clusters
        
 #=======================================================================
-#========================================================================
+#=======================================================================
 class Likelihood(distributions.MultinomialDistribution):
     """ Discrete Likelihood class """
     def __init__(self, BVertex):
@@ -406,7 +387,7 @@ class JoinTree(InferenceEngine, graph.Graph):
     """ Join Tree inference engine"""
     def __init__(self, BNet):
         """Creates an 'Optimal' JoinTree from a BNet """
-        logging.info('Creating JunctionTree engine for '+str(BNet.name))
+        logging.info('Creating JunctionTree engine for ' + str(BNet.name))
         InferenceEngine.__init__(self, BNet)
         graph.Graph.__init__(self, 'JT: ' + str(BNet.name))
         
@@ -416,19 +397,20 @@ class JoinTree(InferenceEngine, graph.Graph):
         
         self.likelihoods = [Likelihood(v) for v in self.BNet.observed]
         # likelihood dictionary, key = var name, value = likelihood instance
-        self.likedict = dict((v.name, l) for v,l in zip(self.BNet.observed, self.likelihoods))
+        self.likedict = dict((v.name, l) for v, l in zip(self.BNet.observed, 
+                                                         self.likelihoods))
         
         logging.info('Constructing Optimal Tree')
         self.ConstructOptimalJTree()
 
-        self.Initialization()
+        JoinTree.Initialization(self)
 
         self.GlobalPropagation()
         
     def ConstructOptimalJTree(self):
         # Moralize Graph
         Gm = self.BNet.Moralize()
-        
+
         # triangulate graph and extract clusters
         Gt, clusters = Gm.Triangulate()
         
@@ -443,7 +425,7 @@ class JoinTree(InferenceEngine, graph.Graph):
         for c1 in clusters:
             clustersleft.pop(0)
             for c2 in clustersleft:
-                candsepsets.append(SepSet(len(candsepsets),c1,c2))
+                candsepsets.append(SepSet(len(candsepsets), c1, c2))
 
         # remove all edges added to clusters by creating candidate sepsets
         for c in clusters:  c._e=[]
@@ -454,7 +436,8 @@ class JoinTree(InferenceEngine, graph.Graph):
         # Create trees
         # initialise = one tree for each cluster
         # key = cluster name, value = tree index
-        trees = dict([(c.name, i) for c,i in zip(clusters,range(len(clusters)))])
+        trees = dict([(c.name, i) for c, i in zip(clusters, 
+                     range(len(clusters)))])
 
         # add SepSets according to criterion, iff the two clusters connected
         # are on different trees
@@ -462,7 +445,7 @@ class JoinTree(InferenceEngine, graph.Graph):
             # if on different trees
             if trees[s._v[0].name] != trees[s._v[1].name]:
                 # add SepSet
-                self.add_e(SepSet(len(self.e),s._v[0],s._v[1]))
+                self.add_e(SepSet(len(self.e), s._v[0], s._v[1]))
                 
                 # merge trees
                 oldtree = trees[s._v[1].name]
@@ -481,18 +464,17 @@ class JoinTree(InferenceEngine, graph.Graph):
         
         # assign a cluster to each variable
         # multiply cluster potential by v.cpt,
-        self.clusterdict = {}
         for v in self.BNet.all_v:
             for c in self.all_v:
                 if c.ContainsVar(v.family):
                     # assign a cluster for each variable
                     self.clusterdict[v.name] = c
                     v.parentcluster = c
-                    
+
                     # in place multiplication!
                     #logging.debug('JT:initialisation '+c.name+' *= '+v.name)
-                    c.potential *= v.distribution         # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
-                    
+                    c.potential *= v.distribution   # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
+
                     # stop here for this node otherwise we count it
                     # more than once, bug reported by Michael Munie
                     break
@@ -506,7 +488,7 @@ class JoinTree(InferenceEngine, graph.Graph):
 
     def GlobalPropagation(self, start = None):
         if start == None: start = self.v.values()[0]    # first cluster found
-
+        
         logging.info('Global Propagation, starting at :'+ str(start))
         logging.info('      Collect Evidence')
         
@@ -523,14 +505,11 @@ class JoinTree(InferenceEngine, graph.Graph):
         # find a cluster containing v
         # v.parentcluster is a convenient choice, can make better...
         c = self.clusterdict[v]
-        
-        #res = c.potential.Marginalise(c.other(v))
-        res = c.potential.Retrieve([v])
-        res.Normalize()
+        res = c.potential.Marginalise(c.other(v))
+        res.Normalise()
         
         vDist = self.BNet.v[v].GetSamplingDistribution()
-        #vDist.setParameters(res)
-        vDist.Update(res)
+        vDist.setParameters(res)
         return vDist
     
     def MarginaliseFamily(self, v):
@@ -582,7 +561,7 @@ class JoinTree(InferenceEngine, graph.Graph):
         logging.info('Set finding, '+ str(v))
         temp = dict((vi.name,0) for vi in self.BNet.observed)
         if temp.has_key(v): temp[v] = 1
-        else: raise str(v)+''' is not observable or doesn't exist'''
+        else: raise str(v) + ''' is not observable or doesn't exist'''
         
         
         self.Initialization()
@@ -615,12 +594,12 @@ class JoinTree(InferenceEngine, graph.Graph):
     def GlobalRetraction(self, evidence ):
         logging.info('Global Retraction')
         self.Initialization()
-        self.ObservationEntry(evidence.keys(),evidence.values())
+        self.ObservationEntry(evidence.keys(), evidence.values())
         self.GlobalPropagation()
         
     def ObservationEntry(self, v, val):
         logging.info('Observation Entry')
-        for vv,vval in zip(v,val):
+        for vv, vval in zip(v, val):
             c = self.clusterdict[vv]     # cluster containing likelihood, same as v
             l = self.likedict[vv]    
             l.SetObs(vval)
@@ -666,24 +645,45 @@ class ConnexeInferenceJTree(JoinTree):
         and acts transparently to the user
     """
     def __init__(self, BNet):
-        self.BNet = BNet
+        #JoinTree.__init__(self, BNet)
         self.BNets = BNet.split_into_components()
-        
+        self.engines={}
+        for G in self.BNets:
+            JoinTree.__init__(self, G)
+            self.engines[G] = JoinTree(G)
+
     def Marginalise(self, vname):
         """ trouver dans quel reseau appartient le noeud et faire l'inference 
         sur celui-ci"""
         for G in self.BNets:
             for v in G.all_v:
                 if v.name == vname:
-                    engine = JoinTree(G)
-                    return engine.Marginalise(vname)
-    
+                    #engine = JoinTree(G)
+                    return self.engines[G].Marginalise(vname)
+
 ##    def SetObs(self, ev = dict()):
-##        for G in self.BNets:
-##            for v in G.all_v:
-##                if v.name == ev.keys()[0]:
-##                    engine = JoinTree(G)
-##                    engine.SetObs(ev)
+##        """ trouver dans quel reseau appartient le noeud et faire l'inference 
+##        sur celui-ci"""
+##        for vert in ev:
+##            for G in self.BNets:
+##                for v in G.all_v:
+##                    if v.name == vert:
+##                        evidence = {vert:ev[vert]}
+##                        #engine = JoinTree(G)
+##                        self.engines[G].SetObs(evidence)
+
+    def SetObs(self, ev=dict()):
+        """ trouver dans quel reseau appartient le noeud et faire l'inference 
+        sur celui-ci"""
+        for G in self.BNets:
+            evidence = {}
+            for vert in ev:
+                for v in G.all_v:
+                    if v.name == vert:
+                        evidence[vert] = ev[vert]
+            self.engines[G].SetObs(evidence)
+
+
 
 class MCMCEngine(InferenceEngine):
         """ MCMC in the way described in the presentation by Rina Rechter """
@@ -703,7 +703,6 @@ class MCMCEngine(InferenceEngine):
             # 1.Sample the network N times
             if not samples:
                 # if no samples are given, get them
-                #---TODO:should sample according to the evidence
                 samples = self.BNet.Sample(self.N)
             
             # 2. Create the distribution that will be returned
@@ -714,8 +713,7 @@ class MCMCEngine(InferenceEngine):
             # 3.Count number of occurences of vname = i
             #    for each possible value of i, that respects the evidence
             for s in samples:
-                
-                if na.alltrue([s[e] == i for e,i in self.evidence.items()]): 
+                if na.alltrue([s[e] == i for e, i in self.evidence.items()]): 
                     # this samples respects the evidence
                     # add one to the corresponding instance of the variable
                     vDist.incrCounts(s)
@@ -726,13 +724,18 @@ class MCMCEngine(InferenceEngine):
             return vDist
             
 class InferenceEngineTestCase(unittest.TestCase):
-    """ An abstract set of inference test cases.  Basically anything that is similar between the different inference engines can be implemented here and automatically applied to lower engines.  For example, we can define the learning tests here and they shouldn't have to be redefined for different engines.
+    """ An abstract set of inference test cases.  Basically anything 
+    that is similar between the different inference engines can be 
+    implemented here and automatically applied to lower engines.  
+    For example, we can define the learning tests here and they 
+    shouldn't have to be redefined for different engines.
     """
     def setUp(self):
         # create a discrete network
         G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-        c,s,r,w = [G.add_v(bayesnet.BVertex(nm,True,2)) for nm in 'c s r w'.split()]
-        for ep in [(c,r), (c,s), (r,w), (s,w)]:
+        c, s, r, w = [G.add_v(bayesnet.BVertex(nm, True, 2)) \
+                      for nm in 'c s r w'.split()]
+        for ep in [(c, r), (c, s), (r, w), (s, w)]:
             G.add_e(graph.DirEdge(len(G.e), *ep))
         G.InitDistributions()
         c.setDistributionParameters([0.5, 0.5])
@@ -751,8 +754,9 @@ class InferenceEngineTestCase(unittest.TestCase):
         
         # create a simple continuous network
         G2 = bayesnet.BNet('Gaussian Bayesian Network')
-        a,b = [G2.add_v(bayesnet.BVertex(nm,False,1)) for nm in 'a b'.split()]
-        for ep in [(a,b)]:
+        a, b = [G2.add_v(bayesnet.BVertex(nm, False, 1)) \
+                for nm in 'a b'.split()]
+        for ep in [(a, b)]:
             G2.add_e(graph.DirEdge(len(G2.e), *ep))
         
         G2.InitDistributions()
@@ -763,42 +767,43 @@ class InferenceEngineTestCase(unittest.TestCase):
         self.b = b
         self.G2 = G2
 
-class LearningTestCase(InferenceEngineTestCase):
-    """ Learning Test case """
-    def setUp(self):
-        InferenceEngineTestCase.setUp(self)   
-    
-    def testML(self):
-        # sample the network 2000 times
-        cases = self.BNet.Sample(2000)
-        
-        # create a new BNet with same nodes as self.BNet but all parameters
-        # set to 1s
-        G = copy.deepcopy(self.BNet)
-        
-        G.InitDistributions()
-        
-        # create an infeence engine
-        engine = JoinTree(G)
-        
-        # learn according to the test cases
-        engine.LearnMLParams(cases)
-        
-        tol = 0.05
-        assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
-               for v in G.all_v])), \
-                " Learning does not converge to true values "
+####class LearningTestCase(InferenceEngineTestCase):
+####    """ Learning Test case """
+####    def setUp(self):
+####        InferenceEngineTestCase.setUp(self)   
+####    
+####    def testML(self):
+####        # sample the network 2000 times
+####        cases = self.BNet.Sample(2000)
+####        
+####        # create a new BNet with same nodes as self.BNet but all parameters
+####        # set to 1s
+####        G = copy.deepcopy(self.BNet)
+####        
+####        G.InitDistributions()
+####        
+####        # create an infeence engine
+####        engine = JoinTree(G)
+####        
+####        # learn according to the test cases
+####        engine.LearnMLParams(cases)
+####        
+####        tol = 0.05
+####        assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
+####               for v in G.all_v])), \
+####                " Learning does not converge to true values "
 
 class MCMCTestCase(InferenceEngineTestCase):
     """ MCMC unit tests.
     """
     def setUp(self):
         InferenceEngineTestCase.setUp(self)
-        self.engine = MCMCEngine(self.BNet,2000)
-        self.engine2 = MCMCEngine(self.G2,5000)
+        self.engine = MCMCEngine(self.BNet, 2000)
+        self.engine2 = MCMCEngine(self.G2, 5000)
     
     def testUnobservedDiscrete(self):
-        """ DISCRETE: Compute and check the probability of water-sprinkler given no evidence
+        """ DISCRETE: Compute and check the probability of 
+        water-sprinkler given no evidence
         """
         res = self.engine.MarginaliseAll()
         
@@ -816,9 +821,11 @@ class MCMCTestCase(InferenceEngineTestCase):
         "Incorrect probability with unobserved water-sprinkler network"
 
     def testUnobservedGaussian(self):
-        """ GAUSSIAN: Compute and check the marginals of a simple gaussian network """
+        """ GAUSSIAN: Compute and check the marginals of a simple 
+        gaussian network 
+        """
         G = self.G2
-        a,b = self.a, self.b
+        a, b = self.a, self.b
         engine = self.engine2
         
         res = engine.MarginaliseAll()
@@ -826,7 +833,8 @@ class MCMCTestCase(InferenceEngineTestCase):
         #---TODO: find the true results and compare them...
     
     def testObservedDiscrete(self):
-        """ DISCRETE: Compute and check the probability of water-sprinkler given some evidence
+        """ DISCRETE: Compute and check the probability of 
+        water-sprinkler given some evidence
         """
         self.engine.SetObs({'c':1,'s':0})
         res = self.engine.MarginaliseAll()
@@ -834,10 +842,10 @@ class MCMCTestCase(InferenceEngineTestCase):
         cprob, sprob, rprob, wprob = res['c'], res['s'], res['r'], res['w']
 
         error = 0.05        
-        assert(na.allclose(cprob.cpt,[0.0,1.0], atol=error) and \
-               na.allclose(rprob.cpt,[0.2,0.8], atol=error) and \
-               na.allclose(sprob.cpt,[1.0,0.0], atol=error) and \
-               na.allclose(wprob.cpt,[ 0.278, 0.722], atol=error) ), \
+        assert(na.allclose(cprob.cpt, [0.0,1.0], atol=error) and \
+               na.allclose(rprob.cpt, [0.2,0.8], atol=error) and \
+               na.allclose(sprob.cpt, [1.0,0.0], atol=error) and \
+               na.allclose(wprob.cpt, [ 0.278, 0.722], atol=error) ), \
                " Somethings wrong with MCMC inference with evidence "        
 
  
@@ -849,32 +857,32 @@ class JTreeTestCase(InferenceEngineTestCase):
 
     def testGeneral(self):
         """ Check that the overall algorithm works """
-        c=self.engine.Marginalise('c')
-        r=self.engine.Marginalise('r')
-        s=self.engine.Marginalise('s')
-        w=self.engine.Marginalise('w')
+        c = self.engine.Marginalise('c')
+        r = self.engine.Marginalise('r')
+        s = self.engine.Marginalise('s')
+        w = self.engine.Marginalise('w')
 
-        assert(na.allclose(c.cpt,[0.5,0.5]) and \
-               na.allclose(r.cpt,[0.5,0.5]) and \
-               na.allclose(s.cpt,[0.7,0.3]) and \
-               na.allclose(w.cpt,[ 0.34909999, 0.65090001]) ), \
-               " Somethings wrong with JoinTree inference engine"
+        assert(na.allclose(c.cpt, [0.5, 0.5]) and \
+                na.allclose(r.cpt, [0.5, 0.5]) and \
+                na.allclose(s.cpt, [0.7, 0.3]) and \
+                na.allclose(w.cpt, [0.34909999, 0.65090001])), \
+                " Somethings wrong with JoinTree inference engine"
 
     def testEvidence(self):
         """ check that evidence works """
         print 'evidence c=1,s=0'
         self.engine.SetObs({'c':1,'s':0})
         
-        c=self.engine.Marginalise('c')
-        r=self.engine.Marginalise('r')
-        s=self.engine.Marginalise('s')
-        w=self.engine.Marginalise('w')
+        c = self.engine.Marginalise('c')
+        r = self.engine.Marginalise('r')
+        s = self.engine.Marginalise('s')
+        w = self.engine.Marginalise('w')
 
         assert(na.allclose(c.cpt,[0.0,1.0]) and \
-               na.allclose(r.cpt,[0.2,0.8]) and \
-               na.allclose(s.cpt,[1.0,0.0]) and \
-               na.allclose(w.cpt,[ 0.278, 0.722]) ), \
-               " Somethings wrong with JoinTree evidence"        
+                na.allclose(r.cpt,[0.2,0.8]) and \
+                na.allclose(s.cpt,[1.0,0.0]) and \
+                na.allclose(w.cpt,[ 0.278, 0.722]) ), \
+                " Somethings wrong with JoinTree evidence"        
 
     def testMarginaliseAll(self):
         res = self.engine.MarginaliseAll()
@@ -893,14 +901,14 @@ class JTreeTestCase(InferenceEngineTestCase):
     
     
 if __name__=='__main__':
-    suite = unittest.makeSuite(MCMCTestCase, 'test')
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
-##
-##    suite = unittest.makeSuite(JTreeTestCase, 'test')
+##    suite = unittest.makeSuite(MCMCTestCase, 'test')
 ##    runner = unittest.TextTestRunner()
 ##    runner.run(suite)
 
-    suite = unittest.makeSuite(LearningTestCase, 'test')
+    suite = unittest.makeSuite(JTreeTestCase, 'test')
     runner = unittest.TextTestRunner()
     runner.run(suite)
+
+####    suite = unittest.makeSuite(LearningTestCase, 'test')
+####    runner = unittest.TextTestRunner()
+####    runner.run(suite)

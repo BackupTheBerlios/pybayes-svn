@@ -1,31 +1,14 @@
-###############################################################################
-## OpenBayes
-## OpenBayes for Python is a free and open source Bayesian Network library
-## Copyright (C) 2006  Gaitanis Kosta
-##
-## This library is free software; you can redistribute it and/or
-## modify it under the terms of the GNU Lesser General Public
-## License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-##
-## This library is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-## Lesser General Public License for more details.
-##
-## You should have received a copy of the GNU Lesser General Public
-## License along with this library (LICENSE.TXT); if not, write to the 
-## Free Software Foundation, 
-## Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-###############################################################################
-__all__ = ['DiscretePotential','GaussianPotential']
+__all__ = ['DiscretePotential', 'GaussianPotential']
+
+
+from copy import copy
+import unittest
 
 import numarray as na
-from copy import copy
 
 import delegate
 import table
-import unittest
+
 
 class Potential:
     """ General Potential class that will be inherited by all potentials
@@ -55,20 +38,23 @@ class Potential:
         """ Retrieves and returns some variables """
         raise "Method is not yet implemented at child level"
     
+    def Normalise(self):
+        """ normalizes the distribution """
+        raise "Method is not yet implemented at child level"
     
-    def __mul__(a,b):
+    def __mul__(a, b):
         """ multiplication, returns a new potential """
         raise "Method is not yet implemented at child level"
 
-    def __imul__(a,b):
+    def __imul__(a, b):
         """ in-place multiplication, destructive for a """
         raise "Method is not yet implemented at child level"
     
-    def __div__(a,b):
+    def __div__(a, b):
         """ division, returns a new potential """
         raise "Method is not yet implemented at child level"
     
-    def __idiv__(a,b):
+    def __idiv__(a, b):
         """ in-place division, destructive for a """
         raise "Method is not yet implemented at child level"   
     #===================================================================== 
@@ -80,7 +66,7 @@ class DiscretePotential(table.Table, Potential):
     and Marginalise().
     """
     def __init__(self, names, shape, elements=None):
-        Potential.__init__(self, names)
+        order = Potential.__init__(self, names)
 
         # sort shape in the same way names are sorted
         #print names, self.names_list,order
@@ -106,20 +92,21 @@ class DiscretePotential(table.Table, Potential):
         returns a new DiscretePotential instance
         the variables keep their relative order
         """
-        temp = copy(self.cpt)
+        temp = self.cpt.view()
         ax = [self.assocdim[v] for v in varnames]
         ax.sort(reverse=True)  # sort and reverse list to avoid inexistent dimensions
         newnames = copy(self.names_list)
         for a in ax:
-            temp = na.sum(temp, axis = a)
+            temp = na.sum(temp, axis=a)
             newnames.pop(a)
 
-        return DiscretePotential(newnames, temp.shape, temp)
+        #=================================================
+        #---ERROR : In which order ?????
+        #remainingNames = self.names - set(varnames)
+        #remainingNames_list = [name for name in self.names_list if name in remainingNames]
 
-    def Normalize(self):
-        """ All values are normalized Sum(Pr(A)) = 1     """
-        self.cpt /= na.sum(self.cpt.flat)   
-        
+        return self.__class__(newnames, temp.shape, temp)
+
     def Retrieve(self, varnames):
         """ Retrieves the dimensions specified in varnames.
         To do this, we marginalise all the variables EXCEPT those specified
@@ -134,7 +121,7 @@ class DiscretePotential(table.Table, Potential):
         """
         sum(X\S)phiX
 
-        sum out the variables contained in self but NOT in other
+        marginalise the variables contained in BOTH SepSet AND in Cluster
         returns a new DiscretePotential instance
 
         eg: a = Pr(A,B,C)
@@ -144,29 +131,29 @@ class DiscretePotential(table.Table, Potential):
             = Sum(A)a = Pr(B,C)
 
         only the names of the variables contained in b are relevant!
-        no operation with the values of b is performed
-        
-        The result is a new potential containing the variables of other with
-        the values of these variables found in self.
+        no operation with b is done in practice
         """
-        
-        var = self.names - other.names
+        var = set(v for v in self.names) - set(v for v in other.names)
         return self.Marginalise(var)
 
-            
+    def Normalise(self):
+        self.cpt /= na.sum(self.cpt.flat)
+  
     #================================
     # Initialise
     def Uniform(self):
         ' Uniform distribution '
         N = na.product(self.shape)
-        self[:] = 1.0/N
+        self[:] = 1.0 / N
 
     #===================================
     # Printing
     #def __str__(self): return str(self.cpt)
 
     def Printcpt(self):
-        string =  str(self.cpt) + '\nshape:'+str(self.cpt.shape)+'\nnames:'+str(self.names)+'\nsum : ' +str(na.sum(self.cpt.flat))
+        string =  str(self.cpt) + '\nshape:' + str(self.cpt.shape) + \
+                  '\nnames:' + str(self.names) + '\nsum : ' + \
+                  str(na.sum(self.cpt.flat))
         print string
 
 class GaussianPotential(Potential):
@@ -210,8 +197,8 @@ class GaussianPotential(Potential):
         else: self.g = float(g)
         if not h: self.h = na.zeros(shape=(self.n), type='Float32')     
         else: self.h = na.array(h,shape=(self.n), type='Float32')
-        if not K: self.K = na.zeros(shape=(self.n,self.n), type='Float32')
-        else: self.K = na.array(K,shape=(self.n,self.n), type='Float32')
+        if not K: self.K = na.zeros(shape=(self.n, self.n), type='Float32')
+        else: self.K = na.array(K, shape=(self.n, self.n), type='Float32')
 
     def __str__(self):
         string = 'Gaussian Potential over variables ' + str(self.names)
@@ -223,14 +210,14 @@ class GaussianPotential(Potential):
 
 class GaussianPotentialTestCase(unittest.TestCase):
     def setUp(self):
-        names = ('a','b')
-        shape = (1,2)
-        self.a = GaussianPotential(names,shape) 
+        names = ('a', 'b')
+        shape = (1, 2)
+        self.a = GaussianPotential(names, shape) 
         
         g=2
         h=[1,2,3]
         K=range(9)
-        self.b = GaussianPotential(names,shape,g,h,K)
+        self.b = GaussianPotential(names, shape, g, h, K)
     
     def testInit(self):
         a = self.a
@@ -241,79 +228,81 @@ class GaussianPotentialTestCase(unittest.TestCase):
                " Error with standard initialization "
 
         assert(b.g == 2.0 and \
-               na.allclose(b.h, na.array([1,2,3],type='Float32')) and \
-               na.allclose(b.K, na.arange(9,shape=(3,3),type='Float32'))), \
+               na.allclose(b.h, na.array([1,2,3], type='Float32')) and \
+               na.allclose(b.K, na.arange(9,shape=(3,3), type='Float32'))), \
                " Error with standard initialization with parameter setting"    
-        
-    
+  
 
 class DiscretePotentialTestCase(unittest.TestCase):
     def setUp(self):
       names = ('a','b','c')
       shape = (2,3,4)
-      self.a = DiscretePotential(names,shape,na.arange(24))
+      self.a = DiscretePotential(names, shape, na.arange(24))
       self.names = names
       self.shape = shape
    
     def testMarginalise(self):
         def factorial(n):
             if n==1:return 1
-            return factorial(n-1)*n
+            return factorial(n - 1) * n
         
         var = set('c')
         b = self.a.Marginalise(var)
         var2 = set(['c','a'])
         c = self.a.Marginalise(var2)
-        d = DiscretePotential(['b','c'],[3,4],na.arange(12))
+        d = DiscretePotential(['b','c'], [3,4], na.arange(12))
 
         # extended test
-        a = DiscretePotential('a b c d e f'.split(), [2,3,4,5,6,7],na.arange(factorial(7)))
-        aa=a.Marginalise('c f a'.split())
+        a = DiscretePotential('a b c d e f'.split(), [2,3,4,5,6,7], \
+                              na.arange(factorial(7)))
+        aa = a.Marginalise('c f a'.split())
       
 
         assert(b.names == self.a.names - var and \
                b[0,1] == na.sum(self.a[0,1]) and \
                c.names == self.a.names - var2 and \
-               na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2),axis=0)) and
+               na.alltrue(c.cpt.flat == na.sum(na.sum(self.a.cpt,axis=2), axis=0)) and
                aa.shape == (3,5,6) and \
                aa.names_list == 'b d e'.split() and \
                aa[2,4,3] == na.sum(a[:,2,:,4,3,:].flat)), \
                " Marginalisation doesn't work"
 
     def testAdd(self):
-        d = DiscretePotential(['b','c'],[3,4],na.arange(12))
+        d = DiscretePotential(['b','c'], [3,4], na.arange(12))
         
         assert(self.a + d == self.a.Marginalise(['a'])), \
                "Addition does not work..."
     
     def testIntEQIndex(self):
         self.a[1,1,1] = -2
-        self.a[self.a==-2] = -3
+        self.a[self.a == -2] = -3
         assert(self.a[1,1,1] == -3), \
               "Set by EQ does not work"
 
     def testAll(self):
         """ this is actually the Water-sprinkler example """
-        c = DiscretePotential(['c'],[2],[0.5,0.5])                  # Pr(C)
-        s = DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1]) # Pr(S|C)
-        r = DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])    # Pr(R|C)
-        w = DiscretePotential(['w','s','r'],[2,2,2])                # Pr(W|S,R)
-        w[:,0,0]=[0.99, 0.01]
-        w[:,0,1]=[0.1, 0.9]
-        w[:,1,0]=[0.1, 0.9]
-        w[:,1,1]=[0.0, 1.0]
+        c = DiscretePotential(['c'], [2], [0.5,0.5])                  # Pr(C)
+        s = DiscretePotential(['s','c'], [2,2], [0.5,0.9,0.5,0.1]) # Pr(S|C)
+        r = DiscretePotential(['r','c'], [2,2], [0.8,0.2,0.2,0.8])    # Pr(R|C)
+        w = DiscretePotential(['w','s','r'], [2,2,2])                # Pr(W|S,R)
+        w[:,0,0] = [0.99, 0.01]
+        w[:,0,1] = [0.1, 0.9]
+        w[:,1,0] = [0.1, 0.9]
+        w[:,1,1] = [0.0, 1.0]
 
-        cr = c*r        # Pr(C,R)     = Pr(R|C) * Pr(C)
-        crs = cr*s      # Pr(C,S,R)   = Pr(S|C) * Pr(C,R)
-        crsw = crs*w    # Pr(C,S,R,W) = Pr(W|S,R) * Pr(C,R,S)
+        cr = c * r        # Pr(C,R)     = Pr(R|C) * Pr(C)
+        crs = cr * s      # Pr(C,S,R)   = Pr(S|C) * Pr(C,R)
+        print crs, crs.names_list
+        print crs[:,0,0]
+        crsw = crs * w    # Pr(C,S,R,W) = Pr(W|S,R) * Pr(C,R,S)
 
         # this can be verified using any bayesian network software
 
         # check the result for the multiplication and marginalisation
-        assert(na.allclose(crsw.Marginalise('s r w'.split()).cpt,[0.5,0.5]) and \
-               na.allclose(crsw.Marginalise('c r w'.split()).cpt,[0.7,0.3]) and \
-               na.allclose(crsw.Marginalise('c s w'.split()).cpt,[0.5,0.5]) and \
-               na.allclose(crsw.Marginalise('c s r'.split()).cpt,[0.349099,0.6509])),\
+        assert(na.allclose(crsw.Marginalise('s r w'.split()).cpt, [0.5,0.5]) and \
+               na.allclose(crsw.Marginalise('c r w'.split()).cpt, [0.7,0.3]) and \
+               na.allclose(crsw.Marginalise('c s w'.split()).cpt, [0.5,0.5]) and \
+               na.allclose(crsw.Marginalise('c s r'.split()).cpt, [0.349099,0.6509])), \
                 "Something's wrong on the big Test..."
 
 
@@ -326,5 +315,29 @@ if __name__ == '__main__':
     runner = unittest.TextTestRunner()
     runner.run(suite)
     
-
+#    names = ('a','b','c')
+#    shape = (2,3,4)
+#    a = DiscretePotential(names,shape,na.arange(24))
+#
+#    names = ('a','d','b')
+#    shape = (2,5,3)
+#    b = DiscretePotential(names,shape,na.arange(2*5*3))
+#
+#    c = DiscretePotential(['c'],[2],[0.5,0.5])
+#    s = DiscretePotential(['s','c'],[2,2],[0.5, 0.9, 0.5, 0.1])
+#    r = DiscretePotential(['r','c'],[2,2],[0.8,0.2,0.2,0.8])
+#    w = DiscretePotential(['w','s','r'],[2,2,2])
+#    w[:,0,0]=[0.99, 0.01]
+#    w[:,0,1]=[0.1, 0.9]
+#    w[:,1,0]=[0.1, 0.9]
+#    w[:,1,1]=[0.0, 1.0]
+#
+#    cr = c*r
+#    crs = cr*s
+#    crsw = crs*w
+#
+#    print 'c:', crsw.Marginalise('s r w'.split())
+#    print 's:', crsw.Marginalise('c r w'.split())
+#    print 'r:', crsw.Marginalise('c s w'.split())
+#    print 'w:', crsw.Marginalise('c s r'.split())
 
