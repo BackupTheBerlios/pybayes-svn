@@ -107,6 +107,7 @@ class Distribution(object):
 
     def __str__(self):
         list_ = ['Distribution for node : '+ self.vertex.name]
+        list_.append('Type : ' + self.distribution_type)
         if len(self.names_list)>1 : 
             list_.append('Parents : ' + str(self.names_list[1:]))
         return '\n'.join(list_)
@@ -323,13 +324,12 @@ class MultinomialDistribution(Distribution, Table):
     #===================================================
     #=== printing functions
     def __str__(self):
-        string = 'Multinomial ' + Distribution.__str__(self)
-        string += '\nConditional Probability Table (CPT) :\n'
+        list_ = [Distribution.__str__(self)]
+        list_.append('Conditional Probability Table (CPT) :')
         #---TODO: should find a nice neat way to represent numarrays
         #		  only 3 decimals are sufficient... any ideas?
-        string += repr(self.cpt)
-
-        return string
+        list_.append(str(self.cpt))
+        return "\n".join(list_)
 
 
 #=================================================================
@@ -628,20 +628,24 @@ class GaussianDistribution(Distribution):
 
         self.sigma = (sum_squared_deviation / (len(samples)-1.0)) ** 0.5
 
-    #==================================================
-    #=== printing Functions	   
     def __str__(self):
-        string = 'Gaussian ' + Distribution.__str__(self)
-        string += '\nDimensionality : ' + str(self.nvalues)
-        string += '\nDiscrete Parents :' + \
-                   str([p.name for p in self.discrete_parents])
-        string += '\nContinuous Parents :' + \
-                  str([p.name for p in self.continuous_parents])
-        string += '\nMu : ' + str(self.mean)
-        string += '\nSigma : ' + str(self.sigma)
-        string += '\nWeights: ' + str(self.weights)
+        """
+        This function is used to print an object. Every new distribution
+        should first print the info given by Distribution.__str__. Then
+        new information can be appended. 
 
-        return string
-
+        It is better to construct a list a then join the list (for
+        people using other implementation than CPython
+        """
+        list_ =[Distribution.__str__(self)]
+        list_.append('Dimensionality : ' + str(self.nvalues))
+        list_.append('Discrete Parents :' + \
+                   str([p.name for p in self.discrete_parents]))
+        list_.append('Continuous Parents :' + \
+                  str([p.name for p in self.continuous_parents]))
+        list_.append('Mu : ' + str(self.mean))
+        list_.append('Sigma : ' + str(self.sigma))
+        list_.append('Weights: ' + str(self.weights))
+        return "\n".join(list_)
 	
 

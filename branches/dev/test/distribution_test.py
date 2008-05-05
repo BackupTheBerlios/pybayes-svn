@@ -8,8 +8,51 @@ import unittest
 import numpy
 
 from OpenBayes.distributions import *
+from OpenBayes.distributions import Distribution
 from OpenBayes import graph
 from OpenBayes.bayesnet import BVertex, BNet
+
+#=================================================================
+#	Test case for Distribution class
+#=================================================================
+class DistributionTestCase(unittest.TestCase):
+    """ Unit tests for general distribution class
+    """
+    def setUp(self):
+        # create a small BayesNet
+        g = BNet('Water Sprinkler Bayesian Network')
+        c, s, r, w = [g.add_v(BVertex(nm, discrete=True, nvalues=nv)) for nm, nv
+                      in zip('c s r w'.split(), [2, 3, 4, 2])]
+        for start, end in [(c, r), (c, s), (r, w), (s, w)]:
+            g.add_e(graph.DirEdge(len(g.e), start, end))
+        g.init_distributions()
+        self.network = g
+
+    def test_str(self):
+        c = Distribution(BVertex("a", 2))        
+        self.assertEqual(str(c), "Distribution for node : a\n"
+                                 "Type : None")
+
+    def test_default(self):
+        """ We test the defaul value of __init__"""
+        c = Distribution(BVertex("a", 2))
+        self.assertEqual(c.names_list, ["a"])
+        self.assertEqual(c.is_adjustable, False)
+        self.assertEquals(c.family, ["a"])
+
+    def test_family(self):
+        """ test parents, family, etc... """
+        g = self.network
+        c, s, r, w = g.v['c'], g.v['s'], g.v['r'], g.v['w']
+        self.assertEqual(c.distribution.parents, [])
+        self.assertEqual(set(w.distribution.parents), set([r, s]))
+        self.assertEqual(r.distribution.parents, [c])
+        self.assertEqual(s.distribution.parents, [c])
+        self.assertEqual(c.distribution.family, [c])
+        self.assertEqual(set(s.distribution.family), set([c, s]))
+        self.assertEqual(set(r.distribution.family), set([r, c]))
+        self.assertEqual(set(w.distribution.family), set([w, r, s]))
+        self.assertEqual(c.distribution.nvalues, c.nvalues)
 
 
 #=================================================================
@@ -170,45 +213,6 @@ class GaussianTestCase(unittest.TestCase):
         self.assertAlmostEqual(b.mean, a.mean, 1)
         self.assertAlmostEqual(b.sigma, a.sigma, 1)
         
-#=================================================================
-#	Test case for Distribution class
-#=================================================================
-class DistributionTestCase(unittest.TestCase):
-    """ Unit tests for general distribution class
-    """
-    def setUp(self):
-        # create a small BayesNet
-        g = BNet('Water Sprinkler Bayesian Network')
-        c, s, r, w = [g.add_v(BVertex(nm, discrete=True, nvalues=nv)) for nm, nv
-                      in zip('c s r w'.split(), [2, 3, 4, 2])]
-        for start, end in [(c, r), (c, s), (r, w), (s, w)]:
-            g.add_e(graph.DirEdge(len(g.e), start, end))
-        g.init_distributions()
-        self.network = g
-
-    def test_str(self):
-        c = Distribution()        
-        self.assertEqual(str(c), "Distribution for node : c\n")
-
-
-    def test_family(self):
-        """ test parents, family, etc... """
-        g = self.network
-        c, s, r, w = g.v['c'], g.v['s'], g.v['r'], g.v['w']
-        self.assertEqual(c.distribution.parents, [])
-        self.assertEqual(set(w.distribution.parents), set([r, s]))
-        self.assertEqual(r.distribution.parents, [c])
-        self.assertEqual(s.distribution.parents, [c])
-        self.assertEqual(c.distribution.family, [c])
-        self.assertEqual(set(s.distribution.family), set([c, s]))
-        self.assertEqual(set(r.distribution.family), set([r, c]))
-        self.assertEqual(set(w.distribution.family), set([w, r, s]))
-        self.assertEqual(c.distribution.nvalues, c.nvalues)
-
-##		  assert(c.distribution.order['c'] == 0 and \
-##				 set([w.distribution.order['w'],w.distribution.order['s'], \
-##                   w.distribution.order['r']]) == set([0,1,2])), \
-##				 "Error with order"
 
 #=================================================================
 #	Test case for Multinomial_Distribution class
