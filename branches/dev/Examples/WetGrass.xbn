@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<ANALYSISNOTEBOOK NAME="Notebook.bndefault" ROOT="bndefault">
+  <BNMODEL NAME="bndefault"><STATICPROPERTIES><FORMAT>MSR DTAS XML</FORMAT>
+        <VERSION>1.0</VERSION>
+        <CREATOR>Microsoft Research DTAS</CREATOR>
+        </STATICPROPERTIES>
+      <DYNAMICPROPERTIES><PROPERTYTYPE NAME="DTASDG_Notes" TYPE="stringarray"><COMMENT>Notes on the diagram</COMMENT>
+          </PROPERTYTYPE>
+        <PROPERTYTYPE NAME="MS_Addins" TYPE="stringarray"/>
+        </DYNAMICPROPERTIES>
+      <VARIABLES><VAR NAME="Holmes" TYPE="discrete" XPOS="7362" YPOS="153"><FULLNAME>Holmes</FULLNAME>
+          <STATENAME>Yes</STATENAME>
+          <STATENAME>No</STATENAME>
+          </VAR>
+        <VAR NAME="Rain" TYPE="discrete" XPOS="3510" YPOS="-4638"><FULLNAME>Rain</FULLNAME>
+          <STATENAME>Yes</STATENAME>
+          <STATENAME>No</STATENAME>
+          </VAR>
+        <VAR NAME="Sprinkler" TYPE="discrete" XPOS="12270" YPOS="-4558"><FULLNAME>Sprinkler</FULLNAME>
+          <STATENAME>Yes</STATENAME>
+          <STATENAME>No</STATENAME>
+          </VAR>
+        <VAR NAME="Watson" TYPE="discrete" XPOS="-1222" YPOS="1"><FULLNAME>Watson</FULLNAME>
+          <STATENAME>Yes</STATENAME>
+          <STATENAME>No</STATENAME>
+          </VAR>
+        </VARIABLES>
+      <STRUCTURE><ARC PARENT="Rain" CHILD="Holmes"/>
+        <ARC PARENT="Sprinkler" CHILD="Holmes"/>
+        <ARC PARENT="Rain" CHILD="Watson"/>
+        </STRUCTURE>
+      <DISTRIBUTIONS><DIST TYPE="discrete"><CONDSET><CONDELEM NAME="Rain"/>
+            <CONDELEM NAME="Sprinkler"/>
+            </CONDSET>
+          <PRIVATE NAME="Holmes"/>
+          <DPIS><DPI INDEXES="0 0 ">1 0 </DPI>
+            <DPI INDEXES="0 1 ">1 0 </DPI>
+            <DPI INDEXES="1 0 ">0.9 0.1 </DPI>
+            <DPI INDEXES="1 1 ">0 1 </DPI>
+            </DPIS>
+          </DIST>
+        <DIST TYPE="discrete"><PRIVATE NAME="Rain"/>
+          <DPIS><DPI>0.2 0.8 </DPI>
+            </DPIS>
+          </DIST>
+        <DIST TYPE="discrete"><PRIVATE NAME="Sprinkler"/>
+          <DPIS><DPI>0.1 0.9 </DPI>
+            </DPIS>
+          </DIST>
+        <DIST TYPE="discrete"><CONDSET><CONDELEM NAME="Rain"/>
+            </CONDSET>
+          <PRIVATE NAME="Watson"/>
+          <DPIS><DPI INDEXES="0 ">1 0 </DPI>
+            <DPI INDEXES="1 ">0.2 0.8 </DPI>
+            </DPIS>
+          </DIST>
+        </DISTRIBUTIONS>
+      </BNMODEL>
+    </ANALYSISNOTEBOOK>
