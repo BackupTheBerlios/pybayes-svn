@@ -54,7 +54,6 @@ class DistributionTestCase(unittest.TestCase):
         self.assertEqual(set(w.distribution.family), set([w, r, s]))
         self.assertEqual(c.distribution.nvalues, c.nvalues)
 
-
 #=================================================================
 #	Test case for GaussianDistribution class
 #=================================================================
