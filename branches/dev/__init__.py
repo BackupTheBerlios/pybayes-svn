@@ -1,15 +1,15 @@
 #Python __init__.py file
-#setup.py
-__all__ = ['bayesnet', 'distributions', 'inference', 'potentials', \
-           'table', 'graph', 'OpenBayesXBN', 'BNController']
 
 # this will only import the class names defined in the __all__ parameter of each
 # file :
-from bayesnet import *
-from inference import *
-from distributions import *
-from potentials import *
-from table import *
-from graph import *
-from OpenBayesXBN import *
-from BNController import *
+from OpenBayes.bayesnet import *
+from OpenBayes.inference import *
+from OpenBayes.distributions import *
+from OpenBayes.potentials import *
+from OpenBayes.table import *
+from OpenBayes.graph import *
+from OpenBayes.OpenBayesXBN import *
+from OpenBayes.BNController import *
+
+__all__ = ['bayesnet', 'distributions', 'inference', 'potentials',
+           'table', 'graph', 'OpenBayesXBN', 'BNController']

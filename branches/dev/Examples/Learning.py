@@ -1,44 +1,48 @@
-""" this example shows how to Learn parameters from a set of observations
- using Maximum Likelihood Estimator """
+#!/usr/bin/env python
+""" 
+this example shows how to Learn parameters from a set of observations
+using Maximum Likelihood Estimator 
+"""
  
-from OpenBayes import JoinTree, MCMCEngine
+from OpenBayes import MCMCEngine
+#fron OpenBayes import JoinTree
 from copy import deepcopy
 from time import time
+import WaterSprinkler
 
+def main():
+    """
+    This is the main function
+    """
+    # first create a beyesian network
+    graph = WaterSprinkler.main()
+    nbr_samples = 1000
+    # sample the network N times
+    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
+    cases = graph.sample(nbr_samples)   
+    # create a new bayesian network with all parameters set to 1
+    graph_copy  = deepcopy(graph)
+    # set all parameters to 1s
+    graph_copy.init_distributions()
 
-# first create a beyesian network
-from WaterSprinkler import *
+    # create an inference Engine
+    # choose the one you like by commenting/uncommenting the appropriate line
+    # engine = JoinTree(graph_copy)
+    engine = MCMCEngine(graph_copy)
 
-N = 1000
-# sample the network N times
-cases = G.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
+    # Learn the parameters from the set of cases
+    start_time = time()
+    engine.learn_ml_params(cases)
+    print 'Learned from %d cases in %1.3f secs' % \
+           (nbr_samples,(time()-start_time))
 
-# create a new bayesian network with all parameters set to 1
-G2 = deepcopy(G)
-# set all parameters to 1s
-G2.InitDistributions()
+    # print the learned parameters
+    for vertex in graph_copy.all_v: 
+        print vertex.distribution,'\n'
 
-# create an inference Engine
-# choose the one you like by commenting/uncommenting the appropriate line
-ie = JoinTree(G2)
-#ie = MCMCEngine(G)
-
-# Learn the parameters from the set of cases
-t =time()
-ie.LearnMLParams(cases)
-print 'Learned from %d cases in %1.3f secs' %(N,(time()-t))
-
-# print the learned parameters
-for v in G2.all_v: 
-    print v.distribution,'\n'
-
-<<<<<<< .mine
-# print the learned parameters
-for v in G.all_v: 
-    print v.distribution,'\n'
-    
-
-=======
-    
-
->>>>>>> .r145
+    # print the learned parameters
+    for vertex in graph.all_v: 
+        print vertex.distribution,'\n'
+        
+if __name__ == "__main__":
+    main()

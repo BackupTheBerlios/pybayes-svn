@@ -1,35 +1,41 @@
+#!/usr/bin/env python
 """ this example shows how to Learn parameters from a set of observations
  using Maximum Likelihood Estimator """ 
 ####from OpenBayes import JoinTree, MCMCEngine
 from copy import deepcopy
 from time import time
-import random
 
 from OpenBayes import learning####, bayesnet
 
 # first create a beyesian network
-from WaterSprinkler import *
+import WaterSprinkler
 
-N = 1000
-# sample the network N times
-cases = G.Sample(N)    # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]
+def main():
+    """
+    The main function
+    """
+    graph = WaterSprinkler.main()
+    nbr_samples = 1000
+    # sample the network N times
+    cases = graph.sample(nbr_samples)  
+    # create a new bayesian network with all parameters set to 1
+    graph_copy = deepcopy(graph)
+    graph_copy.init_distributions()
+    # Learn the parameters from the set of cases
+    engine = learning.MLLearningEngine(graph_copy)
+    # cases = engine.read_file('file.xls') #To use the data of file.xls
+    start_time = time()
+    engine.learn_ml_params(cases)
+    print 'Learned from %d cases in %1.3f secs' % \
+          (nbr_samples, (time() - start_time))
 
-# create a new bayesian network with all parameters set to 1
-G2 = deepcopy(G)
-# set all parameters to 1s
-G2.InitDistributions()
+    # print the learned parameters
+    for vertex in graph_copy.all_v: 
+        print vertex.name, vertex.distribution.cpt,'\n'
 
-# Learn the parameters from the set of cases
-engine = learning.MLLearningEngine(G2)
-# cases = engine.ReadFile('file.xls') #To use the data of file.xls
-t = time()
-engine.LearnMLParams(cases)
-print 'Learned from %d cases in %1.3f secs' %(N,(time()-t))
+    # print the parameters
+    for vertex in graph.all_v: 
+        print vertex.distribution,'\n'
 
-# print the learned parameters
-for v in G2.all_v: 
-    print v.name, v.distribution.cpt,'\n'
-
-### print the parameters
-##for v in G.all_v: 
-##    print v.distribution,'\n'
+if __name__ == "__main__":
+    print main()
