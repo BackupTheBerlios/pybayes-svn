@@ -140,7 +140,7 @@ class BNet(graph.Graph):
         if edge.__class__.__name__ == 'DirEdge':
             graph.Graph.add_e(self, edge)
             #e._v[1] = [e._v[1]] + [parent for parent in e._v[1].in_v]
-            for v in edge._v:
+            for v in edge.all_v:
                 v.family = [v] + list(v.in_v)
         else:
             raise TypeError("All edges should be directed")
@@ -150,7 +150,7 @@ class BNet(graph.Graph):
         This method is used to remove an edge from the network
         """
         # remove the parent from the child node
-        edge._v[1].family.pop(edge._v[1].family.index(edge._v[0]))
+        edge.all_v[1].family.pop(edge.all_v[1].family.index(edge.all_v[0]))
         graph.Graph.del_e(self, edge.name)
   
     def inv_e(self, edge):
@@ -159,8 +159,8 @@ class BNet(graph.Graph):
         """
         self.e[edge].invert()
         # change the families of the corresponding nodes
-        edge._v[0].family.append(edge._v[1])
-        edge._v[1].family.pop(edge._v[1].family.index(edge._v[0]))
+        edge.all_v[0].family.append(edge.all_v[1])
+        edge.all_v[1].family.pop(edge.all_v[1].family.index(edge.all_v[0]))
     
     def moralize(self):
         """
@@ -176,8 +176,8 @@ class BNet(graph.Graph):
         # create an UndirEdge for each DirEdge in current graph
         for e in self.e.values():
             # get corresponding vertices in G (and not in self!)
-            v1 = tree.v[e._v[0].name]
-            v2 = tree.v[e._v[1].name]
+            v1 = tree.v[e.all_v[0].name]
+            v2 = tree.v[e.all_v[1].name]
             tree.add_e(graph.UndirEdge(len(tree.e), v1, v2))
 
         # add moral edges
