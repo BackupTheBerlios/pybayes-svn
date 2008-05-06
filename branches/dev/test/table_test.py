@@ -8,8 +8,9 @@ from copy import copy
 
 import numpy
 from OpenBayes.table import Table
+from OpenBayes.test.utils import ExtendedTestCase
 
-class TableTestCase(unittest.TestCase):
+class TableTestCase(ExtendedTestCase):
     """
     The unique test case in this file
     """
@@ -17,7 +18,6 @@ class TableTestCase(unittest.TestCase):
         names = ('a', 'b', 'c')
         shape = (2, 3, 4)
         self.table_a = Table(names, shape, dtype='Float32')
-        self.table_b = Table(names, shape[1:], dtype='Float32')
         self.names = names
         self.shape = shape
    
@@ -26,41 +26,41 @@ class TableTestCase(unittest.TestCase):
         b = Table(['a', 'b'], [2, 3], range(6), 'Float32')
         c = Table(['a'], [6], range(6), 'Float32')
         d = numpy.arange(6).reshape(2, 3)
-        e = Table(['b', 'a'], [3, 2], numpy.transpose(a.cpt))
-        self.assertEqual(a, b)
+        e = Table(['b', 'a'], [3, 2], numpy.transpose(a))
+        self.assertAllEqual(a, b)
         self.assertNotEqual(a, c)
-        self.assertEqual(a, d)
-        self.assertEqual(a, e)
-        self.assertEqual(e, a)
-
+        self.assertAllEqual(a, d)
+        self.assertAllEqual(a, e)
+        self.assertAllEqual(e, a)
+    """
     def test_imul(self):
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], \
                  range(2*3*4*5*6))
    
-        bcpt = b.cpt[..., numpy.newaxis, numpy.newaxis]
+        bcpt = b[..., numpy.newaxis, numpy.newaxis]
         bcpt.transpose([3, 1, 0, 4, 2])
-        res = bcpt*c.cpt
+        res = bcpt*c
         c *= b
-        self.assert_(numpy.all(c.cpt == res))
+        self.assertAllEqual(c, res)
 
     def test_idiv(self):
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], range(2*3*4*5*6))
-        bcpt = b.cpt[..., numpy.newaxis, numpy.newaxis]
+        bcpt = b[..., numpy.newaxis, numpy.newaxis]
         bcpt.transpose([3, 1, 0, 4, 2])
-        res = c.cpt/bcpt
+        res = c/bcpt
         res[numpy.isnan(res)] = 0.0
         c /= b
-        self.assert_(numpy.all(c.cpt == res))
+        self.assertAllEqual(c, res)
               
     def test_mul(self):
         a = Table(['a', 'b', 'c', 'd'], [2, 3, 4, 5], range(2*3*4*5))
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], range(2*3*4*5*6))
    
-        acpt = a.cpt[..., numpy.newaxis]
-        bcpt = b.cpt[..., numpy.newaxis, numpy.newaxis]
+        acpt = a[..., numpy.newaxis]
+        bcpt = b[..., numpy.newaxis, numpy.newaxis]
         bcpt = numpy.transpose(bcpt, [3, 1, 0, 4, 2])
         resab = acpt * bcpt
         ab = a * b
@@ -76,8 +76,8 @@ class TableTestCase(unittest.TestCase):
         a = Table(['a', 'b', 'c', 'd'], [2, 3, 4, 5], range(2*3*4*5))
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(4*3*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], range(2*3*4*5*6))
-        acpt = copy(a.cpt)[..., numpy.newaxis]
-        bcpt = copy(b.cpt)[..., numpy.newaxis, numpy.newaxis]
+        acpt = copy(a)[..., numpy.newaxis]
+        bcpt = copy(b)[..., numpy.newaxis, numpy.newaxis]
         bcpt.transpose(3, 1, 0, 4, 2)
         ab = a/b
         cc = c/c
@@ -93,9 +93,7 @@ class TableTestCase(unittest.TestCase):
         self.assertEqual(cc, Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], 
                                    cres))
         self.assertEqual(bb, Table(['c', 'b', 'e'], [4, 3, 6], bres))
-             
-    def test_delegate(self):
-        self.assert_(numpy.alltrue(self.table_a.flat == self.table_a.cpt.flat))
+    """    
 
     def test_basic_index(self):
         self.assertEqual(self.table_a[1,1,1], 1.0)
@@ -114,27 +112,40 @@ class TableTestCase(unittest.TestCase):
         self.assertEqual(self.table_a[index], self.table_a[1,1,1])
         self.assertEqual(self.table_a[index] == 3.0)
 
+    def test_copy(self):
+        a = Table('a b c'.split())
+        b = a.copy()
+        self.assertEqual(b.names_list, ['a', 'b', 'c'])
+
     def test_add_dim(self):
         a = Table('a b c'.split())
         a.add_dim('d')
+        self.assertEqual(a.names, set('a b c d'.split()))
+        self.assertEqual(a.names_list, 'a b c d'.split()) 
+        self.assert_(a.assocdim.has_key('d'))
+        self.assert_(a.assocname.has_key(3))
+        self.assertEqual(a.shape ,(2,2,2,1))
 
-        assert(a.names == set('a b c d'.split()) and \
-               a.names_list == 'a b c d'.split() and \
-               a.assocdim.has_key('d') and \
-               a.assocname.has_key(3)), \
-               "add Dim does not work correctly..."
- 
+    def test_transpose(self):
+        a = Table("a b".split(), None, range(4))
+        b = a.transpose()
+        # only the copy must be changed
+        self.assertEqual(b.names_list, ['b', 'a'])
+        self.assertEqual(a.names_list, ['a', 'b'])
+
+
     def test_union(self):
         """ test Union between two Tables """
         a = Table(['a','b','c','d'], [2,3,4,5], range(2*3*4*5))
         b = Table(['c','b','e'], [4,3,6], range(12*6))
         ab, bb = a.union(b)
-        assert(ab.names_list == ['a','b','c','d','e'] and \
-               ab.shape == tuple([2,3,4,5,1]) and \
-               numpy.all(bb == numpy.transpose(b.cpt[..., numpy.newaxis,numpy.newaxis], axes=[3,1,0,4,2]))), \
-               """ union does not work ..."""
- 
-    def testPrepareOther(self):
+        self.assertEqual(ab.names_list, ['a','b','c','d','e'])
+        self.assertEqual(ab.shape, tuple([2,3,4,5,1]))
+        b.add_dim("a")
+        b.add_dim("d")
+        self.assertAllEqual(b, bb)
+
+    def test_prepare_other(self):
         c = Table(['e','b'], [2,3], range(6))
         d = Table(['a','b','c','d','e'], [2,3,2,2,2], range(3*2**4))
         e = Table(['e','b','f'], [2,3,4], range(6*4))
@@ -144,18 +155,11 @@ class TableTestCase(unittest.TestCase):
         dc = d.prepare_other(c)
         self.assertRaises(ValueError, d.prepare_other, e)
         cr_ = src.prepare_other(cr)
-        assert(dc.shape == (1, 3, 1, 1, 2))
-        assert((dc[0, :, 0, 0, :] == numpy.transpose(c.cpt, axes=[1, 0])).all())
+        self.assertEqual(dc.shape, (1, 3, 1, 1, 2))
+        assert((dc[0, :, 0, 0, :] == numpy.transpose(c, axes=[1, 0])).all())
         assert(cr_.shape == (1,3,4))       
       
 if __name__ == '__main__':
     unittest.main()
-##    a*c
-##    print a
-##    print c
-
-    #a*b
-    #print 'mul'
-    #print a
 
 

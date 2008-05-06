@@ -1,147 +1,112 @@
-#!/usr/bin/env python
-""" This is a set of code for subclassing numarray.  
-It creates a new table class which is similar to numarray's basic array
+""" This is a set of code for subclassing numpy.ndarray.  
+It creates a new table class which is similar to numpy's basic array
 except that each dimension of the array is associated with a name.
 This allows indexing via a dictionary and transposing dimensions 
 according to an ordered list of dimension names.
 
 Copyright 2005 Elliot Cohen and Kosta Gaitanis, please see the license
 file for further legal information.
-"""
 
-__version__ = '0.1'
-__author__ = 'Kosta Gaitanis & Elliot Cohen'
-__author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
-#import random
+Heavy Modifcation by Hugues Salamin in 2008 (port to numpy)
+"""
 import types
-from copy import copy
 
 import numpy
+import numpy.random
 
 __all__ = ['Table']
+__version__ = '0.2'
+__author__ = 'Kosta Gaitanis & Elliot Cohen & Hugues Salamin'
+__author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com;'\
+                   'hugues.salamin@gmail.com'
+
 # avoid divide by zero warnings...
 numpy.seterr(invalid='ignore', divide='ignore')
 
-class Table:
+class Table(numpy.ndarray):
     """
-    A table implementation based on numarray
+    A table implementation based on numpy
+
+    Table is a subclass of numpy.ndarray and can therefor be used
+    anywhere a numpy array can be
     """
-    def __init__(self, names, shape=None, elements=None, dtype='Float32'):
-        ''' names = ['a','b',...]
-        shape = (2, 3, ...) (default: binary)
-        elements = [0, 1, 2,....] (a list or a numarray, default: all ones)
-        type = 'Float32' or 'Float64' or 'UInt8', etc... (default: Float32)
-        '''
-        # set default parameters
+
+    def __new__(cls, names, shape=None, elements=None, dtype='Float32', 
+                copy=False):
         if shape is None:
             shape = [2] * len(names)
         if elements is None:
             elements = numpy.ones(shape=shape)
-        self.cpt = numpy.array(elements, dtype=dtype).reshape(shape)
-        self.names = set(names)
-        # just to keep the order in an easy to use way
-        self.names_list = list(names) 
-        # dict of name:dim number pairs
-        self.assocdim = dict(zip(self.names_list, range(len(self.names_list))))
-        # dict of dim:name pairs
-        self.assocname = dict(enumerate(self.names_list))
+        if copy:
+            subarray = numpy.array(elements, dtype=dtype).reshape(shape)
+        else:
+            subarray = numpy.asarray(elements, dtype=dtype).reshape(shape)
+        subarray = subarray.view(cls)
+        subarray.assocname = dict(enumerate(names))
+        subarray._compute_internal_dict()
+        return subarray
 
-#==============================================================================
-#    def normalize(self, dim=-1):
-#        """ If dim=-1 all elements sum to 1.  Otherwise sum to specific 
-#        dimension, such that sum(Pr(x=i|Pa(x))) = 1 for all values of i 
-#        and a specific set of values for Pa(x)
-#        """
-#        if dim == -1 or len(self.cpt.shape) == 1:
-#            self.cpt /= self.cpt.sum()            
-#        else:
-#            ndim = self.assocdim[dim]
-#            order = range(len(self.names_list))
-#            order[0] = ndim
-#            order[ndim] = 0
-#            tcpt = na.transpose(self.cpt, order)
-#            t1cpt = na.sum(tcpt, axis=0)
-#            t1cpt = na.resize(t1cpt,tcpt.shape)
-#            tcpt = tcpt/t1cpt
-#            self.cpt = na.transpose(tcpt, order)
-#    #======================================================
-#    #=== Sampling
-#    def sample(self, index={}):
-#        """ returns the index of the sampled value
-#        eg. a=Pr(A)=[0.5 0.3 0.0 0.2]
-#            a.sample() -->  5/10 times will return 0
-#                            3/10 times will return 1
-#                            2/10 times will return 3
-#                            2 will never be returned
-#
-#            - returns an integer
-#            - only works for one variable tables
-#              eg. a=Pr(A,B); a.sample() --> ERROR
-#        """
-#        assert(len(self.names) == 1 or len(self.names - set(index.keys())) == 1),\
-#              "Sample only works for one variable tables"
-#        if not index == {}:
-#            tcpt = self.__getitem__(index)
-#        else:
-#            tcpt = self.cpt
-#        # csum is the cumulative sum of the distribution
-#        # csum[i] = na.sum(self.cpt[0:i])
-#        # csum[-1] = na.sum(self.cpt)
-#        csum = [na.sum(tcpt.flat[0:end+1]) for end in range(tcpt.shape[0])]
-#        
-#        # sample in this distribution
-#        r = random.random()
-#        for i,cs in enumerate(csum):
-#            if r < cs: return i
-#        return i
-#==============================================================================
-    #==================================
-    #Administration stuff
-    def __getattr__(self, name):
-        """ delegate to self.cpt """
-        return getattr(self.cpt, name)
-    
-    def __coerce__(self, other):
-        assert(isinstance(other, Table))
-        return (self, other)
+    def get_names_list(self):
+        return [self.assocname[i] for i in range(len(self.shape))]
 
-    def __copy__(self):
-        """ copy method """
-        return Table(self.names_list, self.shape, self.cpt, self.cpt.dtype)
+    names_list = property(get_names_list, None, None, 
+                          "Return an ordered list of names")
+   
+    def get_names_set(self):
+        return set(self.assocdim.keys())
+
+    names = property(get_names_set, None, None, 
+                     "Return the set of the names present in the array")
+
+    def __array_finalize__(self, obj):
+        """
+        We must set the default value in this function.
+        See numpy documentation
+        """
+        if hasattr(obj, "assocname"):
+            self.assocname = dict(obj.assocname)
+        else:
+            self.assocname =dict( [(x,str(x)) for x in xrange(len(self.shape))])
+        self._compute_internal_dict()
+
+    def _compute_internal_dict(self):
+        self.assocdim = dict([(x[1], x[0]) for x in self.assocname.items()])
+        if len(self.assocdim) != len(self.shape):
+            raise ValueError("Missing dimension name:\n shape: %s\n%s" %
+                              (self.shape, self.assocdim))
 
     def update(self, other):
         """ updates this Table with the values contained in the other"""
         # check that all variables in self are contained in other
-        if self.names != other.names:
-            return "error in update, all variables in other should be"\
-                   " contained in self"
-
-        # find the correspondance vector
+        if self.assocname != other.assocname:
+            raise ValueError("Update not possible if names differs")
         correspond = []
         for vara in self.names_list:
             correspond.append(other.assocdim[vara])
+        self[:] = numpy.transpose(other, axes=correspond)
 
-        self.cpt = copy(numpy.transpose(other.cpt, axes=correspond))
-    #===================================
-    # Put values into the cpt
     def rand(self):
-        ''' put random values to self.cpt '''
-        self.cpt = numpy.mlab.rand(*self.shape)
+        ''' put random values into self '''
+        self[:] = numpy.random.uniform(size = self.shape)
 
-    def all_ones(self):
+    def ones(self):
         """
         set all the element to ones
         """
-        self.cpt = numpy.ones(self.shape, dtype='Float32')
+        self[:] = numpy.ones(self.shape, dtype=self.dtype)
+
+    def zeros(self):
+        """
+        set all element to zero
+        """
+        self[:] = numpy.zeros(self.shape, dtype = self.dtype)
     
     def set_values(self, values):
         """
-        set self.cpt to values
+        set self to values
         """
-        ###X ???self.sizes is not a atribute, change to self.shape
-        self.cpt = numpy.array(values, dtype='Float32').reshape(self.sizes)
-    #==================================
-    # Indexing
+        self[:] = numpy.array(values, dtype=self.dtype).reshape(self.shape)
+
     def __getitem__(self, index):
         """ Overload array-style indexing behaviour.
         Index can be a dictionary of var name:value pairs, 
@@ -154,7 +119,7 @@ class Table:
             num_index = self._num_index_from_dict(index)
         else:
             num_index = index
-        return self.cpt[num_index]
+        return numpy.ndarray.__getitem__(self.view(numpy.ndarray), num_index)
 
     def __setitem__(self, index, value):
         """ Overload array-style indexing behaviour.
@@ -166,11 +131,12 @@ class Table:
             num_index = self._num_index_from_dict(index)
         else:
             num_index = index
-        self.cpt[num_index] = value
+        numpy.ndarray.__setitem__(self, num_index, value)
 
     def _num_index_from_dict(self, dim_name):
         """
-        TODO figure out
+        This function convert a dictionnary of index into
+        a list of index
         """
         index = []
         for dim in range(len(self.shape)):
@@ -180,65 +146,103 @@ class Table:
                 index.append(slice(None, None, None))
         return tuple(index) # must convert to tuple in order to work, bug fix
 
-    #=====================================
-    # printing
-    def __repr__(self):
-        " Return printable representation of instance."
-        class_name = self.__class__.__name__
-        class_name = class_name.zfill(5).replace('0', ' ')
-        rep = class_name + repr(self.cpt)[5:]
-        rep += '\nVariables :' + str(self.names_list)
-        return rep
+    def __str__(self):
+        string = "Dimension names : "+" ".join(self.names_list) + "\n"
+        return string + numpy.ndarray.__str__(self)
 
-    #=====================================
-    # Operations
+    def transpose(self, *axis):
+        """
+        This function get called when we want to transpose the table. We
+        need to ensure that the names stay on the right dimension
+        """
+        new = numpy.ndarray.transpose(self, *axis)
+        if len(axis) == 1:
+            axis = axis[0]
+        if axis is None or len(axis) == 0:
+            axis = range(len(self.shape)-1, -1, -1)
+        new.assocname = dict([(x, self.assocname[y]) for x,y in enumerate(axis)])
+        return new.view(Table)
+
     def add_dim(self, new_dim_name):
-        ###X bug??? e.g. abc->abcd the no of elements of self.cpt still 8
         """adds a new unary dimension to the table """
         # add a new dimension to the cpt
-        self.cpt = self.cpt[..., numpy.newaxis]
+        self.assocname[len(self.shape)] = new_dim_name
+        self.shape = self.shape + (1,)
+        self._compute_internal_dict()
 
-        self.names.add(new_dim_name)
-        # just to keep the order in an easy to use way
-        self.names_list.append(new_dim_name) 
-        # dict of name:dim number pairs
-        self.assocdim[new_dim_name] = len(self.names) - 1
-        # dict of dim:name pairs
-        self.assocname[len(self.names) - 1] = new_dim_name     
-        
     def __eq__(self, other):
         """ True if a and b have same elements, size and names """
         if other.__class__ == numpy.ndarray:
-        # in case b is a just a numarray and not a Table instance
+        # in case b is a just a numpy.ndarray and not a Table instance
         # in this case, variable should absoltely be at the same order
         # otherwise the Table and numArray are considered as different
-            return (numpy.alltrue(self.cpt.flat == other.flat) \
-                    and self.shape == other.shape)
-
-        elif other == None:
+            return (numpy.ndarray.__eq__(self.view(numpy.ndarray), other))
+        elif other is None:
         # in case b is None type
             return False
-        
         elif isinstance(other, (int, float, long)):
         # b is just a number, int, float, long
-            return self.cpt == other
-        
-        else:
-        # the b class should better be a Table or something like that
-        # order of variables is not important
+            return numpy.ndarray.__eq__(self, other)
+        else:   
+            # the b class should better be a Table or something like that
+            # order of variables is not important
             # put the variables in the same order
             # first must get the correspondance vector :
-            bcpt = self.prepare_other(other)
-            return (self.names == other.names and \
-                    bcpt.shape == self.shape and \
-                    numpy.allclose(bcpt, self.cpt))
-        
-## This code checks that order is the same
-##            return (a.shape == b.shape \
-##                    and a.names_list == b.names_list \
-##                    and na.alltrue(a.cpt.flat == b.cpt.flat)  \
-##                    )
+            if self.names != other.names:
+                return numpy.array([False])
+            correspond = []
+            for vara in self.names_list:
+                correspond.append(other.assocdim[vara])
+            return numpy.ndarray.__eq__(self, 
+                                     numpy.transpose(other, axes=correspond)).view(numpy.ndarray)
 
+
+    def union(self, other):
+        """ 
+        Returns a new instance of same class as a that contains all
+        data contained in self but also has any new variables found in other with unary
+        dimensions. Also returns a view of other ready for an operation with
+        the returned instance.
+        
+        eg. self = Pr(A,B,C,D,E)
+            other = Pr(C,G,A,F)
+            self.union(other) --> returns (Pr(A,B,C,D,E,1,1),numarray([A,1,C,1,1,G,F])
+            
+        Notes:
+        -    self and other remain unchanged
+        -    self and other must be Table instances (or something equivalent)
+        -    self always keeps the same order of its existing variables
+        -    any new variables found in other are added at the end of the result in the order
+             they appear in other.
+        -    new dimensions are added with numpy.newaxis
+        -    the two numpy.ndarray objects returns have exactly the same dimensions
+             and are ready for any kind of operation, *,/,...
+        """
+        new = self.copy()
+        for variable in other.names_list:
+            if variable not in new.names:
+                new.add_dim(variable) # add new variable to new
+        # new now contains all the variables contained in a and b
+        # new = A U B
+        correspond = []        
+        b_assocdim = other.assocdim.copy()
+        bcpt = other.view()
+        for var in new.names_list:
+            # var is the name of a variable in new
+            if not other.assocdim.has_key(var):
+                bcpt.add_dim(var)
+                b_assocdim[var] = numpy.rank(bcpt) - 1
+            correspond.append(b_assocdim[var])
+        # transpose dimensions in b to match those in a
+        btr = bcpt.transpose(correspond)
+        # btr is now ready for any operation with new
+        return new, btr
+
+
+    ##########################################################################
+    # What is below must still be implemented
+    # TODO understand and reimplement
+    ##########################################################################
     def __imul__(self, other):
         """
         in place multiplication
@@ -259,7 +263,8 @@ class Table:
         -   a keeps the order of its existing variables
         -   b is not touched during this operation
         -   operation is done in-place for a, a is not the same after the operation
-        """
+        -> code start
+        
         # prepare dimensions in b for multiplication
         cptb = self.prepare_other(other)
 
@@ -270,6 +275,8 @@ class Table:
                                 #is this a numarray BUG????
 
         return self
+        """
+        raise NotImplementedError
 
     def __idiv__(self, other):
         """
@@ -291,7 +298,7 @@ class Table:
         -   a keeps the order of its existing variables
         -   b is not touched during this operation
         -   operation is done in-place for a, a is not the same after the operation
-        """
+        -> code start
         # prepare dimensions in b for multiplication
         cptb = self.prepare_other(other)
 
@@ -306,6 +313,8 @@ class Table:
         self.cpt[numpy.isnan(self.cpt)] = 0
         #---TODO: replace this very SLOW function with a ufunc
         return self 
+        """
+        raise NotImplementedError
 
     def __mul__(self, other):
         """
@@ -327,7 +336,7 @@ class Table:
             order they appear in b
         -   a and b are not touched during this operation
         -   return a NEW Table instance
-        """
+        -> code start
         # prepare dimensions in a and b for multiplication
         new, cptb = self.union(other)
 
@@ -338,6 +347,8 @@ class Table:
                                 #is this a numarray BUG????        
 
         return new
+        """
+        raise NotImplementedError
 
     def __div__(self, other):
         """
@@ -359,7 +370,7 @@ class Table:
             order they appear in b
         -   a and b are not touched during this operation
         -   return a NEW Table instance
-        """
+        -> code
         #########################################
         #---TODO: add division with a number
         #########################################
@@ -377,9 +388,11 @@ class Table:
         # na.Error.setMode(invalid='ignore') replace INFs by 0s
         new.cpt[numpy.isnan(new.cpt)] = 0
         #---TODO: replace this very SLOW function with a ufunc
-
         return new
-    
+        """
+        raise NotImplementedError
+
+
     def prepare_other(self, other):
         """
         Prepares other for inplace multiplication/division with self. Returns
@@ -388,11 +401,11 @@ class Table:
 
         eg. a= Pr(A,B,C,D)
             b= Pr(D,B)
-            a.prepare_other(b) --> returns a numarray Pr(1,B,1,D)
+            a.prepareOther(b) --> returns a numarray Pr(1,B,1,D)
 
             a= Pr(A,B,C,D)
             b= Pr(C,B,E)
-            a.prepare_other(b) --> ERROR (E not in {A,B,C,D})
+            a.prepareOther(b) --> ERROR (E not in {A,B,C,D})
 
         Notes:
         -   a and b are not altered in any way. NON-DESTRUCTIVE
@@ -401,83 +414,15 @@ class Table:
         """
         #self contains all variables found in other
         if len(other.names - self.names) > 0:
-            raise ValueError(str((other.names-self.names)) +
-                             "not in" + str(self.names))
-
+            raise ValueError(str((other.names-self.names)) + "not in" + str(self.names))
         # add new dimensions to b
-        bcpt = other.cpt.view()
-        b_assocdim = copy(other.assocdim)
+        new_b = other.copy()
         for var in (self.names - other.names):
             #for all variables found in self and not in other
             #add a new dimension to other
-            bcpt = bcpt[..., numpy.newaxis]
-            b_assocdim[var] = numpy.rank(bcpt) - 1
-
+            new_b.add_dim(var)
         #create the transposition vector
-        trans = list()
+        trans = []
         for var in self.names_list:
-            trans.append(b_assocdim[var])
-
-        bcpt_trans = bcpt.transpose(trans)
-
-        # transpose and return bcpt
-        return bcpt_trans
-        
-    def union(self, other):
-        """ Returns a new instance of same class as a that contains all
-        data contained in a but also has any new variables found in b with unary
-        dimensions. Also returns a view of b.cpt ready for an operation with
-        the returned instance.
-        
-        eg. a= Pr(A,B,C,D,E)
-            b= Pr(C,G,A,F)
-            a.union(b) --> returns (Pr(A,B,C,D,E,1,1),numarray([A,1,C,1,1,G,F]))
-
-            
-            
-        Notes:
-        -    a and b remain unchanged
-        -    a and b must be Table instances (or something equivalent)
-        -    a always keeps the same order of its existing variables
-        -    any new variables found in b are added at the end of a in the order
-             they appear in b.
-        -    new dimensions are added with numpy.newaxis
-        -    the two numarrays objects returns have exactly the same dimensions
-             and are ready for any kind of operation, *,/,...
-        """
-        # make a copy of a
-        new = copy(self)
-
-        for varb in other.names_list:
-            # varb is the name of a variable in b
-            if not new.assocdim.has_key(varb):
-                new.add_dim(varb) # add new variable to new
-
-        # new now contains all the variables contained in a and b
-        # new = A U B
-
-        correspond = []        
-        b_assocdim = copy(other.assocdim)
-        bcpt = other.cpt.view()
-        for var in new.names_list:
-            # var is the name of a variable in new
-            if not other.assocdim.has_key(var):
-                bcpt = bcpt[..., numpy.newaxis]
-                b_assocdim[var] = numpy.rank(bcpt) - 1
-            correspond.append(b_assocdim[var])
-
-        # transpose dimensions in b to match those in a
-        btr = bcpt.transpose(correspond)
-
-        # btr is now ready for any operation with new
-        return new, btr
-
-    def ones(self):
-        """ All CPT elements are set to 1 """
-        self.cpt = numpy.ones(self.cpt.shape, dtype=self.cpt.dtype)
-
-    def zeros(self):
-        """ All CPT elements are set to 0 """
-        self.cpt = numpy.zeros(self.cpt.shape, dtype=self.cpt.dtype)
-
-  
+            trans.append(new_b.assocdim[var])
+        return new_b.transpose(trans)

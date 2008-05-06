@@ -10,14 +10,17 @@ __version__ = '0.2'
 __author__ = 'Robert Dick (dickrp@ece.northwestern.edu)'
 
 
-import copy, new, operator, struct, delegate
+import copy
+import struct
+
+import OpenBayes.delegate as delegate
 
 # The following four lines borrowed from Gregory R. Warnes's fpconst
 # (until it's standard in Python distributions).
 if struct.pack('i', 1)[0] != '\x01':
-    PosInf = struct.unpack('d', '\x7F\xF0\x00\x00\x00\x00\x00\x00')[0]
+    pos_inf = struct.unpack('d', '\x7F\xF0\x00\x00\x00\x00\x00\x00')[0]
 else:
-    PosInf = struct.unpack('d', '\x00\x00\x00\x00\x00\x00\xf0\x7f')[0]
+    pos_inf = struct.unpack('d', '\x00\x00\x00\x00\x00\x00\xf0\x7f')[0]
 
 
 class GraphError(StandardError):
@@ -37,17 +40,27 @@ class SortStruct(float, object):
         return obj
 
     @property
-    def number(self): return float(self)
+    def number(self): 
+        return float(self)
 
 
 def _condop(cond, v1, v2):
+    """
+    Return v1 if cond is True, else v2
+    """
     if cond:
         return v1
     else:
         return v2
 
 def _roprop(description = None):
+    """
+    Define a read-only property
+    """
     def prop_func(ro_method):
+        """
+        decorator
+        """
         return property(ro_method, None, None, description)
     return prop_func
 
@@ -177,7 +190,7 @@ class UndirEdge(RawEdge):
     def weight(self, v1, v2):
         '''1 if this edge connects the vertices.'''
         if v1 not in self._v or v2 not in self._v:
-                    raise GraphError('vertices not connected')
+            raise GraphError('vertices not connected')
         return 1
 
     @_roprop('Source vertices.')
@@ -283,7 +296,7 @@ class VertexDict(dict, delegate.Delegate):
         '''
         v = self[key]
         for e in reversed(v._e):
-                    del self.graph.e[e.name]
+            del self.graph.e[e.name]
         self.__dict.__delitem__(self, key)
 
 
@@ -331,7 +344,8 @@ class Graph(delegate.Delegate):
 
     @_roprop(
             'List of all vertices with both incoming and outgoing edges.')
-    def intermed_v(self):   return [v for n, v in self.v.items() if v.is_intermed]
+    def intermed_v(self):   
+        return [v for n, v in self.v.items() if v.is_intermed]
 
     def add_v(self, v):
         '''Add and return a vertex.'''
@@ -371,7 +385,8 @@ class Graph(delegate.Delegate):
         return visited                
 
     def connected_components(self):
-        '''Return a list of lists.  Each holds transitively-connected vertices.'''
+        '''Return a list of lists.  Each holds transitively-connected 
+        vertices.'''
         unchecked = set(self.v.values())
         groups = []
         while len(unchecked):
@@ -463,7 +478,7 @@ class Graph(delegate.Delegate):
 ##                                break
 ##                return result
 
-#================================================================================
+#==============================================================================
 
     def minimal_span_tree(self, **kargs):
         '''Return minimal spanning 'Tree'.
@@ -480,7 +495,7 @@ class Graph(delegate.Delegate):
         mst = Tree()
 
         while targets:
-# Haven't found it yet.  Search more.
+            # Haven't found it yet.  Search more.
             connected = []
             for v in visited:
                 for u in unvisited:
@@ -490,9 +505,9 @@ class Graph(delegate.Delegate):
                         connected.append(SortStruct(dist, src=v, dest=u))
 
             if not connected:
-                raise GraphError('unreachable vertices in minimal_spanning_tree')
+                raise GraphError('unreachable vertices')
 
-# Connect it
+            # Connect it
             near = min(connected)
             if near.src.name not in mst.v:
                 mst.add_v(DataVertex(near.src.name, near.src))
@@ -506,7 +521,7 @@ class Graph(delegate.Delegate):
             targets.remove(near.dest)
         return mst
 
-#================================================================================
+#==============================================================================
 
     def shortest_tree(self, start, **kargs):
         '''Return a 'Tree' of shortest paths to all nodes.
@@ -522,9 +537,9 @@ class Graph(delegate.Delegate):
         dist = {start:0.0}
         unvisited = set(self.v.values())
         while targets:
-# Determine the closest vertex
-            closest = min([(dist.get(v, PosInf), v) for v in unvisited])[1]
-# Add it and push the distances
+            # Determine the closest vertex
+            closest = min([(dist.get(v, pos_inf), v) for v in unvisited])[1]
+            # Add it and push the distances
             unvisited.remove(closest)
             targets.discard(closest)
             adj_v = closest.out_v
@@ -533,9 +548,9 @@ class Graph(delegate.Delegate):
             for v in adj_v:
                 for e in closest.connecting_e(v):
                     push_dist = weight_func(e, closest, v) + dist[closest]
-                    if push_dist < dist.get(v, PosInf):
+                    if push_dist < dist.get(v, pos_inf):
                         dist[v] = push_dist
-# Add the vertices.  Remove the old edges, if any.  Add the new edge.
+                        # Add the vertices.  Remove the old edges, if any.  Add the new edge.
                         if closest.name not in path_tr.v:
                             path_tr.add_v(DataVertex(closest.name, closest))
                         if v.name not in path_tr.v:
@@ -544,11 +559,12 @@ class Graph(delegate.Delegate):
                         for e2 in path_tr.v[v.name].in_e:
                             del path_tr.e[e2.name]
                             e_nm = e2.name
-                        path_tr.auto_add_e(DirEdge(e_nm, path_tr.v[closest.name],
+                        path_tr.auto_add_e(DirEdge(e_nm, 
+                                                   path_tr.v[closest.name],
                                                    path_tr.v[v.name]))
         return path_tr
 
-#================================================================================
+#==============================================================================
 
     def greedy_paths(self, start, goal, weight_func=None):
         '''Return a dict of greedy paths with (start vertex, end vertex) keys.
@@ -563,14 +579,16 @@ class Graph(delegate.Delegate):
         visited = set([start])
         while path[-1] is not goal:
             adj_v = [SortStruct(weight_func(e, path[-1], v), dest = v)
-                     for e in path[-1].out_e for v in e.dest_v if v not in visited]
+                     for e in path[-1].out_e 
+                         for v in e.dest_v 
+                             if v not in visited]
             if adj_v:
                 closest_v = min(adj_v).dest
                 visited.add(closest_v)
                 path.append(closest_v)
             else:
                 path.pop()
-# Prepare the dict
+        # Prepare the dict
         d = {}
         for i1 in range(len(path)):
             for i2 in range(i1, len(path)):
@@ -578,23 +596,21 @@ class Graph(delegate.Delegate):
         return d
 
     def all_pairs_sp(self, weight_func=None):
-            '''Return a dictionary of shortest path lists for all vertex pairs.
+        '''Return a dictionary of shortest path lists for all vertex pairs.
 
-            Keys are (source, destination) tuples.
-            'weight_func' is a function taking (edge, v1, v2) that returns a weight.
-            Defaults to e.weight()'''
+        Keys are (source, destination) tuples.
+        'weight_func' is a function taking (edge, v1, v2) that returns a weight.
+        Defaults to e.weight()'''
 
-            return dict(self.shortest_tree(v,
-                        weight_func = weight_func).path_dict().items() for v in self.v.values())
+        return dict(self.shortest_tree(v, weight_func = weight_func).path_dict().items() for v in self.v.values())
 
-#================================================================================
+#==============================================================================
 
     @staticmethod
     def path_weight(path, weight_func=None):
         '''Return the weight of the path, which is a list of vertices.
-
-        'weight_func' is a function taking (edge, v1, v2) and returning a weight.'''
-
+        'weight_func' is a function taking (edge, v1, v2) and returning 
+        a weight.'''
         def def_weight_func(e, v1, v2): return e.weight(v1, v2)
         weight_func = weight_func or def_weight_func
         wt = 0.0
@@ -656,201 +672,3 @@ class Tree(Graph):
                 parent = parent.pop()
                 d[root.data, v.data] = d[root.data, parent.data] + [v.data]
         return d
-
-########################################################################
-if __name__ == '__main__':
-    from OpenBayes import BVertex    
-    G = Graph()
-    a, b, c, d, e, f, g = [G.add_v(BVertex(nm)) for nm in 'a b c d e f g'.split()]
-    for ep in [(a,b), (a,c), (b,d), (b,f), (b,e), (c,e), (d,f), (e,f),
-    (f, g)]:
-        G.add_e(UndirEdge(len(G.e), *ep))
-
-    print G
-    #print 'DFS:', map(str, G.depth_first_search(a))
-    #print 'BFS:', map(str, G.breadth_first_search(a))
-    #print 'top sort:', map(str, G.topological_sort(a))
-
-    #T = G.minimal_span_tree()
-    #print T
-    #print [(map(str, k), map(str, v)) for k, v in T.path_dict().items()]
-
-    #S = G.shortest_tree(a)
-    #print S
-
-    print a
-
-    ###################################################################
-    # just in case, this is the copy method I created, but don't seem to need it
-    ######################################
-    def __copy__(self):
-        g = Graph('Copy of ' + str(self.name))
-
-        # copy vertices
-        for v in self.v.values():
-            if v.__class__.__name__ == 'BVertex':
-                g.add_v(BVertex(v.name, v.nvalues))
-            elif v.__class__.__name__ == 'Vertex':
-                g.add_v(Vertex(v.name))
-
-
-        # for each edge, create a corresponding edge in g
-        for e in self.e.values():
-            print e
-            print e._v[0].name
-            v1 = g.v[e._v[0].name]
-            v2 = g.v[e._v[1].name]
-            if e.__class__.__name__ == 'UndirEdge':
-                g.add_e(UndirEdge(len(g.e),v1,v2))
-            elif e.__class__.__name__ == 'DirEdge':
-                g.add_e(DirEdge(len(g.e),v1,v2))
-
-        return g
-
-
-#!/usr/bin/env python
-
-'''Class to automate delegation decisions based on inheritance graph.
-
-Copyright 2004, Robert Dick (dickrp@ece.northwestern.edu).
-
-Whenever you need to delegate to something, inherit from delegate and use
-self.__<base>.<method()> to access the base.  If the delegation was
-inappropriate due to reconverging paths in the inheritance graph, the return
-value will be None.  In the case of reconverging paths, the left-most call in
-the method resolution order will be honored.  The rest will be nulified.  You
-can also check to see if the base is the no_delegation object.  Delegate to all
-your bases if you need everything in the inheritance graph to be visited.  As
-long as one of a class's (transitive) bases inherits from Delegate, that's
-enough.
-
-For examples of use, please see the delegate.py file.
-
-Python doesn't yet automate meta-class instantiation.  If you need to inherit
-from Delegate and another class that does not have a 'type' metaclass, you'll
-need to generate a shared derived metaclass and explicitly use that as your
-class's metaclass.  For example:
-
-    import Delegate, qt
-
-    class sip_meta_join(type(Delegate), type(qt.QObject)):
-    def __init__(*args):
-        type(Delegate).__init__(*args)
-        type(qt.QObject).__init__(*args)
-
-    class MyClass(Delegate, qt.QObject):
-    __metaclass__ = sip_meta_join
-    ...
-
-Please see the license at the end of the source code for legal information.'''
-
-
-__version__ = '0.1'
-__author__ = 'Robert Dick (dickrp@ece.northwestern.edu)'
-
-
-def should_call(obj, pos, supr):
-    '''Returns bool.  Should 'self' delegate to 'super' at 'pos'?
-    Determines whether pos is left-most derived of super in MRO.'''
-
-    for c in type(obj).__mro__:
-        if supr in c.__bases__:
-            return pos is c
-    return False
-
-class _no_delegation(object):
-    '''All class's attributes are null callable's.'''
-
-    _to_base = set(['__bases__', '__name__', '__mro__', '__module__'])
-
-    def __getattribute__(self, attr):
-        if attr in _no_delegation._to_base:
-            return getattr(object, attr)
-        def no_action(*pargs, **kargs): pass
-        return no_action
-
-'''Whatever'''
-no_delegation = _no_delegation()
-'''Whatever'''
-
-
-class _delegate_meta(type):
-    '''Sets up delegation private variables.
-    
-    Traverses inheritance graph on class construction.  Creates a private
-    __base variable for each base class.  If delegating to the base class is
-    inappropriate, uses _no_delegation class.'''
-    
-    def __init__(cls, name, bases, dict):
-        type.__init__(cls, name, bases, dict)
-        visited_supr = set()
-        for sub in cls.__mro__[:-1]:
-            subnm = sub.__name__.split('.')[-1]
-            for supr in sub.__bases__:
-                suprnm = supr.__name__.split('.')[-1]
-                if supr not in visited_supr:
-                    visited_supr.add(supr)
-                    deleg = supr
-                else:
-                    deleg = no_delegation
-                    setattr(cls, '_%s__%s' % (subnm, suprnm), deleg)
-
-
-class Delegate(object):
-    '''Inherit from Delegate to get delegation variables on class construction.'''
-    __metaclass__ = _delegate_meta
-
-
-if __name__ == '__main__':
-    class Base(Delegate):
-        def __init__(self, basearg):
-            self.__Delegate.__init__(self)
-            self.basearg = basearg
-            print 'base'
-            
-        def __str__(self): return 'BASE'
-        
-
-    class Left(Base):
-        def __init__(self, basearg, leftarg):
-            self.__Base.__init__(self, basearg)
-            self.leftarg = leftarg
-            print 'left'
-
-        def __str__(self):
-            return ' '.join(filter(None, (self.__Base.__str__(self), 'LEFT')))
-
-
-    class Right(Base):
-        def __init__(self, basearg):
-            self.__Base.__init__(self, basearg)
-            print 'right'
-
-        def __str__(self):
-            return ' '.join(filter(None, (self.__Base.__str__(self), 'RIGHT')))
-
-
-    class Der(Left, Right):
-        def __init__(self, basearg, leftarg):
-            self.__Left.__init__(self, basearg, leftarg)
-            self.__Right.__init__(self, basearg)
-            print 'der'
-
-        def __str__(self):
-            return ' '.join(filter(None, (self.__Left.__str__(self), \
-                                          self.__Right.__str__(self), 'DER')))
-        
-
-    print 'should print base, left, right, der'
-    der = Der('basearg', 'leftarg')
-    
-    print '\nshould print base, left'
-    left = Left('basearg', 'leftarg')
-
-    print '\nshould print base right'
-    right = Right('basearg')
-    
-    print '\nshould print BASE LEFT RIGHT DER'
-    print der
-
-
