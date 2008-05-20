@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 ###############################################################################
 ## OpenBayes
 ## OpenBayes for Python is a free and open source Bayesian Network library
@@ -28,13 +29,11 @@ __version__ = '0.1'
 __author__ = 'Ronald Moncarey'
 __author_email__ = 'rmoncarey@gmail.com'
 
-# !/usr/bin/python
-# -*- coding: utf-8 -*-
-
 import wx, os, sys, string
 import wx.grid
 import wx.lib.ogl as ogl
-import OpenBayesXBN as obx
+
+import openbayes.xbn as obx
 
 #Constantes menu Fichier
 ID_NEW      = wx.NewId()

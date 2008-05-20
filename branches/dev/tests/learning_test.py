@@ -5,13 +5,14 @@ This module is the test for learning.py
 
 import unittest
 import random
+from copy import deepcopy
+
 
 import numpy
 
-from OpenBayes.inference import ConnexeInferenceJTree
-from copy import deepcopy
-from OpenBayes.learning import *
-from OpenBayes import bayesnet, graph
+from openbayes.inference import ConnexeInferenceJTree
+from openbayes.learning import *
+from openbayes import bayesnet, graph
 
 class MLLearningTestCase(unittest.TestCase):
     '''ML Learning Test Case'''

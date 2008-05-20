@@ -7,10 +7,9 @@ import unittest
 
 import numpy
 
-from OpenBayes.distributions import *
-from OpenBayes.distributions import Distribution
-from OpenBayes import graph
-from OpenBayes.bayesnet import BVertex, BNet
+from openbayes.distributions import *
+from openbayes.distributions import Distribution
+from openbayes import graph, BVertex, BNet
 
 #=================================================================
 #	Test case for Distribution class

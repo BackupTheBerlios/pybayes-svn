@@ -4,18 +4,18 @@ this example shows how to Learn parameters from a set of observations
 using Maximum Likelihood Estimator 
 """
  
-from OpenBayes import MCMCEngine
+from openbayes import MCMCEngine
 #fron OpenBayes import JoinTree
 from copy import deepcopy
 from time import time
-import WaterSprinkler
+import watersprinkler
 
 def main():
     """
     This is the main function
     """
     # first create a beyesian network
-    graph = WaterSprinkler.main()
+    graph = watersprinkler.main()
     nbr_samples = 1000
     # sample the network N times
     # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]

@@ -5,7 +5,7 @@ from copy import copy
 
 import numpy
 
-import table
+import openbayes.table as table
 
 __all__ = ['DiscretePotential', 'GaussianPotential']
 

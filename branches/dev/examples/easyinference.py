@@ -2,17 +2,17 @@
 """ this example shows how to perform Inference using any Inference 
 Engine 
 """
-from OpenBayes import JoinTree
+from openbayes import JoinTree
 # from OpenBayes import MCMCEngine
 
 # first create a beyesian network
-import WaterSprinkler
+import watersprinkler
 
 def main():
     """
     The main function
     """
-    graph = WaterSprinkler.main()
+    graph = watersprinkler.main()
     # create an inference Engine
     # choose the one you like by commenting/uncommenting the appropriate line
     engine = JoinTree(graph)

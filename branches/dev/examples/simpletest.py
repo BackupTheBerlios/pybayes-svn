@@ -2,8 +2,8 @@
 """
 This is a simple test
 """
-from OpenBayes import BNet, BVertex, DirEdge
-from OpenBayes import learning
+from openbayes import BNet, BVertex, DirEdge
+from openbayes import learning
 from copy import deepcopy
 from time import time
 

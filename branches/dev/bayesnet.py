@@ -17,9 +17,9 @@ import logging
 import numpy
 
 #Library Specific Modules
-import OpenBayes.graph as graph
-import OpenBayes.distributions as distributions
-import OpenBayes.inference as inference
+import openbayes.graph as graph
+import openbayes.distributions as distributions
+import openbayes.inference as inference
 
 __all__ = ['BVertex', 'BNet']
 

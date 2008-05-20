@@ -7,8 +7,8 @@ import unittest
 from copy import copy
 
 import numpy
-from OpenBayes.table import Table
-from OpenBayes.test.utils import ExtendedTestCase
+from openbayes.table import Table
+from openbayes.tests.utils import ExtendedTestCase
 
 class TableTestCase(ExtendedTestCase):
     """

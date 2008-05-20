@@ -13,7 +13,7 @@ __author__ = 'Robert Dick (dickrp@ece.northwestern.edu)'
 import copy
 import struct
 
-import OpenBayes.delegate as delegate
+import openbayes.delegate as delegate
 
 # The following four lines borrowed from Gregory R. Warnes's fpconst
 # (until it's standard in Python distributions).

@@ -68,15 +68,6 @@ class Distribution(object):
                         (e.g. 2D gaussian,...)
 
     """
-    vertex = None 
-    family = list()
-    ndimensions = 0
-    parents = list()
-    names_list = list()
-    #names = set()
-    distribution_type = 'None'
-    is_adjustable = False
-    nvalues = 0
 
     def __init__(self, vertex, is_adjustable=False, ignore_family=False):
         """ Creates a new distribution for the given variable.
@@ -139,6 +130,8 @@ class MultinomialDistribution(Distribution, Table):
     a Conditional Probability Table (CPT)
     This class now inherits from Distribution and Table.
     """
+    # TODO: Do a lot of cleaning. This is An extended CPT table
+    # Need to reflect on the class hierarchy
     def __init__(self, vertex, cpt=None, is_adjustable=True, 
                  ignore_family=False):
         Distribution.__init__(self, vertex, is_adjustable=is_adjustable, \

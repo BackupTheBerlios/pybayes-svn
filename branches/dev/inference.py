@@ -7,9 +7,9 @@ import copy
 import numpy
 
 #Library Specific Modules
-import graph
-import distributions
-from potentials import DiscretePotential
+import openbayes.graph as graph
+import openbayes.distributions as distributions
+from openbayes.potentials import DiscretePotential
 
 
 __all__ = ['JoinTree', 'MCMCEngine']

@@ -2,14 +2,14 @@
 
 # this will only import the class names defined in the __all__ parameter of each
 # file :
-from OpenBayes.bayesnet import *
-from OpenBayes.inference import *
-from OpenBayes.distributions import *
-from OpenBayes.potentials import *
-from OpenBayes.table import *
-from OpenBayes.graph import *
-from OpenBayes.OpenBayesXBN import *
-from OpenBayes.BNController import *
+from openbayes.bayesnet import *
+from openbayes.inference import *
+from openbayes.distributions import *
+from openbayes.potentials import *
+from openbayes.table import *
+from openbayes.graph import *
+from openbayes.xbn import *
+from openbayes.bncontroller import *
 
 __all__ = ['bayesnet', 'distributions', 'inference', 'potentials',
            'table', 'graph', 'OpenBayesXBN', 'BNController']

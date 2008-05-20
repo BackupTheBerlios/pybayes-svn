@@ -34,8 +34,8 @@ __version__ = "0.1"
 __author__ = "Sebastien Arnaud"
 
 
-from OpenBayes import BNet, BVertex, DirEdge 
-from OpenBayes import learning, MCMCEngine, LoadXBN, SaveXBN
+from openbayes import BNet, BVertex, DirEdge 
+from openbayes import learning, MCMCEngine, LoadXBN, SaveXBN
 
 
 class BNController(object):

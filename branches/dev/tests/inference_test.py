@@ -4,8 +4,8 @@ import unittest
 
 import numpy as na
 
-from OpenBayes.inference import *
-from OpenBayes import bayesnet, graph
+from openbayes.inference import *
+from openbayes import bayesnet, graph
 
 
 class InferenceEngineTestCase(unittest.TestCase):

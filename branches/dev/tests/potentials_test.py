@@ -6,7 +6,7 @@ This is the test module for potential.py
 import unittest
 import numpy
 
-from OpenBayes.potentials import GaussianPotential, DiscretePotential
+from openbayes.potentials import GaussianPotential, DiscretePotential
 
 class GaussianPotentialTestCase(unittest.TestCase):
     """

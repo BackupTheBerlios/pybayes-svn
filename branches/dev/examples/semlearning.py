@@ -4,14 +4,14 @@ This example demonstrate the capacity of sem_learningEngine
 """
 import random
 
-from OpenBayes import learning, bayesnet
-import WaterSprinkler
+from openbayes import learning, bayesnet
+import watersprinkler
 
 def main():
     """
     This is the main function
     """
-    graph = WaterSprinkler.main()
+    graph = watersprinkler.main()
     nbr_samples = 2000
     # sample the network several times
     cases = graph.sample(nbr_samples)   

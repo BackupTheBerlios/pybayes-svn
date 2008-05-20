@@ -10,7 +10,7 @@ B and C are univariate gaussian distributions
 A is a boolean discrete distribution
 """
 
-from OpenBayes import BNet, BVertex, DirEdge, MCMCEngine
+from openbayes import BNet, BVertex, DirEdge, MCMCEngine
 
 def main():
     """

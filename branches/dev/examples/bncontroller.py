@@ -3,7 +3,7 @@
 This is an example of use BNController
 """
 
-from OpenBayes import BNController
+from openbayes import BNController
 
 def main():
     """

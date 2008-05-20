@@ -7,16 +7,16 @@ from copy import deepcopy
 from time import time
 import random
 
-from OpenBayes import learning
+from openbayes import learning
 
 # first create a bayesian network
-import WaterSprinkler
+import watersprinkler
 
 def main():
     """
     This is the main function
     """
-    graph = WaterSprinkler.main()
+    graph = watersprinkler.main()
     nbr_samples = 2000
     # sample the network N times
     # cases = [{'c':0,'s':1,'r':0,'w':1},{...},...]

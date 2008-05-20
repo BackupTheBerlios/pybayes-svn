@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 import unittest
 
-from OpenBayes.graph import Graph, UndirEdge
-from OpenBayes import BVertex
+from openbayes.graph import Graph, UndirEdge
+from openbayes import BVertex
 
 
 class TestGarph(unittest.TestCase):

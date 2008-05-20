@@ -4,8 +4,8 @@ import unittest
 
 import numpy
 
-from OpenBayes.bayesnet import BNet, BVertex
-from OpenBayes import graph
+from openbayes.bayesnet import BNet, BVertex
+from openbayes import graph
 
 class BNetTestCase(unittest.TestCase):
     """ Basic Test Case suite for BNet
@@ -16,20 +16,12 @@ class BNetTestCase(unittest.TestCase):
                       for name in 'c s r w'.split()]
         for start, end in [(c, r), (c, s), (r, w), (s, w)]:
             g.add_e(graph.DirEdge(len(g.e), start, end))
-##        G.InitCPTs()
-##        c.setCPT([0.5, 0.5])
-##        s.setCPT([0.5, 0.9, 0.5, 0.1])
-##        r.setCPT([0.8, 0.2, 0.2, 0.8])
-##        w.setCPT([1, 0.1, 0.1, 0.01, 0.0, 0.9, 0.9, 0.99])
-
         g.init_distributions()
-
         c.set_distribution_parameters([0.5, 0.5])
         s.set_distribution_parameters([0.5, 0.9, 0.5, 0.1])
         r.set_distribution_parameters([0.8, 0.2, 0.2, 0.8])
         w.set_distribution_parameters([1, 0.1, 0.1, 0.01, 0.0, 0.9, 
                                      0.9, 0.99])    
-
         self.c = c
         self.s = s
         self.r = r

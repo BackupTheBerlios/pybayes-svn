@@ -13,7 +13,7 @@
 all edges are pointing downwards
 
 """
-from OpenBayes import BNet, BVertex, DirEdge
+from openbayes import BNet, BVertex, DirEdge
 
 def main():
     """

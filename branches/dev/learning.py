@@ -27,9 +27,9 @@ import math
 
 import numpy
 
-import graph
-import readexcel
-from inference import ConnexeInferenceJTree 
+import openbayes.graph as graph
+import openbayes.readexcel as readexcel
+from openbayes.inference import ConnexeInferenceJTree 
 
 __all__ = ["LearningEngine","MLLearningEngine", "EMLearningEngine", "SEMLearningEngine" ]
 # show INFO messages

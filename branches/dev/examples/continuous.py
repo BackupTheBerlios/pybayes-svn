@@ -9,7 +9,7 @@ all edges point downwards
 A,B and C are univariate gaussian distributions
 """
 
-from OpenBayes import BNet, BVertex, DirEdge, MCMCEngine
+from openbayes import BNet, BVertex, DirEdge, MCMCEngine
 
 def main():
     """
