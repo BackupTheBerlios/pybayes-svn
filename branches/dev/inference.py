@@ -69,7 +69,7 @@ class InferenceEngine:
                 v.distribution.normalize(dim=v.name)
 
         
-class Cluster(graph.Vertex):
+class Cluster(object):
     """
     A Cluster/Clique node for the Join Tree structure
     """
@@ -179,7 +179,7 @@ class Cluster(graph.Vertex):
                 v.distribute_evidence()
 
 
-class SepSet(graph.UndirEdge):
+class SepSet(object):
     """
     A Separation Set
     """

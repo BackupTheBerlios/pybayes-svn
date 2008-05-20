@@ -10,15 +10,14 @@ See Examples/bncontroller.py for usage
 # Distributed under the terms of the GNU Lesser General Public License
 # http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
 
+from openbayes import BNet, BVertex, __version__, authors
+from openbayes import learning, MCMCEngine
 
+__all__ = ['BNController']
 __version__ = "0.1"
 __author__ = authors['Arnaud']
 
 
-from openbayes import BNet, BVertex, DirEdge, __version__, authors
-from openbayes import learning, MCMCEngine, LoadXBN, SaveXBN
-
-__all__ = ['BNController']
 
 class BNController(object):
     """
@@ -62,7 +61,7 @@ class BNController(object):
                 pass
 
         for ep in connections:
-            network.add_e(DirEdge(len(network.e), *ep))
+            network.add_e(*ep)
 
         # Ok our Bnet has been created, let's save it in the controller
         self._network = network

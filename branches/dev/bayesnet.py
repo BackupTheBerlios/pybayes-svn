@@ -21,7 +21,7 @@ import openbayes.inference as inference
 __all__ = ['BVertex', 'BNet']
 __author__ = authors['Cohen'] + '\n' + authors['Gaitanis']
 
-class BVertex(graph.Vertex):
+class BVertex(object):
     """
     This class implement a vertex of a Bayesian Network
     """
@@ -190,7 +190,6 @@ class BNet(graph.Graph):
 
         return tree
     
-    @graph._roprop('List of observed vertices.')
     def observed(self):
         """
         This method return the list of observed vertices

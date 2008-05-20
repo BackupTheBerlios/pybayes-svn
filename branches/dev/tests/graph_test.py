@@ -1,32 +1,27 @@
 #!/usr/bin/env python
 import unittest
 
-from openbayes.graph import Graph, UndirEdge
-from openbayes import BVertex
+from openbayes.graph import Graph
 
 
 class TestGarph(unittest.TestCase):
-    def test_nothing(self):   
-        G = Graph()
-        a, b, c, d, e, f, g = [G.add_v(BVertex(nm)) 
-                               for nm in 'a b c d e f g'.split()]
-        for ep in [(a,b), (a,c), (b,d), (b,f), (b,e), (c,e), (d,f), (e,f),
-        (f, g)]:
-            G.add_e(UndirEdge(len(G.e), *ep))
+    def setUp(self):
+        self.graph = Graph()
+        self.graph.add_edge((1,2))
+        self.graph.add_edge((2,3))
+        self.graph.add_edge((3,1))
 
-        print G
-        #print 'DFS:', map(str, G.depth_first_search(a))
-        #print 'BFS:', map(str, G.breadth_first_search(a))
-        #print 'top sort:', map(str, G.topological_sort(a))
+    def test_nodes(self):   
+        self.assertEqual(set(self.graph.nodes()), set([1, 2, 3]))
+        
+    def test_edges(self):
+        self.assertEqual(set(self.graph.edges()), set([(1,2),(2,3),(3,1)]))
 
-        #T = G.minimal_span_tree()
-        #print T
-        #print [(map(str, k), map(str, v)) for k, v in T.path_dict().items()]
+    def test_predecessor(self):
+        self.assertEqual(self.graph.predecessors(1), [3])
+        self.assertEqual(self.graph.predecessors(2), [1])
+        self.assertEqual(self.graph.predecessors(3), [2])
 
-        #S = G.shortest_tree(a)
-        #print S
-
-        print a
-
+       
 if __name__ == "__main__":
     unittest.main()

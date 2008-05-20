@@ -18,7 +18,7 @@ from openbayes.distributions import *
 from openbayes.potentials import *
 from openbayes.table import *
 from openbayes.graph import *
-from openbayes.xbn import *
+# from openbayes.xbn import *
 from openbayes.bncontroller import *
 
 __all__ = ['bayesnet', 'distributions', 'inference', 'potentials',

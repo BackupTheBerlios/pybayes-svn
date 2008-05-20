@@ -18,8 +18,8 @@ import numpy.random
 
 from openbayes import __version__, authors
 __all__ = ['Table']
-__author__ = authors['Cohen'] + '\n'\
-             authors['Gaitanis'] + '\n'\
+__author__ = authors['Cohen'] + '\n' +\
+             authors['Gaitanis'] + '\n' +\
              authors['Salamin']
 
 # avoid divide by zero warnings...

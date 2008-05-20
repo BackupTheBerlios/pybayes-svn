@@ -20,9 +20,9 @@ __author_email__ = 'rmoncarey@gmail.com'
 authors = {'Arnaud' : 'Sebastien Arnaud',
            'Brouchoven' : 'Francois de Brouchoven',
            'Cohen' : 'Elliot Cohen (elliot.cohen@gmail.com)',
-           'Gaitainis' : 'Kosta Gaitanis (gaitanis@tele.ucl.ac.be)',
+           'Gaitanis' : 'Kosta Gaitanis (gaitanis@tele.ucl.ac.be)',
            'Moncarey' : 'Ronald Moncarey (rmoncarey@gmail.com)',
-           'Salamin' : 'Hugues Salamin (hugues.salamin@gmail.com')
+           'Salamin' : 'Hugues Salamin (hugues.salamin@gmail.com)'
           }
 
 __author__ = "\n".join([x for _, x in sorted(authors.items())])
