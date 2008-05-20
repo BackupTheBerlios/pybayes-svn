@@ -36,4 +36,4 @@ tests/potentials_test.py
 tests/table_test.py
 tests/test.py
 tests/utils.py
-
+tests/xbn_test.py

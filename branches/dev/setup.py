@@ -8,7 +8,7 @@ if sys.version < '2.2.3':
     DistributionMetadata.classifiers = None
     DistributionMetadata.download_url = None
 
-setup(  name='OpenBayes',
+setup(  name='openbayes',
         version='0.1.0',
         description='An OpenSource Python implementation of bayesian networks inspired by BNT.',
         author = 'Kosta Gaitanis, Elliot Cohen',

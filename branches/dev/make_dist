@@ -9,11 +9,11 @@ echo
 echo ----------------------------------------
 echo "Creating Source Distribution (.tar.gz)"
 echo ----------------------------------------
-sudo python setup.py sdist 
-echo ----------------------------------------
-echo "Creating Windows Installer (.exe)"
-echo ----------------------------------------
-sudo python setup.py bdist_wininst
+python setup.py sdist 
+# echo ----------------------------------------
+# echo "Creating Windows Installer (.exe)"
+# echo ----------------------------------------
+# python setup.py bdist_wininst
 
 # register to python cheese shop
 # python setup.py register
