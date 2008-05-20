@@ -23,35 +23,51 @@ __author__ = authors['Cohen'] + '\n' + authors['Gaitanis']
 
 class BVertex(object):
     """
-    This class implement a vertex of a Bayesian Network
+    This class implement a vertex of a Bayesian Network. Please note that
+    self.name == self so that it is possible to retrieve value in dict and 
+    set with either the name or the original object (or any object with the
+    same name)
+
+    This class should never be used directly. Instead, using the subclass
+    in vertex is the recommended way.
     """
-    def __init__(self, name, discrete=True, nvalues=2, observed=True):
+
+    def __init__(self, name, observed=True):
         '''
-        Name needn't be a string but must be hashable and immutable.
-        if discrete = True:
-            nvalues = number of possible values for variable contained \
-                      in Vertex
-        if discrete = False:
-            nvalues is not relevant = 0
+        name needn't be a string but must be hashable and should be immutable.
         observed = True means that this node CAN be observed
         '''
-        graph.Vertex.__init__(self, name)
-        self.distribution = None
-        self.nvalues = int(nvalues)
-        
-        self.discrete = discrete
-            # a continuous node can be scalar (self.nvalues=1)
-            # or vectorial (self.nvalues=n)
-            # n=2 is equivalent to 2D gaussian for example
-
-        # True if variable can be observed
+        self.name = name
         self.observed = observed
-        self.family = [self] + list(self.in_v)
+        
+    def set_parents(self, parents):
+        """
+        This function get called when the graph construction is finished. The list
+        of parents should be enough for every distribution to be initialiased
+        """
+        raise NotImplementedError
+
+    def sample(self, parents):
+        """
+        This function should return a random value of the node based on the value of
+        the parents. Parents is a dictionnary of value (that may contains value for
+        node that are not parent) that is guarantee to contains one value for every
+        parents
+        """
+        raise NotImplementedError
+
+    """
+    This code as been moved the vertex package and subcontent. Init is now done
+    by calling setparents
 
     def init_distribution(self, *args, **kwargs):
-        """ Initialise the distribution, all edges must be added"""
+       
+        # TODO : The user must specifies the type of distribution present in the
+        # network. This sort of code is very bad for expension
+
         # first decide which type of Distribution
         # if all nodes are discrete, then Multinomial)
+        return
         if numpy.alltrue([v.discrete for v in self.family]):
             # print self.name,'Multinomial'
             # FIX: should be able to pass through 'is_adjustable=True'
@@ -68,26 +84,23 @@ class BVertex(object):
             return
         raise ValueError("Some distribution were not init") 
         # other cases go here
-    
+    """
+
     def set_distribution_parameters(self, *args, **kwargs):
         """
         sets any parameters for the distribution of this node
+        TODO: replace this proxy by actual ineritance
         """
+        return
         self.distribution.set_parameters(*args, **kwargs)
         
-    def __str__(self):
-        if self.discrete:
-            return graph.Vertex.__str__(self) + \
-                   '    (discrete, %d)' %self.nvalues
-        else:
-            return graph.Vertex.__str__(self) + '    (continuous)'
-
     def get_sampling_distribution(self):
         """
         This is used for the MCMC engine
         returns a new distributions of the correct type, containing only
         the current without its family
         """
+        #TODO: refactor in distribution
         if self.discrete:
             d = distributions.MultinomialDistribution(self, 
                                                       ignore_family = True)
@@ -97,18 +110,49 @@ class BVertex(object):
         return d
      
     # This function is necessary for correct Message Pass
-    # we fix the order of variables, by using a cmp function
+    # we fix the order of variables, by using a cmp function. Furthermore,
+    # by implementing __eq__ and __hash__, we can use BVertex as
+    # key. The name attribute is equal to the vertex in question
+    # This is black magic and should maybe be removed
+
     def __cmp__(self, other):
         ''' sort by name, any other criterion can be used '''
-        return cmp(self.name, other.name)
+        if hasattr(other, 'name'):
+            return cmp(self.name, other.name)
+        return cmp(self.name, other)
+
+    def __eq__(self, other):
+        '''
+        Test wether to object are equal. This is used for retrieving
+        graph element by name
+        '''
+        if hasattr(other, 'name'):
+            return self.name == other.name
+        return self.name == other
+
+    def __neq__(self, other):
+        '''
+        A simple fall back
+        '''
+        return not self.__eq__(other)
 
     def __hash__(self):
         """
-        This function is used to hash the value (for putting in set).
+        This function is used to hash the value (for putting in a graph).
         It must be defined to count only on the name to be coeherent with
         the previously defined __cmp__
         """
         return hash(self.name)
+
+
+    def __str__(self):
+        if self.discrete:
+            return str(self.name) + \
+                   '    (discrete, %d)' %self.nvalues
+        else:
+            return str(self) + '    (continuous)'
+
+
 
 
 class BNet(graph.Graph):
@@ -116,50 +160,24 @@ class BNet(graph.Graph):
     This class implements a bayesian Network
     """
     def __init__(self, name=None):
-        graph.Graph.__init__(self, name)
+        graph.Graph.__init__(self)
+        self.name = name
 
     def copy(self):
-        ''' returns a deep copy of this BNet '''
+        ''' 
+        returns a deep copy of this BNet 
+        '''
         g_new = copy.deepcopy(self)
-        g_new.init_distributions()
-        for v in self.all_v:
-            g_new.v[v.name].distribution.set_parameters(
-                                           v.distribution.convert_to_cpt()) 
+        g_new.finalize()
+        for v in self.vertices():
+            g_new[v.name].set_parameters(v.get_parameters()) 
         return g_new
 
-    def add_e(self, edge):
-        """
-        This add an edge to the Bayesian Net
-        """
-        if edge.__class__.__name__ == 'DirEdge':
-            graph.Graph.add_e(self, edge)
-            #e._v[1] = [e._v[1]] + [parent for parent in e._v[1].in_v]
-            for v in edge.all_v:
-                v.family = [v] + list(v.in_v)
-        else:
-            raise TypeError("All edges should be directed")
-
-    def del_e(self, edge):
-        """
-        This method is used to remove an edge from the network
-        """
-        # remove the parent from the child node
-        edge.all_v[1].family.pop(edge.all_v[1].family.index(edge.all_v[0]))
-        graph.Graph.del_e(self, edge.name)
-  
-    def inv_e(self, edge):
-        """
-        This methode change the direction of the edge
-        """
-        self.e[edge].invert()
-        # change the families of the corresponding nodes
-        edge.all_v[0].family.append(edge.all_v[1])
-        edge.all_v[1].family.pop(edge.all_v[1].family.index(edge.all_v[0]))
-    
     def moralize(self):
         """
         moralize ??? the Network
         """
+        #TODO: Rewrite this for the new monture
         tree = inference.MoralGraph(name='Moralized '+str(self.name))
         
         # for each vertice, create a corresponding vertice
@@ -192,9 +210,10 @@ class BNet(graph.Graph):
     
     def observed(self):
         """
-        This method return the list of observed vertices
+        This method return the list of observed vertices. Every vertex in a
+        BNet must have an observed attribute
         """
-        return [v for v in self.v.values() if v.observed]
+        return [v for v in self.vertices if v.observed]
 
     def split_into_components(self):
         """ 
@@ -220,40 +239,26 @@ class BNet(graph.Graph):
             i += 1
         return b_nets
     
-    def init_distributions(self):
+    def finalize(self):
         """ Finalizes the network, all edges must be added. A 
         distribution (unknown) is added to each node of the network
         """
-        #---TODO: test if DAG (fdebrouc)
-        # this replaces the InitCPTs() function
-        for v in self.v.values(): 
-            v.init_distribution()
-    
-##    def InitCPTs(self):
-##        for v in self.v.values(): v.InitCPT()
-
-    def randomize_cpts(self):
-        """
-        This randomize the cpts
-        """
-        for v in self.v.values():
-            v.rand()
-            v.makecpt()
+        if not self.is_dag():
+            raise graph.GraphError("None acyclic graph")
+        for v in self.vertices(): 
+            v.set_parents(self.predecessors(v)) 
     
     def sample(self, nbr_samples=1):
         """ 
         Generate a sample of the network, n is the number of 
         samples to generate
         """
-        assert(len(self.v) > 0)
         samples = []
-        topological = self.topological_sort()
+        topological = self.topological_order()
         for _ in xrange(nbr_samples):
             sample = {}
             for v in topological:
-                assert(not v.distribution == None), \
-                "vertex's distribution is not initialized"
-                sample[v.name] = v.distribution.sample(sample)
+                sample[v.name] = v.sample(sample)
             samples.append(sample)
         return samples
 

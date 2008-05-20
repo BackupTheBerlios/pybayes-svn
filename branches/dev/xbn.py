@@ -6,12 +6,10 @@
 OpenBayesXBN allow you to parse XBN file format
 """
 from xml.dom.minidom import Document, parse, Node
-import unittest
 
 from numpy import array, concatenate, newaxis, allclose
 
 from openbayes.bayesnet import BNet, BVertex
-from openbayes.graph import DirEdge
 from openbayes import __version__, authors
 
 __author__ = authors['Moncarey']
@@ -436,7 +434,7 @@ class LoadXBN:
             #---TODO: Discrete or Continuous. Here True means always discrete
             bv = BVertex(v.name, True, len(v.stateName))
             bv.state_names = v.stateName
-            self.G.add_v(bv)
+            self.G.add_vertex(bv)
             #---TODO: add the names of the states into the vertex
                 
         return self.variablesList
@@ -471,9 +469,9 @@ class LoadXBN:
                         self.structureList.append(attrValue)
 
         for ind in range(0, len(self.structureList), 2):
-            par = self.G.v[self.structureList[ind]]
-            child = self.G.v[self.structureList[ind + 1]]
-            self.G.add_e(DirEdge(len(self.G.e), par, child))
+            par = self.structureList[ind]
+            child = self.structureList[ind + 1]
+            self.G.add_edge((par, child))
 
         # initialize the distributions
         self.G.init_distributions()

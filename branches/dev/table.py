@@ -47,7 +47,7 @@ class Table(numpy.ndarray):
         subarray.assocname = dict(enumerate(names))
         subarray._compute_internal_dict()
         return subarray
-
+ 
     def get_names_list(self):
         return [self.assocname[i] for i in range(len(self.shape))]
 
@@ -68,13 +68,16 @@ class Table(numpy.ndarray):
         if hasattr(obj, "assocname"):
             self.assocname = dict(obj.assocname)
         else:
-            self.assocname =dict( [(x,str(x)) for x in xrange(len(self.shape))])
+            self.assocname =dict([(x,str(x)) 
+                                  for x in xrange(len(self.shape))])
         self._compute_internal_dict()
 
     def _compute_internal_dict(self):
         self.assocdim = dict([(x[1], x[0]) for x in self.assocname.items()])
+        if self.shape == tuple() and len(self.assocdim) == 1:
+            return 
         if len(self.assocdim) != len(self.shape):
-            raise ValueError("Missing dimension name:\n shape: %s\n%s" %
+            raise ValueError("Missing dimension name:\n shape: %s\n assocdim %s" %
                               (self.shape, self.assocdim))
 
     def update(self, other):
@@ -114,14 +117,27 @@ class Table(numpy.ndarray):
         Index can be a dictionary of var name:value pairs, 
         or pure numbers as in the standard way
         of accessing a numarray array array[1,:,1]
-      
-        returns the indexed cpt
+     
+        We also support slices. If any of the return index
+        is a slice, then we return a Table object, else we return
+        a simple float
         """
-        if isinstance(index, types.DictType):
-            num_index = self._num_index_from_dict(index)
+        if isinstance(index, dict):
+            names, num_index = self._num_index_from_dict(index)
         else:
             num_index = index
-        return numpy.ndarray.__getitem__(self.view(numpy.ndarray), num_index)
+            # we never return table if we index by dimension
+            names = []
+       # we now check if we need to return slices
+        # We first 
+        # we either return a simple numpy object
+        if len(names) == 0:
+            return numpy.ndarray.__getitem__(self.view(numpy.ndarray), num_index)
+        # or a table if we selcted complete dimension
+        else:
+            temp = numpy.ndarray.__getitem__(self.view(numpy.ndarray), num_index)
+            temp = Table(names, temp.shape, temp)
+            return temp
 
     def __setitem__(self, index, value):
         """ Overload array-style indexing behaviour.
@@ -129,11 +145,11 @@ class Table(numpy.ndarray):
         or pure numbers as in the standard way
         of accessing a numarray array array[1,:,1]
         """
-        if isinstance(index, types.DictType):
-            num_index = self._num_index_from_dict(index)
+        if isinstance(index, dict):
+            _, num_index  = self._num_index_from_dict(index)
         else:
             num_index = index
-        numpy.ndarray.__setitem__(self, num_index, value)
+        numpy.ndarray.__setitem__(self.view(numpy.ndarray), num_index, value)
 
     def _num_index_from_dict(self, dim_name):
         """
@@ -141,16 +157,20 @@ class Table(numpy.ndarray):
         a list of index
         """
         index = []
+        names = []
         for dim in range(len(self.shape)):
-            if dim_name.has_key(self.assocname[dim]):###X might be bug
+            if dim_name.has_key(self.assocname[dim]):
                 index.append(dim_name[self.assocname[dim]])
             else:
                 index.append(slice(None, None, None))
-        return tuple(index) # must convert to tuple in order to work, bug fix
+                names.append(self.assocname[dim])
+        return names, tuple(index)
 
+    
     def __str__(self):
-        string = "Dimension names : "+" ".join(self.names_list) + "\n"
-        return string + numpy.ndarray.__str__(self)
+        string = "(Dims: " + \
+                 " ".join([str(x) for x in self.names_list]) + ","
+        return string + numpy.ndarray.__str__(self.view(numpy.ndarray))+")"
 
     def transpose(self, *axis):
         """
@@ -162,7 +182,8 @@ class Table(numpy.ndarray):
             axis = axis[0]
         if axis is None or len(axis) == 0:
             axis = range(len(self.shape)-1, -1, -1)
-        new.assocname = dict([(x, self.assocname[y]) for x,y in enumerate(axis)])
+        new.assocname = dict([(x, self.assocname[y]) 
+                              for x,y in enumerate(axis)])
         return new.view(Table)
 
     def add_dim(self, new_dim_name):
@@ -195,9 +216,10 @@ class Table(numpy.ndarray):
             correspond = []
             for vara in self.names_list:
                 correspond.append(other.assocdim[vara])
-            return numpy.ndarray.__eq__(self, 
-                                     numpy.transpose(other, axes=correspond)).view(numpy.ndarray)
-
+            #TODO: Investigate if the view is needed
+            other_view =  numpy.transpose(other, axes=correspond)
+            return numpy.ndarray.__eq__(self, other_view).view(numpy.ndarray)
+                                    
 
     def union(self, other):
         """ 
@@ -295,28 +317,56 @@ class Table(numpy.ndarray):
         POST:
             a=Pr(A)/Pr(B) = Pr(a,b,c)
 
-
+        The division is done element by element
         Notes :
         -   a keeps the order of its existing variables
         -   b is not touched during this operation
         -   operation is done in-place for a, a is not the same after the operation
         -> code start
         # prepare dimensions in b for multiplication
-        cptb = self.prepare_other(other)
-
-        # multiply in place, a's values are changed
-        #a.cpt /= cptb  # this does not work correctly for some reason...
-        #na.divide(a.cpt,cptb,a.cpt) # does not work either
-        self.cpt = self.cpt / cptb    #this one works fine
-                                #is this a numarray BUG????
-
-        ## WARNING, division by zero, avoided using 
-        # na.Error.setMode(invalid='ignore') replace INFs by 0s
-        self.cpt[numpy.isnan(self.cpt)] = 0
-        #---TODO: replace this very SLOW function with a ufunc
-        return self 
         """
-        raise NotImplementedError
+        if other.shape == tuple():
+            numpy.ndarray.__idiv__(self, other)
+        elif not hasattr(other, 'names'):
+            numpy.ndarray.__idiv__(self, other)
+        else:
+            cptb = self.prepare_other(other)
+            numpy.ndarray.__idiv__(self, cptb)
+        self[numpy.isnan(self)] = 0
+        return self
+
+    def __div__(self, other):
+        """
+        Division
+        PRE:
+            a=Pr(A); A = {'a','b','c'}
+            b=Pr(B); B = {'a','b'}
+
+        usage:
+        c = a/b
+        c is a NEW Table instance
+
+        POST:
+            c = Pr(A | B) = Pr(a | b ,c)
+
+        Notes :
+        -   c keeps the order of the variables in a
+        -   a and b are not touched during this operation
+        -   return a NEW Table instance
+        -> code
+        """
+        if other.shape == tuple():
+            ans = numpy.array.__div__(self, other)
+        elif not hasattr(other, 'names'):
+            ans = numpy.ndarray.__div__(self, other)
+        else:
+            cptb = self.prepare_other(other)
+            ans = numpy.ndarray.__div__(self, cptb)
+        ans[numpy.isnan(ans)] = 0
+        return ans
+
+            
+
 
     def __mul__(self, other):
         """
@@ -352,55 +402,14 @@ class Table(numpy.ndarray):
         """
         raise NotImplementedError
 
-    def __div__(self, other):
-        """
-        multiplication
-        PRE:
-            a=Pr(A); A = {'a','b','c'}
-            b=Pr(B); B = {'c','a','d','e'}
-
-        usage:
-        c = a/b
-        c is a NEW Table instance
-
-        POST:
-            c=Pr(A U B) = Pr(a,b,c,d,e)
-
-        Notes :
-        -   c keeps the order of the variables in a
-        -   any new variables in b (d and e) are added at the end of c in the
-            order they appear in b
-        -   a and b are not touched during this operation
-        -   return a NEW Table instance
-        -> code
-        #########################################
-        #---TODO: add division with a number
-        #########################################
-        
-        # prepare dimensions in a and b for multiplication
-        new, cptb = self.union(other)
-
-        # multiply
-        #new.cpt /= cptb  # this does not work correctly for some reason...
-        #na.divide(new.cpt,cptb,new.cpt) # does not work either
-        new.cpt = new.cpt / cptb    #this one works fine
-                                #is this a numarray BUG????        
-
-        ## WARNING, division by zero, avoided using 
-        # na.Error.setMode(invalid='ignore') replace INFs by 0s
-        new.cpt[numpy.isnan(new.cpt)] = 0
-        #---TODO: replace this very SLOW function with a ufunc
-        return new
-        """
-        raise NotImplementedError
-
+    
 
     def prepare_other(self, other):
         """
         Prepares other for inplace multiplication/division with self. Returns
         a *view* of other.cpt ready for an operation. other must contain a
         subset of the variables of self. NON-DESTRUCTIVE!
-
+        
         eg. a= Pr(A,B,C,D)
             b= Pr(D,B)
             a.prepareOther(b) --> returns a numarray Pr(1,B,1,D)
@@ -428,3 +437,38 @@ class Table(numpy.ndarray):
         for var in self.names_list:
             trans.append(new_b.assocdim[var])
         return new_b.transpose(trans)
+
+    def sum(self, axis=None, dtype=None, out=None):
+        """
+        We overload the sum to support of named axis
+        """
+        
+        if not axis is None:
+            axis = self.assocdim[axis]
+        return numpy.ndarray.sum(self.view(numpy.ndarray), axis, dtype, out)
+
+    def normalize(self, axis = None):
+        """
+        This function normalize the value in the table such that the sum acros
+        of dimension dim is 1
+        """
+        sum_ = self.sum(axis)
+        if not sum_.shape == tuple():
+            sum_ = Table([axis] , [len(sum_)], sum_)
+        self /= sum_
+        """
+        if axis is None== -1 or len(self.shape) == 1:
+            self /= self.sum()	
+        else:
+            self /= self.sum(axis)
+            ndim = self.assocdim[axis]
+            order = range(len(self.names_list))
+            order[0] = ndim
+            order[ndim] = 0
+            tcpt = self.transpos(order)
+            dim_sum = numpy.sum(tcpt, axis=0)
+            dim_sum = numpy.resize(dim_sum, tcpt.shape)
+            tcpt = tcpt/dim_sum
+            self.cpt = numpy.transpose(tcpt, order)
+        """
+    

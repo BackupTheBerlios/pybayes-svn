@@ -5,10 +5,9 @@
 # Distributed under the terms of the GNU Lesser General Public License
 # http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
 
-
 import unittest
 
-import numpy as na
+import numpy
 
 from openbayes.inference import *
 from openbayes import bayesnet, graph
@@ -24,10 +23,10 @@ class InferenceEngineTestCase(unittest.TestCase):
     def setUp(self):
         # create a discrete network
         G = bayesnet.BNet('Water Sprinkler Bayesian Network')
-        c, s, r, w = [G.add_v(bayesnet.BVertex(nm, True, 2)) \
+        c, s, r, w = [bayesnet.BVertex(nm, True, 2) \
                       for nm in 'c s r w'.split()]
-        for ep in [(c, r), (c, s), (r, w), (s, w)]:
-            G.add_e(graph.DirEdge(len(G.e), *ep))
+        for edge in [(c, r), (c, s), (r, w), (s, w)]:
+            G.add_edge(edge)
         G.init_distributions()
         c.set_distribution_parameters([0.5, 0.5])
         s.set_distribution_parameters([0.5, 0.9, 0.5, 0.1])
@@ -80,7 +79,7 @@ class InferenceEngineTestCase(unittest.TestCase):
 ####        engine.LearnMLParams(cases)
 ####        
 ####        tol = 0.05
-####        assert(na.alltrue([na.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
+####        assert(numpy.alltrue([numpy.allclose(v.distribution.cpt, self.BNet.v[v.name].distribution.cpt, atol=tol) \
 ####               for v in G.all_v])), \
 ####                " Learning does not converge to true values "
 
@@ -105,10 +104,10 @@ class MCMCTestCase(InferenceEngineTestCase):
         #print wprob[True] <= (0.65090001 + 2*error) and wprob[True] >= (0.65090001 - 2*error)
         #print sprob[True] <= (0.3 + error) and sprob[True] >= (0.3 - error)
         
-        assert(na.allclose(cprob[True], 0.5, atol = error) and \
-               na.allclose(sprob[True], 0.3, atol = error) and \
-               na.allclose(rprob[True], 0.5, atol = error) and \
-               na.allclose(wprob[True], 0.6509, atol = error)), \
+        assert(numpy.allclose(cprob[True], 0.5, atol = error) and \
+               numpy.allclose(sprob[True], 0.3, atol = error) and \
+               numpy.allclose(rprob[True], 0.5, atol = error) and \
+               numpy.allclose(wprob[True], 0.6509, atol = error)), \
         "Incorrect probability with unobserved water-sprinkler network"
 
     def testUnobservedGaussian(self):
@@ -133,10 +132,10 @@ class MCMCTestCase(InferenceEngineTestCase):
         cprob, sprob, rprob, wprob = res['c'], res['s'], res['r'], res['w']
 
         error = 0.05        
-        assert(na.allclose(cprob.cpt, [0.0,1.0], atol=error) and \
-               na.allclose(rprob.cpt, [0.2,0.8], atol=error) and \
-               na.allclose(sprob.cpt, [1.0,0.0], atol=error) and \
-               na.allclose(wprob.cpt, [ 0.278, 0.722], atol=error) ), \
+        assert(numpy.allclose(cprob.cpt, [0.0,1.0], atol=error) and \
+               numpy.allclose(rprob.cpt, [0.2,0.8], atol=error) and \
+               numpy.allclose(sprob.cpt, [1.0,0.0], atol=error) and \
+               numpy.allclose(wprob.cpt, [ 0.278, 0.722], atol=error) ), \
                " Somethings wrong with MCMC inference with evidence "        
 
  
@@ -153,10 +152,10 @@ class JTreeTestCase(InferenceEngineTestCase):
         s = self.engine.marginalise('s')
         w = self.engine.marginalise('w')
 
-        assert(na.allclose(c.cpt, [0.5, 0.5]) and \
-                na.allclose(r.cpt, [0.5, 0.5]) and \
-                na.allclose(s.cpt, [0.7, 0.3]) and \
-                na.allclose(w.cpt, [0.34909999, 0.65090001])), \
+        assert(numpy.allclose(c.cpt, [0.5, 0.5]) and \
+               numpy.allclose(r.cpt, [0.5, 0.5]) and \
+               numpy.allclose(s.cpt, [0.7, 0.3]) and \
+               numpy.allclose(w.cpt, [0.34909999, 0.65090001])), \
                 " Somethings wrong with JoinTree inference engine"
 
     def testEvidence(self):
@@ -168,10 +167,10 @@ class JTreeTestCase(InferenceEngineTestCase):
         s = self.engine.marginalise('s')
         w = self.engine.marginalise('w')
 
-        assert(na.allclose(c.cpt,[0.0,1.0]) and \
-                na.allclose(r.cpt,[0.2,0.8]) and \
-                na.allclose(s.cpt,[1.0,0.0]) and \
-                na.allclose(w.cpt,[ 0.278, 0.722]) ), \
+        assert(numpy.allclose(c.cpt,[0.0,1.0]) and \
+               numpy.allclose(r.cpt,[0.2,0.8]) and \
+               numpy.allclose(s.cpt,[1.0,0.0]) and \
+               numpy.allclose(w.cpt,[ 0.278, 0.722]) ), \
                 " Somethings wrong with JoinTree evidence"        
 
     def testMarginaliseAll(self):

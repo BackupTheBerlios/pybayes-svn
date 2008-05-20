@@ -22,10 +22,15 @@ class TableTestCase(ExtendedTestCase):
     def setUp(self):
         names = ('a', 'b', 'c')
         shape = (2, 3, 4)
-        self.table_a = Table(names, shape, dtype='Float32')
+        self.table_a = Table(names, shape, range(2*3*4), dtype='Float32')
         self.names = names
         self.shape = shape
-   
+  
+    def test_getitem(self):
+        self.failIf(isinstance(self.table_a[1,2,3],Table))
+        self.assert_(isinstance(self.table_a[0:1,2,3], numpy.ndarray))
+        self.assertEqual(self.table_a[0:1,0,0], 0)
+
     def test_eq(self):
         a = Table(['a', 'b'], [2, 3], range(6), 'Float32')
         b = Table(['a', 'b'], [2, 3], range(6), 'Float32')
@@ -37,6 +42,35 @@ class TableTestCase(ExtendedTestCase):
         self.assertAllEqual(a, d)
         self.assertAllEqual(a, e)
         self.assertAllEqual(e, a)
+
+    def test_normalize(self):
+        a = Table(['a'], [2], range(2))
+        a.normalize()
+        self.assertAllEqual(a, numpy.array([0,1]))
+   
+    def test_num_index_from_dict(self):
+        a = Table(['a','b'])
+        index = {'a':1,'b':1}
+        self.assertEqual(a._num_index_from_dict(index),([], (1,1)))
+        index['b'] = 0
+        self.assertEqual(a._num_index_from_dict(index),([], (1,0)))
+        self.assertEqual(a[index] , 1)
+        index['c'] = 123
+        self.assertEqual(a[index], 1)
+        b = Table(['b'])
+        index = {'a':1,'b':1}
+
+        
+
+    def test_increment(self):
+        a = Table(['a','b'])
+        a[{'a':1,'b':1}] += 1
+        self.assertAllEqual(a, numpy.array([[1,1],[1,2]]))
+        a[1,0] += 1
+        self.assertAllEqual(a, numpy.array([[1,1],[2,2]]))
+        a[0,0] += 1
+        self.assertAllEqual(a, numpy.array([[2,1],[2,2]]))
+    
     """
     def test_imul(self):
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
@@ -48,17 +82,17 @@ class TableTestCase(ExtendedTestCase):
         res = bcpt*c
         c *= b
         self.assertAllEqual(c, res)
-
+    """
     def test_idiv(self):
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], range(2*3*4*5*6))
         bcpt = b[..., numpy.newaxis, numpy.newaxis]
-        bcpt.transpose([3, 1, 0, 4, 2])
+        bcpt = bcpt.transpose([3, 1, 0, 4, 2])
         res = c/bcpt
         res[numpy.isnan(res)] = 0.0
         c /= b
         self.assertAllEqual(c, res)
-              
+    """          
     def test_mul(self):
         a = Table(['a', 'b', 'c', 'd'], [2, 3, 4, 5], range(2*3*4*5))
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
@@ -101,11 +135,12 @@ class TableTestCase(ExtendedTestCase):
     """    
 
     def test_basic_index(self):
-        self.assertEqual(self.table_a[1,1,1], 1.0)
+        self.assertEqual(self.table_a[1,1,1], 17.0)
+        self.assertEqual(self.table_a[0,0,0], 0)
    
     def test_dict_index(self):
         index = dict(zip(self.names, (1,1,1)))
-        self.assertEqual(self.table_a[index], self.table_a[1,1,1])
+        self.assertAllEqual(self.table_a[index], self.table_a[1,1,1])
    
     def test_basic_set(self):
         self.table_a[1, 1, 1] = 2.0
@@ -164,6 +199,12 @@ class TableTestCase(ExtendedTestCase):
         assert((dc[0, :, 0, 0, :] == numpy.transpose(c, axes=[1, 0])).all())
         assert(cr_.shape == (1,3,4))       
       
+    def test_str(self):
+        a = Table(['a', 'b'] , [2,3])
+        self.assert_(str(a))
+        a = Table([1,2],[2,3])
+        self.assert_(str(a))
+
 if __name__ == '__main__':
     unittest.main()
 

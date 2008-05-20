@@ -25,10 +25,10 @@ class DistributionTestCase(unittest.TestCase):
     def setUp(self):
         # create a small BayesNet
         g = BNet('Water Sprinkler Bayesian Network')
-        c, s, r, w = [g.add_v(BVertex(nm, discrete=True, nvalues=nv)) for nm, nv
+        c, s, r, w = [(BVertex(nm, discrete=True, nvalues=nv)) for nm, nv
                       in zip('c s r w'.split(), [2, 3, 4, 2])]
-        for start, end in [(c, r), (c, s), (r, w), (s, w)]:
-            g.add_e(graph.DirEdge(len(g.e), start, end))
+        for edge in [(c, r), (c, s), (r, w), (s, w)]:
+            g.add_edge(edge)
         g.init_distributions()
         self.network = g
 
@@ -68,17 +68,17 @@ class GaussianTestCase(unittest.TestCase):
         # create a small BayesNet
         self.G = G = BNet('Test')
 
-        self.a = a = G.add_v(BVertex('a', discrete=False, nvalues=1))
-        self.b = b = G.add_v(BVertex('b', discrete=False, nvalues=2))
-        self.c = c = G.add_v(BVertex('c', discrete=False, nvalues=1))
-        self.d = d = G.add_v(BVertex('d', discrete=True, nvalues=2))
-        self.e = e = G.add_v(BVertex('e', discrete=True, nvalues=3))
-        self.f = f = G.add_v(BVertex('f', discrete=False, nvalues=1))
-        self.g = g = G.add_v(BVertex('g', discrete=False, nvalues=1))
+        self.a = a = BVertex('a', discrete=False, nvalues=1)
+        self.b = b = BVertex('b', discrete=False, nvalues=2)
+        self.c = c = BVertex('c', discrete=False, nvalues=1)
+        self.d = d = BVertex('d', discrete=True, nvalues=2)
+        self.e = e = BVertex('e', discrete=True, nvalues=3)
+        self.f = f = BVertex('f', discrete=False, nvalues=1)
+        self.g = g = BVertex('g', discrete=False, nvalues=1)
 
-        for start, end in [(a, c), (b, c), (d, f), (e, f), 
+        for edge in [(a, c), (b, c), (d, f), (e, f), 
                    (a, g), (b, g), (d, g), (e, g)]:
-            G.add_e(graph.DirEdge(len(G.e), start, end))
+            G.add_edge(edge)
 
         #a,b : continuous(1,2), no parents
         #c	 : continuous(3), 2 continuous parents (a,b)
@@ -227,12 +227,12 @@ class MultinomialTestCase(unittest.TestCase):
         # create a small BayesNet, Water-Sprinkler
         g = BNet('Test')
 
-        a, b, c, d = [g.add_v(BVertex(nm, discrete=True, nvalues=nv)) for \
+        a, b, c, d = [BVertex(nm, discrete=True, nvalues=nv) for 
                       nm, nv in zip('a b c d'.split(), [2, 3, 4, 2])]
         # sizes = (2,3,4,2)
         # a has 3 parents, b,c and d
-        for start, end in [(b, a), (c, a), (d, a)]:
-            g.add_e(graph.DirEdge(len(g.e), start, end))
+        for edge in [(b, a), (c, a), (d, a)]:
+            g.add_edge(edge)
 
         g.init_distributions()
         self.network = g

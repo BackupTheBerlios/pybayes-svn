@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 This module is the graph module. It implementation is influenced by
 networkx. However, only a subset of the features of networkx are implemented.
@@ -35,15 +34,16 @@ class Graph(object):
         # They are also stored as an ordered list
         self._succ = {}
 
-    def add_vertice(self, vertice):
+    def add_vertex(self, vertex):
         """
         This method add a vertice to the graph. It hte vertice already exist,
         an GraphError is raised
         """
-        if vertice in self._pred or vertice in self._succ:
+        if vertex in self._pred or vertex in self._succ:
             raise GraphError("Vertices already exists")
-        self.pred[vertice] = []
-        self._succ[vertice] = []
+        self._pred[vertex] = []
+        self._succ[vertex] = []
+        return vertex
 
     def add_edge(self, edge):
         # We start by updating the self._prec
@@ -64,10 +64,32 @@ class Graph(object):
         #   self._prec.keys() == self._succ.keys() 
         # remains valid
 
-    def __getitem__(self, vertice):
-        return self._pred[vertice].key()+self._succ[vertice].key()
+    def del_edge(self, edge):
+        """
+        This simply remove an edge from the graph. The set of vertice is 
+        untouched. return false if no edge was removed, else return true
+        """
+        if edge[0] in self._succ:
+            if edge[1] in self._succ[edge[0]]:
+                self._succ[edge[0]].remove(edge[1])
+                self._pred[edge[1]].remove(edge[0])
+                return True
+        return False
 
-    def nodes(self):
+    def inv_edge(self, edge):
+        """
+        This method inverse an edge in the graph. If the edge is not
+        present, then we raise an exception
+        """
+        if self.del_edge(edge):
+            self.add_edge( (edge[1], edge[0]))
+        else:
+            raise GraphError("Impossible to invert inexistant edge %s"%str(edge))
+
+    def __getitem__(self, vertex):
+        return self._pred[vertex].key()+self._succ[vertex].key()
+
+    def vertices(self):
         return self._succ.keys()
 
     def edges(self):
@@ -80,21 +102,42 @@ class Graph(object):
                 ans.append((start, end))
         return ans
 
-    def succesors(self, vertice):
-        return self._succ[vertice]
+    def successors(self, vertex):
+        return self._succ[vertex]
 
-    def predecessors(self, vertice):
-        return self._pred[vertice]
+    def predecessors(self, vertex):
+        return self._pred[vertex]
+
+    def family(self, vertex):
+        return [vertex] + self._pred[vertex]
+
+    def topological_order(self):
+        """
+        This function return a list of vertex in topological order. If the graph is
+        not DAG, then the empty list is returned
+        """
+        ans = []
+        choices = [x for x in self._pred if len(self._pred[x]) == 0]
+        while choices:
+            v = choices.pop()
+            ans.append(v)
+            for candidate in self._succ[v]:
+                if len([i for i in self._pred[candidate] if i not in ans]) == 0:
+                    choices.append(candidate)
+        if len(ans) == len(self._succ):
+            return ans
+        return False
+
+    def is_dag(self):
+        """
+        This function try to do a topolgical order sort and
+        then return True if the graph is dag, False else.
+        """
+        if self.topological_order():
+            return True
+        return False
 
     def __str__(self):
-        ans = ["Nodes:"+ str(self.nodes())]
+        ans = ["Nodes:"+ str(self.vertices())]
         ans.append("Edges:"+ str(self.edges()))
         return '\n'.join(ans)
-
-if __name__ == "__main__":
-    g = Graph()
-    g.add_edge( (1,2))
-    g.add_edge((2,3))
-    g.add_edge((3,1))
-    print g
-    print __author__

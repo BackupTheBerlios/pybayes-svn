@@ -17,7 +17,7 @@ __author_email__ = 'rmoncarey@gmail.com'
 
 
 class XBNTestCase(unittest.TestCase):   
-         
+    pass
     def setUp(self):
         """ reads the WetGrass.xbn """
         file_name_in = './WetGrass.xbn'
@@ -69,7 +69,6 @@ class XBNTestCase(unittest.TestCase):
         import os
         # delete the test.xbn file
         os.remove(file_name_out)
-
 
 #---MAIN   
 if __name__ == '__main__':
