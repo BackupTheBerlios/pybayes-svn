@@ -2,6 +2,10 @@
 """
 This is a simple script to demonstrate EM learning
 """
+# Copyright (C) 2005-2008 by
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
 
 from copy import deepcopy
 from time import time

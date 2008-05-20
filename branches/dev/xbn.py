@@ -1,32 +1,10 @@
-#!/usr/bin/env python
-########################################################################
-## OpenBayes
-## OpenBayes for Python is a free and open source Bayesian Network library
-## Copyright (C) 2006  Gaitanis Kosta, Ronald Moncarey
-##
-## This library is free software; you can redistribute it and/or
-## modify it under the terms of the GNU Lesser General Public
-## License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-##
-## This library is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-## Lesser General Public License for more details.
-##
-## You should have received a copy of the GNU Lesser General Public
-## License along with this library (LICENSE.TXT); if not, write to the 
-## Free Software Foundation, 
-## Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-########################################################################
+# Copyright (C) 2005-2008 by
+# Ronald Moncarey <rmoncarey@gmail.com>
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
 """
 OpenBayesXBN allow you to parse XBN file format
 """
-__all__ = ['LoadXBN', 'SaveXBN']
-__version__ = '0.1'
-__author__ = 'Ronald Moncarey'
-__author_email__ = 'rmoncarey@gmail.com'
-
 from xml.dom.minidom import Document, parse, Node
 import unittest
 
@@ -34,7 +12,10 @@ from numpy import array, concatenate, newaxis, allclose
 
 from openbayes.bayesnet import BNet, BVertex
 from openbayes.graph import DirEdge
+from openbayes import __version__, authors
 
+__author__ = authors['Moncarey']
+__all__ = ['LoadXBN', 'SaveXBN']
 
 # these classes represent the different sections defined
 # in the XBN file format

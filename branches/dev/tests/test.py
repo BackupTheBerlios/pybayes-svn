@@ -2,14 +2,17 @@
 """
 This module run all the test found in the directory
 """
-
-__version__ = "0.1"
-__author__ = "Hugues Salamin"
-__author_email__ = "hugues.salamin@gmail.com"
-
-
+# Copyright (C) 2008 by
+# Hugues Salamin <hugues.salamin@gmail.com>
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
 from glob import glob
 import unittest
+
+from openbayes import __version__, authors
+
+__version__ = "0.1"
+__author__ = authors['Salamin']
 
 def main():
     """

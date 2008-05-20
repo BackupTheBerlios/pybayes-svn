@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 '''Directed and undirected graph data structures and algorithms.
 
 Copyright 2004, Robert Dick (dickrp@ece.northwestern.edu).
@@ -70,7 +68,7 @@ class Vertex(delegate.Delegate):
     '''General graph vertex.
 
     All methods colaborate with directed and undirected
-    edges.  If the edges are undirected, ine == oute.
+    edges.  If the edges are undirected, in_e == out_e.
 
     Variables :
     --------------------

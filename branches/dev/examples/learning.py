@@ -3,6 +3,10 @@
 this example shows how to Learn parameters from a set of observations
 using Maximum Likelihood Estimator 
 """
+# Copyright (C) 2005-2008 by
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
  
 from openbayes import MCMCEngine
 #fron OpenBayes import JoinTree

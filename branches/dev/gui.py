@@ -1,39 +1,22 @@
 #!/usr/bin/env python
-###############################################################################
-## OpenBayes
-## OpenBayes for Python is a free and open source Bayesian Network library
-## Copyright (C) 2006  Gaitanis Kosta, Ronald Moncarey
-##
-## This library is free software; you can redistribute it and/or
-## modify it under the terms of the GNU Lesser General Public
-## License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-##
-## This library is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-## Lesser General Public License for more details.
-##
-## You should have received a copy of the GNU Lesser General Public
-## License along with this library (LICENSE.TXT); if not, write to the 
-## Free Software Foundation, 
-## Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-###############################################################################
+# Copyright (C) 2005-2008 by
+# Ronald Moncarey <rmoncarey@gmail.com>
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
 
 """
 An OpenBayes GUI for the OpenBayes program created by Kosta Gaitanis & Elliot Cohen
 OpenBayes GUI allow you to create/open Bayesian networks and saving them to XBN file format
 """
 
-__version__ = '0.1'
-__author__ = 'Ronald Moncarey'
-__author_email__ = 'rmoncarey@gmail.com'
-
 import wx, os, sys, string
 import wx.grid
 import wx.lib.ogl as ogl
 
 import openbayes.xbn as obx
+from openbayes import __version__, authors
+
+__author__ = authors['Moncarey']
 
 #Constantes menu Fichier
 ID_NEW      = wx.NewId()

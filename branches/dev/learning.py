@@ -20,23 +20,25 @@
 ## Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 ########################################################################
 
+# Copyright (C) 2006-2008 by
+# Francois de Brouchoven
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
+
 import copy
 import time
-import logging
 import math
 
 import numpy
 
+from openbayes import __version__, authors
 import openbayes.graph as graph
 import openbayes.readexcel as readexcel
 from openbayes.inference import ConnexeInferenceJTree 
 
 __all__ = ["LearningEngine","MLLearningEngine", "EMLearningEngine", "SEMLearningEngine" ]
-# show INFO messages
-#logging.basicConfig(level= logging.INFO)
-#uncomment the following to remove all messages
-logging.basicConfig(level = logging.NOTSET)
-
+__author__ = authors['Brouchoven'] + '\n' + authors['Gaitanis']
 
 class LearningEngine:
     """

@@ -2,6 +2,11 @@
 """
 This is a simple test
 """
+# Copyright (C) 2005-2008 by
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
+
 from openbayes import BNet, BVertex, DirEdge
 from openbayes import learning
 from copy import deepcopy

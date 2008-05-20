@@ -3,22 +3,24 @@ It creates a new table class which is similar to numpy's basic array
 except that each dimension of the array is associated with a name.
 This allows indexing via a dictionary and transposing dimensions 
 according to an ordered list of dimension names.
-
-Copyright 2005 Elliot Cohen and Kosta Gaitanis, please see the license
-file for further legal information.
-
-Heavy Modifcation by Hugues Salamin in 2008 (port to numpy)
 """
+# Copyright (C) 2005-2008 by
+# Elliot Cohen <elliot.cohen@gmail.com>
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Hugues Salamin <hugues.salamin@gmail.com>
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
+
 import types
 
 import numpy
 import numpy.random
 
+from openbayes import __version__, authors
 __all__ = ['Table']
-__version__ = '0.2'
-__author__ = 'Kosta Gaitanis & Elliot Cohen & Hugues Salamin'
-__author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com;'\
-                   'hugues.salamin@gmail.com'
+__author__ = authors['Cohen'] + '\n'\
+             authors['Gaitanis'] + '\n'\
+             authors['Salamin']
 
 # avoid divide by zero warnings...
 numpy.seterr(invalid='ignore', divide='ignore')

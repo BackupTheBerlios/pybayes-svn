@@ -1,29 +1,25 @@
-"""Bayesian network implementation.  Influenced by Cecil Huang's and 
+"""
+Bayesian network implementation.  Influenced by Cecil Huang's and 
 Adnan Darwiche's "Inference in Belief Networks: A Procedural Guide," 
 International Journal of Approximate Reasoning, 1994.
-
-Copyright 2005, Kosta Gaitanis (gaitanis@tele.ucl.ac.be).  Please see 
-the license file for legal information.
 """
+# Copyright (C) 2005-2008 by
+# Elliot Cohen <elliot.cohen@gmail.com>
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
 
-__version__ = '0.1'
-__author__ = 'Kosta Gaitanis & Elliot Cohen'
-__author_email__ = 'gaitanis@tele.ucl.ac.be; elliot.cohen@gmail.com'
-#Python Standard Distribution Packages
 import copy
-import logging
 
-#Major Packages
 import numpy
 
-#Library Specific Modules
+from openbayes import __version__, authors
 import openbayes.graph as graph
 import openbayes.distributions as distributions
 import openbayes.inference as inference
 
 __all__ = ['BVertex', 'BNet']
-
-#logging.basicConfig(level= logging.INFO)
+__author__ = authors['Cohen'] + '\n' + authors['Gaitanis']
 
 class BVertex(graph.Vertex):
     """
@@ -119,8 +115,6 @@ class BNet(graph.Graph):
     """
     This class implements a bayesian Network
     """
-    log = logging.getLogger('BNet')
-    log.setLevel(logging.ERROR)
     def __init__(self, name=None):
         graph.Graph.__init__(self, name)
 
@@ -166,7 +160,6 @@ class BNet(graph.Graph):
         """
         moralize ??? the Network
         """
-        logging.info('Moralising Tree')
         tree = inference.MoralGraph(name='Moralized '+str(self.name))
         
         # for each vertice, create a corresponding vertice

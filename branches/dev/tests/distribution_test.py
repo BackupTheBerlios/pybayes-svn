@@ -2,6 +2,11 @@
 """
 This test unit is responsible for covering distribution
 """
+# Copyright (C) 2005-2008 by
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Hugues Salamin <hugues.salamin@gmail.com>
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
 
 import unittest
 

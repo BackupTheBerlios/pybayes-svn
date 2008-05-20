@@ -1,24 +1,23 @@
 """
 The inference module of the OpenBayes package
 """
-import logging
+# Copyright (C) 2005-2008 by
+# Elliot Cohen <elliot.cohen@gmail.com>
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
+
 import copy
 
 import numpy
 
-#Library Specific Modules
+from openbayes import __version__, authors
 import openbayes.graph as graph
 import openbayes.distributions as distributions
 from openbayes.potentials import DiscretePotential
 
-
+__author__ = authors['Cohen'] + '\n' + authors['Gaitanis']
 __all__ = ['JoinTree', 'MCMCEngine']
-
-# show INFO messages
-#logging.basicConfig(level= logging.INFO)
-#uncomment the following to remove all messages
-logging.basicConfig(level = logging.NOTSET)
-
 
 class InferenceEngine:
     """ General Inference Engine class
@@ -36,7 +35,6 @@ class InferenceEngine:
         """ Incorporate new evidence """
         if ev == None:
             ev = {}
-        logging.info('Incorporating Observations')
         # evidence = {var.name:observed value}
         self.evidence = dict(ev)
            
@@ -138,7 +136,6 @@ class Cluster(graph.Vertex):
         ####################################################
         ### This part must be revisioned !!!!!!!!!
         ####################################################
-        logging.debug('Message Pass from '+ str(self)+' to '+str(cluster))
         # c must be connected to self by a sepset
         # sepset that connects the two clusters
         e = self.connecting_e(cluster)    
@@ -311,7 +308,6 @@ class MoralGraph(graph.Graph):
         the smallest weight
         Implementation in Graph.choose_vertex()
         """
-        logging.info('Triangulating Tree and extracting Clusters')
         # don't touch this graph, create a copy of it
         gt = copy.deepcopy(self)
         gt.name = 'Triangulised ' + str(gt.name)
@@ -324,15 +320,11 @@ class MoralGraph(graph.Graph):
     
         while len(graph_copy.v):
             v = graph_copy.choose_vertex()
-            #logging.debug('Triangulating: chosen '+str(v))
             cluster = list(v.adjacent_v)
             cluster.append(v)
         
-            #logging.debug('Cluster: '+str([str(c) for c in cluster]))
-        
             c = Cluster(cluster)
             if c.not_set_sep_of(clusters):
-                #logging.debug('Appending cluster')
                 clusters.append(c)
             
             clusterleft = copy.copy(cluster)
@@ -394,7 +386,6 @@ class JoinTree(InferenceEngine, graph.Graph):
     """ Join Tree inference engine"""
     def __init__(self, network):
         """Creates an 'Optimal' JoinTree from a BNet """
-        logging.info('Creating JunctionTree engine for ' + str(network.name))
         InferenceEngine.__init__(self, network)
         graph.Graph.__init__(self, 'JT: ' + str(network.name))
         
@@ -408,7 +399,6 @@ class JoinTree(InferenceEngine, graph.Graph):
                                                 zip(self.network.observed, 
                                                     self.likelihoods))
         
-        logging.info('Constructing Optimal Tree')
         self.construct_optimal_Jtree()
 
         JoinTree.initialization(self)
@@ -425,7 +415,6 @@ class JoinTree(InferenceEngine, graph.Graph):
         # Create Clusters for this JoinTree
         for c in clusters: 
             self.add_v(c)
-        logging.info('Connecting Clusters Optimally')
         # Create candidate SepSets
         # one candidate sepset for each pair of clusters
         candsepsets = []
@@ -468,7 +457,6 @@ class JoinTree(InferenceEngine, graph.Graph):
                 break
 
     def initialization(self):
-        logging.info('Initialising Potentials for clusters and SepSets')
         # for each cluster and sepset X, set phiX = 1
         for c in self.v.values():
             c.potential.all_ones()         # PhiX = 1
@@ -484,7 +472,6 @@ class JoinTree(InferenceEngine, graph.Graph):
                     v.parentcluster = c
 
                     # in place multiplication!
-                    #logging.debug('JT:initialisation '+c.name+' *= '+v.name)
                     c.potential *= v.distribution   
                     # phiX = phiX*Pr(V|Pa(V)) (special in-place op)
 
@@ -502,14 +489,8 @@ class JoinTree(InferenceEngine, graph.Graph):
     def global_propagation(self, start = None):
         if start == None: 
             start = self.v.values()[0]    # first cluster found
-        
-        logging.info('Global Propagation, starting at :'+ str(start))
-        logging.info('      Collect Evidence')
-        
         self.unmark_all_clusters()
         start.collect_evidence()
-        
-        logging.info('      Distribute Evidence')
         self.unmark_all_clusters()
         start.distribute_evidence()
         
@@ -572,7 +553,6 @@ class JoinTree(InferenceEngine, graph.Graph):
             
     def set_finding(self, variable):
         ''' v becomes True (v=1), all other observed variables are false '''
-        logging.info('Set finding, '+ str(variable))
         temp = dict((vi.name, 0) for vi in self.network.observed)
         if temp.has_key(variable): 
             temp[variable] = 1
@@ -587,7 +567,6 @@ class JoinTree(InferenceEngine, graph.Graph):
         """ perform message passing to update netwrok according to evidence """
         # evidence = {var.name:value} ; -1=unobserved
         #print evidence
-        logging.info('Global update')
         self.observation_entry(evidence.keys(), evidence.values())
         
         # check if only one Cluster is updated.
@@ -599,7 +578,6 @@ class JoinTree(InferenceEngine, graph.Graph):
         if len(startcluster) == 1:
             # all variables that have changed are in the same cluster
             # perform distribute_evidence only
-            logging.info('distribute only')
             self.unmark_all_clusters()
             startcluster.pop().distribute_evidence()
         else:
@@ -607,13 +585,11 @@ class JoinTree(InferenceEngine, graph.Graph):
             self.global_propagation()
     
     def global_retraction(self, evidence ):
-        logging.info('Global Retraction')
         self.initialization()
         self.observation_entry(evidence.keys(), evidence.values())
         self.global_propagation()
         
     def observation_entry(self, variable, val):
-        logging.info('Observation Entry')
         for vv, vval in zip(variable, val):
             # cluster containing likelihood, same as v 
             c = self.clusterdict[vv]     

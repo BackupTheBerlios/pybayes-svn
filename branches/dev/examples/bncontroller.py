@@ -2,6 +2,11 @@
 """
 This is an example of use BNController
 """
+# Copyright (C) 2005-2008 by
+# Sebastien Arnaud
+# Distributed under the terms of the GNU Lesser General Public License
+# http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
+
 
 from openbayes import BNController
 
