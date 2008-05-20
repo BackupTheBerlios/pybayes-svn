@@ -169,7 +169,7 @@ class Table(numpy.ndarray):
     
     def __str__(self):
         string = "(Dims: " + \
-                 " ".join([str(x) for x in self.names_list]) + ","
+                 " ".join([str(x) for x in self.names_list]) + "\n"
         return string + numpy.ndarray.__str__(self.view(numpy.ndarray))+")"
 
     def transpose(self, *axis):
@@ -195,17 +195,8 @@ class Table(numpy.ndarray):
 
     def __eq__(self, other):
         """ True if a and b have same elements, size and names """
-        if other.__class__ == numpy.ndarray:
-        # in case b is a just a numpy.ndarray and not a Table instance
-        # in this case, variable should absoltely be at the same order
-        # otherwise the Table and numArray are considered as different
-            return (numpy.ndarray.__eq__(self.view(numpy.ndarray), other))
-        elif other is None:
-        # in case b is None type
-            return False
-        elif isinstance(other, (int, float, long)):
-        # b is just a number, int, float, long
-            return numpy.ndarray.__eq__(self, other)
+        if not hasattr(other, 'names'):
+            return numpy.ndarray.__eq__(self.view(numpy.ndarray), other)
         else:   
             # the b class should better be a Table or something like that
             # order of variables is not important
@@ -216,7 +207,6 @@ class Table(numpy.ndarray):
             correspond = []
             for vara in self.names_list:
                 correspond.append(other.assocdim[vara])
-            #TODO: Investigate if the view is needed
             other_view =  numpy.transpose(other, axes=correspond)
             return numpy.ndarray.__eq__(self, other_view).view(numpy.ndarray)
                                     
@@ -325,9 +315,8 @@ class Table(numpy.ndarray):
         -> code start
         # prepare dimensions in b for multiplication
         """
-        if other.shape == tuple():
-            numpy.ndarray.__idiv__(self, other)
-        elif not hasattr(other, 'names'):
+        # if we dont have names, then we assume everything was taken care of
+        if not hasattr(other, 'names'):
             numpy.ndarray.__idiv__(self, other)
         else:
             cptb = self.prepare_other(other)
@@ -355,9 +344,7 @@ class Table(numpy.ndarray):
         -   return a NEW Table instance
         -> code
         """
-        if other.shape == tuple():
-            ans = numpy.array.__div__(self, other)
-        elif not hasattr(other, 'names'):
+        if not hasattr(other, 'names'):
             ans = numpy.ndarray.__div__(self, other)
         else:
             cptb = self.prepare_other(other)
@@ -425,7 +412,7 @@ class Table(numpy.ndarray):
         """
         #self contains all variables found in other
         if len(other.names - self.names) > 0:
-            raise ValueError(str((other.names-self.names)) + "not in" + str(self.names))
+            raise ValueError(str((other.names-self.names)) + " not in " + str(self.names))
         # add new dimensions to b
         new_b = other.copy()
         for var in (self.names - other.names):
@@ -442,10 +429,16 @@ class Table(numpy.ndarray):
         """
         We overload the sum to support of named axis
         """
-        
+        names = []
         if not axis is None:
+            for i in self.names_list:
+                if i != axis:
+                    names.append(i)
             axis = self.assocdim[axis]
-        return numpy.ndarray.sum(self.view(numpy.ndarray), axis, dtype, out)
+        temp = numpy.ndarray.sum(self.view(numpy.ndarray), axis, dtype, out)
+        if len(names) == 0:
+            return temp
+        return Table(names, temp.shape, temp)
 
     def normalize(self, axis = None):
         """
@@ -453,22 +446,4 @@ class Table(numpy.ndarray):
         of dimension dim is 1
         """
         sum_ = self.sum(axis)
-        if not sum_.shape == tuple():
-            sum_ = Table([axis] , [len(sum_)], sum_)
-        self /= sum_
-        """
-        if axis is None== -1 or len(self.shape) == 1:
-            self /= self.sum()	
-        else:
-            self /= self.sum(axis)
-            ndim = self.assocdim[axis]
-            order = range(len(self.names_list))
-            order[0] = ndim
-            order[ndim] = 0
-            tcpt = self.transpos(order)
-            dim_sum = numpy.sum(tcpt, axis=0)
-            dim_sum = numpy.resize(dim_sum, tcpt.shape)
-            tcpt = tcpt/dim_sum
-            self.cpt = numpy.transpose(tcpt, order)
-        """
-    
+        self /= sum_    

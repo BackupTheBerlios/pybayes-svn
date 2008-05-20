@@ -47,6 +47,8 @@ class TableTestCase(ExtendedTestCase):
         a = Table(['a'], [2], range(2))
         a.normalize()
         self.assertAllEqual(a, numpy.array([0,1]))
+        b = Table(['a','b','c'], [3,3,3], range(27))
+        b.normalize('a')
    
     def test_num_index_from_dict(self):
         a = Table(['a','b'])
@@ -60,8 +62,6 @@ class TableTestCase(ExtendedTestCase):
         b = Table(['b'])
         index = {'a':1,'b':1}
 
-        
-
     def test_increment(self):
         a = Table(['a','b'])
         a[{'a':1,'b':1}] += 1
@@ -71,7 +71,7 @@ class TableTestCase(ExtendedTestCase):
         a[0,0] += 1
         self.assertAllEqual(a, numpy.array([[2,1],[2,2]]))
     
-    """
+   
     def test_imul(self):
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], \
@@ -82,7 +82,7 @@ class TableTestCase(ExtendedTestCase):
         res = bcpt*c
         c *= b
         self.assertAllEqual(c, res)
-    """
+    
     def test_idiv(self):
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], range(2*3*4*5*6))
@@ -92,7 +92,7 @@ class TableTestCase(ExtendedTestCase):
         res[numpy.isnan(res)] = 0.0
         c /= b
         self.assertAllEqual(c, res)
-    """          
+          
     def test_mul(self):
         a = Table(['a', 'b', 'c', 'd'], [2, 3, 4, 5], range(2*3*4*5))
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
@@ -112,27 +112,40 @@ class TableTestCase(ExtendedTestCase):
         self.assertEqual(bb, Table(['c','b','e'], [4,3,6], numpy.arange(12*6)**2))
 
     def test_div(self):
+        """
+        We need to test the division function
+        """
+        a = Table(['a', 'b'], [2,3], range(6))
+        self.assertAllEqual( a/1, a)
+        self.assertAllClose(a/2, [[0, 0.5, 1],[1.5, 2, 2.5]])
+        b = Table(['b'], [3], range(1,4))
+        self.assertAllClose(a/b, [[0, 0.5 , 2/3.0],[3, 2 , 5/3.0]])
+        b = Table(['a'], [2], range(1,3))
+        self.assertAllClose(a/b, [[0,1,2],[3,2,5/3.0]])
+        
+        a = Table(['a', 'b', 'c'], [2,2,2], [[[1,1] ,[2,2]],[[3,3],[4,4]]])
+        self.assertAllClose(a/a.sum("a"), 
+                            [[[0.25, 0.25], [1/3.0]*2], 
+                             [[0.75, 0.75],[2/3.0]*2] ])
         a = Table(['a', 'b', 'c', 'd'], [2, 3, 4, 5], range(2*3*4*5))
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(4*3*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], range(2*3*4*5*6))
-        acpt = copy(a)[..., numpy.newaxis]
+
+        # this simply test division by itself yield 1 and that incompatible dimension
+        # get raised as error
         bcpt = copy(b)[..., numpy.newaxis, numpy.newaxis]
         bcpt.transpose(3, 1, 0, 4, 2)
-        ab = a/b
+        self.assertRaises(ValueError, Table.__div__, a, b)
         cc = c/c
         bb = b/b
         cres = numpy.ones(2*3*4*5*6)
         cres[0] = 0
         bres = numpy.ones(12*6)
         bres[0] = 0
-        ares = acpt/bcpt
-        ares[numpy.isnan(ares)] = 0.0
-        self.assertEqual(ab, Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], 
-                                   ares))
-        self.assertEqual(cc, Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], 
+        self.assertAllEqual(cc, Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], 
                                    cres))
-        self.assertEqual(bb, Table(['c', 'b', 'e'], [4, 3, 6], bres))
-    """    
+        self.assertAllEqual(bb, Table(['c', 'b', 'e'], [4, 3, 6], bres))
+      
 
     def test_basic_index(self):
         self.assertEqual(self.table_a[1,1,1], 17.0)
