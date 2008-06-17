@@ -4,6 +4,9 @@ BNController.py
 Created by Sebastien Arnaud on 2006-11-20.
 
 See Examples/bncontroller.py for usage
+
+[Salamin] This is a very good idea to have around. May need more
+work to get working. Waiting until the structure is finalized
 """
 # Copyright (C) 2005-2008 by
 # Sebastien Arnaud
@@ -14,7 +17,6 @@ from openbayes import BNet, BVertex, __version__, authors
 from openbayes import learning, MCMCEngine
 
 __all__ = ['BNController']
-__version__ = "0.1"
 __author__ = authors['Arnaud']
 
 
@@ -25,7 +27,6 @@ class BNController(object):
     """
     def __init__(self, name=None, nodes_def=None):
         self._network = None
-        self._nodes_def = None
         if nodes_def is not None:
             self._init_network(name, nodes_def)
 
@@ -35,11 +36,7 @@ class BNController(object):
         """
         nodes = {}
         connections = []
-        network = BNet(name)  
-
-        # Save the nodesdef for future use (saving)
-        self._nodes_def = nodes_def
-
+        network = BNet(name)   
         for (nodename, isdiscrete, numstates, leafnode)  in nodes_def:
             nodes[nodename] = network.add_v(BVertex(nodename, isdiscrete, 
                                                  numstates))
@@ -61,27 +58,16 @@ class BNController(object):
                 pass
 
         for ep in connections:
-            network.add_e(*ep)
-
-        # Ok our Bnet has been created, let's save it in the controller
+            network.add_e(ep)
         self._network = network
-
         # Let's not forget to initialize the distribution
-        self._network.init_distributions()
+        self._network.finalize()
 
-    def show_graph(self):
-        """
-        This method print the network to stdout
-        """
-        print self._network
-
-    def show_distribution(self):
-        """
-        This method print all the distributions in the 
-        network to stdout
-        """
-        for v in self._network.all_v: 
-            print v.distribution, '\n'
+    def __str__(self):
+        ans = [str(self._network)]
+        for c in self._network.vertices:
+            ans.append(str(c))
+        return "\n".join(ans)
 
     def load(self, filename):
         """

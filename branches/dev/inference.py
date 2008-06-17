@@ -24,19 +24,9 @@ class InferenceEngine:
     Does not really implement something but creates a standard set of
     attributes that any inference engine should implement
     """
-    BNet = None         # The underlying bayesian network
-    evidence = dict()   # the evidence for the BNet
-    
     def __init__(self, network):
         self.network = network
         self.evidence = {}
-    
-    def set_obs(self, ev = None):
-        """ Incorporate new evidence """
-        if ev == None:
-            ev = {}
-        # evidence = {var.name:observed value}
-        self.evidence = dict(ev)
            
     def marginalise_all(self):
         raise NotImplementedError

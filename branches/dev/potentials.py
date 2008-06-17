@@ -53,7 +53,7 @@ class Potential:
         raise NotImplementedError 
 
     def __imul__(self, other):
-        """ in-place multiplication, destructive for a """
+        """ in-place multiplication, destructive for self """
         raise NotImplementedError  
 
     def __div__(self, other):
@@ -61,7 +61,7 @@ class Potential:
         raise NotImplementedError
     
     def __idiv__(self, other):
-        """ in-place division, destructive for a """
+        """ in-place division, destructive for self """
         raise NotImplementedError 
   
     #===================================================================== 

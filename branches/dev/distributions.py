@@ -2,8 +2,14 @@
 # Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
 # Distributed under the terms of the GNU Lesser General Public License
 # http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
+"""
+This module may be replaced by vertex. This is actually not ditribution
+but possible type of vertex in the graph. 
 
-import types
+A coherent interfaces must be found. Apllying duck typing, a vertex will only
+support the interface for the algorithm that are applicable (and else raise
+an exception becaus of bla has not method bli)
+"""
 import random
 
 import numpy

@@ -56,43 +56,14 @@ class BVertex(object):
         """
         raise NotImplementedError
 
-    """
-    This code as been moved the vertex package and subcontent. Init is now done
-    by calling setparents
-
-    def init_distribution(self, *args, **kwargs):
-       
-        # TODO : The user must specifies the type of distribution present in the
-        # network. This sort of code is very bad for expension
-
-        # first decide which type of Distribution
-        # if all nodes are discrete, then Multinomial)
-        return
-        if numpy.alltrue([v.discrete for v in self.family]):
-            # print self.name,'Multinomial'
-            # FIX: should be able to pass through 'is_adjustable=True'
-            # and it work
-            self.distribution = distributions.MultinomialDistribution(self, 
-                                                            *args, **kwargs) 
-            return
-
-        # gaussian distribution
-        if not self.discrete:
-            # print self.name,'Gaussian'
-            self.distribution = distributions.GaussianDistribution(self, 
-                                                            *args, **kwargs)
-            return
-        raise ValueError("Some distribution were not init") 
-        # other cases go here
-    """
 
     def set_distribution_parameters(self, *args, **kwargs):
         """
         sets any parameters for the distribution of this node
         TODO: replace this proxy by actual ineritance
         """
-        return
-        self.distribution.set_parameters(*args, **kwargs)
+        raise NotImplementedError
+        
         
     def get_sampling_distribution(self):
         """
@@ -132,7 +103,7 @@ class BVertex(object):
 
     def __neq__(self, other):
         '''
-        A simple fall back
+        A simple fall back for comparing if two nodes are not equal
         '''
         return not self.__eq__(other)
 
@@ -244,7 +215,7 @@ class BNet(graph.Graph):
         distribution (unknown) is added to each node of the network
         """
         if not self.is_dag():
-            raise graph.GraphError("None acyclic graph")
+            raise graph.GraphError("Not acyclic graph not supported")
         for v in self.vertices(): 
             v.set_parents(self.predecessors(v)) 
     
@@ -265,6 +236,7 @@ class BNet(graph.Graph):
     def dimensions(self, node):
         ''' Computes the dimension of node
         = (nbr of state - 1)*nbr of state of the parents
+        #TODO what for
         '''
         q = 1
         for pa in self.v[node.name].distribution.parents:
