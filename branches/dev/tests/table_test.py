@@ -76,12 +76,9 @@ class TableTestCase(ExtendedTestCase):
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
         c = Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], \
                  range(2*3*4*5*6))
-   
-        bcpt = b[..., numpy.newaxis, numpy.newaxis]
-        bcpt.transpose([3, 1, 0, 4, 2])
-        res = bcpt*c
+        d = c.copy()
         c *= b
-        self.assertAllEqual(c, res)
+        self.assertAllEqual(c, d*b)
     
     def test_idiv(self):
         b = Table(['c', 'b', 'e'], [4, 3, 6], range(12*6))
@@ -105,11 +102,11 @@ class TableTestCase(ExtendedTestCase):
         ab = a * b
         cc = c * c
         bb = b * b
-        self.assertEqual(ab, Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], 
+        self.assertAllEqual(ab, Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6], 
                                    resab))
-        self.assertEqual(cc, Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6],
+        self.assertAllEqual(cc, Table(['a', 'b', 'c', 'd', 'e'], [2, 3, 4, 5, 6],
                                     numpy.arange(2*3*4*5*6)**2))
-        self.assertEqual(bb, Table(['c','b','e'], [4,3,6], numpy.arange(12*6)**2))
+        self.assertAllEqual(bb, Table(['c','b','e'], [4,3,6], numpy.arange(12*6)**2))
 
     def test_div(self):
         """

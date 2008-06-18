@@ -1,12 +1,12 @@
-""" This is a set of code for subclassing numpy.ndarray.  
+""" This is a set of code for subclassing numpy.ndarray.
 It creates a new table class which is similar to numpy's basic array
 except that each dimension of the array is associated with a name.
-This allows indexing via a dictionary and transposing dimensions 
+This allows indexing via a dictionary and transposing dimensions
 according to an ordered list of dimension names.
 """
 # Copyright (C) 2005-2008 by
 # Elliot Cohen <elliot.cohen@gmail.com>
-# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>  
+# Kosta Gaitanis <gaitanis@tele.ucl.ac.be>
 # Hugues Salamin <hugues.salamin@gmail.com>
 # Distributed under the terms of the GNU Lesser General Public License
 # http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
@@ -33,7 +33,7 @@ class Table(numpy.ndarray):
     anywhere a numpy array can be
     """
 
-    def __new__(cls, names, shape=None, elements=None, dtype='Float32', 
+    def __new__(cls, names, shape=None, elements=None, dtype='Float32',
                 copy=False):
         if shape is None:
             shape = [2] * len(names)
@@ -47,17 +47,17 @@ class Table(numpy.ndarray):
         subarray.assocname = dict(enumerate(names))
         subarray._compute_internal_dict()
         return subarray
- 
+
     def get_names_list(self):
         return [self.assocname[i] for i in range(len(self.shape))]
 
-    names_list = property(get_names_list, None, None, 
+    names_list = property(get_names_list, None, None,
                           "Return an ordered list of names")
-   
+
     def get_names_set(self):
         return set(self.assocdim.keys())
 
-    names = property(get_names_set, None, None, 
+    names = property(get_names_set, None, None,
                      "Return the set of the names present in the array")
 
     def __array_finalize__(self, obj):
@@ -68,14 +68,14 @@ class Table(numpy.ndarray):
         if hasattr(obj, "assocname"):
             self.assocname = dict(obj.assocname)
         else:
-            self.assocname =dict([(x,str(x)) 
+            self.assocname =dict([(x,str(x))
                                   for x in xrange(len(self.shape))])
         self._compute_internal_dict()
 
     def _compute_internal_dict(self):
         self.assocdim = dict([(x[1], x[0]) for x in self.assocname.items()])
         if self.shape == tuple() and len(self.assocdim) == 1:
-            return 
+            return
         if len(self.assocdim) != len(self.shape):
             raise ValueError("Missing dimension name:\n shape: %s\n assocdim %s" %
                               (self.shape, self.assocdim))
@@ -105,7 +105,7 @@ class Table(numpy.ndarray):
         set all element to zero
         """
         self[:] = numpy.zeros(self.shape, dtype = self.dtype)
-    
+
     def set_values(self, values):
         """
         set self to values
@@ -114,10 +114,10 @@ class Table(numpy.ndarray):
 
     def __getitem__(self, index):
         """ Overload array-style indexing behaviour.
-        Index can be a dictionary of var name:value pairs, 
+        Index can be a dictionary of var name:value pairs,
         or pure numbers as in the standard way
         of accessing a numarray array array[1,:,1]
-     
+
         We also support slices. If any of the return index
         is a slice, then we return a Table object, else we return
         a simple float
@@ -129,7 +129,7 @@ class Table(numpy.ndarray):
             # we never return table if we index by dimension
             names = []
        # we now check if we need to return slices
-        # We first 
+        # We first
         # we either return a simple numpy object
         if len(names) == 0:
             return numpy.ndarray.__getitem__(self.view(numpy.ndarray), num_index)
@@ -141,7 +141,7 @@ class Table(numpy.ndarray):
 
     def __setitem__(self, index, value):
         """ Overload array-style indexing behaviour.
-        Index can be a dictionary of var name:value pairs, 
+        Index can be a dictionary of var name:value pairs,
         or pure numbers as in the standard way
         of accessing a numarray array array[1,:,1]
         """
@@ -166,7 +166,7 @@ class Table(numpy.ndarray):
                 names.append(self.assocname[dim])
         return names, tuple(index)
 
-    
+
     def __str__(self):
         string = "(Dims: " + \
                  " ".join([str(x) for x in self.names_list]) + "\n"
@@ -182,7 +182,7 @@ class Table(numpy.ndarray):
             axis = axis[0]
         if axis is None or len(axis) == 0:
             axis = range(len(self.shape)-1, -1, -1)
-        new.assocname = dict([(x, self.assocname[y]) 
+        new.assocname = dict([(x, self.assocname[y])
                               for x,y in enumerate(axis)])
         return new.view(Table)
 
@@ -197,7 +197,7 @@ class Table(numpy.ndarray):
         """ True if a and b have same elements, size and names """
         if not hasattr(other, 'names'):
             return numpy.ndarray.__eq__(self.view(numpy.ndarray), other)
-        else:   
+        else:
             # the b class should better be a Table or something like that
             # order of variables is not important
             # put the variables in the same order
@@ -209,19 +209,19 @@ class Table(numpy.ndarray):
                 correspond.append(other.assocdim[vara])
             other_view =  numpy.transpose(other, axes=correspond)
             return numpy.ndarray.__eq__(self, other_view).view(numpy.ndarray)
-                                    
+
 
     def union(self, other):
-        """ 
+        """
         Returns a new instance of same class as a that contains all
         data contained in self but also has any new variables found in other with unary
         dimensions. Also returns a view of other ready for an operation with
         the returned instance.
-        
+
         eg. self = Pr(A,B,C,D,E)
             other = Pr(C,G,A,F)
             self.union(other) --> returns (Pr(A,B,C,D,E,1,1),numarray([A,1,C,1,1,G,F])
-            
+
         Notes:
         -    self and other remain unchanged
         -    self and other must be Table instances (or something equivalent)
@@ -238,7 +238,7 @@ class Table(numpy.ndarray):
                 new.add_dim(variable) # add new variable to new
         # new now contains all the variables contained in a and b
         # new = A U B
-        correspond = []        
+        correspond = []
         b_assocdim = other.assocdim.copy()
         bcpt = other.view()
         for var in new.names_list:
@@ -259,7 +259,8 @@ class Table(numpy.ndarray):
     ##########################################################################
     def __imul__(self, other):
         """
-        in place multiplication
+        Simply call multiplication. No optimisation for inplace
+        multiplication
         PRE:
             - B must be a subset of A!!!
             eg.
@@ -267,7 +268,7 @@ class Table(numpy.ndarray):
                 b=Pr(B); B = {'c','a'}
 
         usage:
-        a*=b 
+        a*=b
 
         POST:
             a=Pr(A)*Pr(B) = Pr(a,b,c)
@@ -278,7 +279,7 @@ class Table(numpy.ndarray):
         -   b is not touched during this operation
         -   operation is done in-place for a, a is not the same after the operation
         -> code start
-        
+
         # prepare dimensions in b for multiplication
         cptb = self.prepare_other(other)
 
@@ -290,7 +291,8 @@ class Table(numpy.ndarray):
 
         return self
         """
-        raise NotImplementedError
+        self = self*other
+        return self
 
     def __idiv__(self, other):
         """
@@ -302,7 +304,7 @@ class Table(numpy.ndarray):
                 b=Pr(B); B = {'c','a'}
 
         usage:
-        a/=b 
+        a/=b
 
         POST:
             a=Pr(A)/Pr(B) = Pr(a,b,c)
@@ -352,7 +354,7 @@ class Table(numpy.ndarray):
         ans[numpy.isnan(ans)] = 0
         return ans
 
-            
+
 
 
     def __mul__(self, other):
@@ -376,27 +378,18 @@ class Table(numpy.ndarray):
         -   a and b are not touched during this operation
         -   return a NEW Table instance
         -> code start
-        # prepare dimensions in a and b for multiplication
-        new, cptb = self.union(other)
-
-        # multiply
-        #new.cpt *= cptb  # this does not work correctly for some reason...
-        #na.multiply(new.cpt,cptb,new.cpt) # does not work either
-        new.cpt = new.cpt * cptb    #this one works fine
-                                #is this a numarray BUG????        
-
-        return new
+        # prepare dimensions in a and b for multiplicatio
         """
-        raise NotImplementedError
+        a,  b = self.union(other)
+        return numpy.ndarray.__mul__(a,  b)
 
-    
 
     def prepare_other(self, other):
         """
         Prepares other for inplace multiplication/division with self. Returns
         a *view* of other.cpt ready for an operation. other must contain a
         subset of the variables of self. NON-DESTRUCTIVE!
-        
+
         eg. a= Pr(A,B,C,D)
             b= Pr(D,B)
             a.prepareOther(b) --> returns a numarray Pr(1,B,1,D)
@@ -446,4 +439,4 @@ class Table(numpy.ndarray):
         of dimension dim is 1
         """
         sum_ = self.sum(axis)
-        self /= sum_    
+        self /= sum_
