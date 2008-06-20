@@ -21,7 +21,7 @@ class GraphError(StandardError):
     """
     pass
 
-class Graph(object):
+class DirectedGraph(object):
     """
     This class implements a directed graph. The only constraints is that
     vertices are hashable
@@ -36,30 +36,22 @@ class Graph(object):
 
     def add_vertex(self, vertex):
         """
-        This method add a vertice to the graph. It hte vertice already exist,
-        an GraphError is raised
+        This method add a vertice to the graph. It the vertice already exist,
+        nothing is done
         """
-        if vertex in self._pred or vertex in self._succ:
-            raise GraphError("Vertices already exists")
-        self._pred[vertex] = []
-        self._succ[vertex] = []
+        self._pred.setdefault(vertex, [])
+        self._succ.setdefault(vertex, [])
         return vertex
 
     def add_edge(self, edge):
-        # We start by updating the self._prec
-        if edge[1] not in self._pred:
-            self._pred[edge[1]] = [edge[0]]
-        else:
-            self._pred[edge[1]].append(edge[0])
-        if edge[0] not in self._pred:
-            self._pred[edge[0]] = []
-        # We then update self._succ
-        if edge[0] not in self._succ:
-            self._succ[edge[0]] = [edge[1]]
-        else:
-            self._succ[edge[0]].append(edge[1])
-        if edge[1] not in self._succ:
-            self._succ[edge[1]] = []
+        """
+        This method can be used to add an edge in the
+        graph. The needed vertices are inserted
+        """
+        self._succ.setdefault(edge[0], []).append(edge[1])
+        self._succ.setdefault(edge[1], [])
+        self._pred.setdefault(edge[1], []).append(edge[0])
+        self._pred.setdefault(edge[0], [])
         # The invariant that
         #   self._prec.keys() == self._succ.keys() 
         # remains valid
@@ -84,15 +76,24 @@ class Graph(object):
         if self.del_edge(edge):
             self.add_edge( (edge[1], edge[0]))
         else:
-            raise GraphError("Impossible to invert inexistant edge %s"%str(edge))
+            raise GraphError("Impossible to invert inexistant edge %s" 
+                             % str(edge))
 
     def __getitem__(self, vertex):
+        """
+        This function return all the neighbour of a given
+        vertex
+        """
         return self._pred[vertex].key()+self._succ[vertex].key()
 
-    def vertices(self):
-        return self._succ.keys()
+    def get_vertices(self):
+        """
+        This return the list of vertices present in the graph
+        """
+        return set(self._succ.keys())
+    vertices = property(get_vertices)
 
-    def edges(self):
+    def get_edges(self):
         """
         This function return a list of edges
         """
@@ -101,14 +102,24 @@ class Graph(object):
             for end in succ:
                 ans.append((start, end))
         return ans
+    edges = property(get_edges)
 
     def successors(self, vertex):
+        """
+        This return all the direct successor of vertex
+        """
         return self._succ[vertex]
 
     def predecessors(self, vertex):
+        """
+        This return the parent of vertex
+        """
         return self._pred[vertex]
 
     def family(self, vertex):
+        """
+        This return the vertex and its parents
+        """
         return [vertex] + self._pred[vertex]
 
     def topological_order(self):
@@ -122,7 +133,8 @@ class Graph(object):
             v = choices.pop()
             ans.append(v)
             for candidate in self._succ[v]:
-                if len([i for i in self._pred[candidate] if i not in ans]) == 0:
+                if len([i for i in self._pred[candidate] 
+                          if i not in ans]) == 0:
                     choices.append(candidate)
         if len(ans) == len(self._succ):
             return ans
@@ -141,3 +153,59 @@ class Graph(object):
         ans = ["Nodes:"+ str(self.vertices())]
         ans.append("Edges:"+ str(self.edges()))
         return '\n'.join(ans)
+
+
+class UndirectedGraph(object):
+    """
+    This class implements a directed graph. The only constraints is that
+    vertices are hashable.
+    """
+
+    def __init__(self):
+        self._neighbors = {}
+
+    def add_vertex(self, vertex):
+        """
+        This method add a vertice to the graph. It the vertice already exist,
+        nothing is done
+        """
+        self._neighbors.setdefault(vertex, set())
+        return vertex
+
+    def add_edge(self, edge):
+        """
+        This method add an edge in the graph and the corresponding vertex
+        if needed
+        """
+        self._neighbors.setdefault(edge[0], set()).add(edge[1])
+        self._neighbors.setdefault(edge[1], set()).add(edge[0])
+
+    def get_vertices(self):
+        """
+        This return a list of the vertices present in the graph
+        """
+        return set(self._neighbors.keys())
+
+    vertices = property(get_vertices)
+
+    def get_edges(self):
+        """
+        This return a list of edge present in the graph
+        """
+        ans = set()
+        for x, nbs in self._neighbors.iteritems():
+            for y in nbs:
+                if x < y:
+                    ans.add(frozenset([x, y]))
+        return ans
+    edges = property(get_edges)
+
+
+    def __getitem__(self, vertex):
+        """
+        This function return all the neighbour of a given
+        vertex
+        """
+        return self._neighbors[vertex]
+
+

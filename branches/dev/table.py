@@ -10,9 +10,6 @@ according to an ordered list of dimension names.
 # Hugues Salamin <hugues.salamin@gmail.com>
 # Distributed under the terms of the GNU Lesser General Public License
 # http://www.gnu.org/copyleft/lesser.html or LICENSE.txt
-
-import types
-
 import numpy
 import numpy.random
 
@@ -33,6 +30,9 @@ class Table(numpy.ndarray):
     anywhere a numpy array can be
     """
 
+    # __init__ is replaced by __new__ in our case. We are subclassing
+    # a numpy.ndarray instance
+
     def __new__(cls, names, shape=None, elements=None, dtype='Float32',
                 copy=False):
         if shape is None:
@@ -49,12 +49,18 @@ class Table(numpy.ndarray):
         return subarray
 
     def get_names_list(self):
+        """
+        This return a list of the name in the current order
+        """
         return [self.assocname[i] for i in range(len(self.shape))]
 
     names_list = property(get_names_list, None, None,
                           "Return an ordered list of names")
 
     def get_names_set(self):
+        """
+        This return the set of names associated with dims
+        """
         return set(self.assocdim.keys())
 
     names = property(get_names_set, None, None,
@@ -68,16 +74,22 @@ class Table(numpy.ndarray):
         if hasattr(obj, "assocname"):
             self.assocname = dict(obj.assocname)
         else:
-            self.assocname =dict([(x,str(x))
+            self.assocname = dict([(x,str(x))
                                   for x in xrange(len(self.shape))])
         self._compute_internal_dict()
 
     def _compute_internal_dict(self):
+        """
+        This method is responsible to update self.assocdim. Some
+        Checking on the length of assocname and the actual number
+        of dimensions is done
+        """
         self.assocdim = dict([(x[1], x[0]) for x in self.assocname.items()])
         if self.shape == tuple() and len(self.assocdim) == 1:
             return
         if len(self.assocdim) != len(self.shape):
-            raise ValueError("Missing dimension name:\n shape: %s\n assocdim %s" %
+            raise ValueError("Missing dimension name:"
+                             "\n shape: %s\n assocdim %s" %
                               (self.shape, self.assocdim))
 
     def update(self, other):
@@ -132,10 +144,12 @@ class Table(numpy.ndarray):
         # We first
         # we either return a simple numpy object
         if len(names) == 0:
-            return numpy.ndarray.__getitem__(self.view(numpy.ndarray), num_index)
+            return numpy.ndarray.__getitem__(self.view(numpy.ndarray),
+                                             num_index)
         # or a table if we selcted complete dimension
         else:
-            temp = numpy.ndarray.__getitem__(self.view(numpy.ndarray), num_index)
+            temp = numpy.ndarray.__getitem__(self.view(numpy.ndarray), 
+                                             num_index)
             temp = Table(names, temp.shape, temp)
             return temp
 
@@ -354,9 +368,6 @@ class Table(numpy.ndarray):
         ans[numpy.isnan(ans)] = 0
         return ans
 
-
-
-
     def __mul__(self, other):
         """
         multiplication
@@ -383,7 +394,6 @@ class Table(numpy.ndarray):
         a,  b = self.union(other)
         return numpy.ndarray.__mul__(a,  b)
 
-
     def prepare_other(self, other):
         """
         Prepares other for inplace multiplication/division with self. Returns
@@ -405,7 +415,8 @@ class Table(numpy.ndarray):
         """
         #self contains all variables found in other
         if len(other.names - self.names) > 0:
-            raise ValueError(str((other.names-self.names)) + " not in " + str(self.names))
+            raise ValueError(str(other.names-self.names) + 
+                             " not in " + str(self.names))
         # add new dimensions to b
         new_b = other.copy()
         for var in (self.names - other.names):
@@ -433,6 +444,8 @@ class Table(numpy.ndarray):
             return temp
         return Table(names, temp.shape, temp)
 
+    # TO-DO: implement some marginalize method (is it useful???) 
+    # salamin 20.06.2008
     def normalize(self, axis = None):
         """
         This function normalize the value in the table such that the sum acros

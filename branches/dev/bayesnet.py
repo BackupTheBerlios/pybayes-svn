@@ -126,7 +126,7 @@ class BVertex(object):
 
 
 
-class BNet(graph.Graph):
+class BNet(graph.DirectedGraph):
     """
     This class implements a bayesian Network
     """

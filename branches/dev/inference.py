@@ -216,7 +216,7 @@ class SepSet(object):
 
 #=======================================================================
 
-class MoralGraph(graph.Graph):
+class MoralGraph(graph.UndirectedGraph):
     def choose_vertex(self):
         """
         Chooses a vertex from the list according to criterion :
@@ -261,7 +261,8 @@ class MoralGraph(graph.Graph):
         
         # from this list, pick the one that has the smallest 
         # clusterweight = nvalues this only works with BVertex instances
-        v = mini[numpy.argmin([clusterweight[vertices.index(v)] for v in mini])]
+        v = mini[numpy.argmin([clusterweight[vertices.index(v)] 
+                               for v in mini])]
         
         return v
 
@@ -372,7 +373,7 @@ class Likelihood(distributions.MultinomialDistribution):
 
 #========================================================================
 
-class JoinTree(InferenceEngine, graph.Graph):
+class JoinTree(InferenceEngine, graph.DirectedGraph):
     """ Join Tree inference engine"""
     def __init__(self, network):
         """Creates an 'Optimal' JoinTree from a BNet """
