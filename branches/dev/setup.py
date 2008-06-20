@@ -29,7 +29,7 @@ __author__ = "\n".join([x for _, x in sorted(authors.items())])
 
 name = 'openbayes'
 
-__version__ = '0.1.0'
+__version__ = '0.2a'
 
 description = 'An OpenSource Python implementation of bayesian networks'\
               ' inspired by BNT.'

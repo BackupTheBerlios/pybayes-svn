@@ -131,7 +131,7 @@ class BNet(graph.DirectedGraph):
     This class implements a bayesian Network
     """
     def __init__(self, name=None):
-        graph.Graph.__init__(self)
+        graph.DirectedGraph.__init__(self)
         self.name = name
 
     def copy(self):
@@ -143,42 +143,7 @@ class BNet(graph.DirectedGraph):
         for v in self.vertices():
             g_new[v.name].set_parameters(v.get_parameters()) 
         return g_new
-
-    def moralize(self):
-        """
-        moralize ??? the Network
-        """
-        #TODO: Rewrite this for the new monture
-        tree = inference.MoralGraph(name='Moralized '+str(self.name))
         
-        # for each vertice, create a corresponding vertice
-        for v in self.v.values():
-            tree.add_v(BVertex(v.name, v.discrete, v.nvalues))
-
-        # create an UndirEdge for each DirEdge in current graph
-        for e in self.e.values():
-            # get corresponding vertices in G (and not in self!)
-            v1 = tree.v[e.all_v[0].name]
-            v2 = tree.v[e.all_v[1].name]
-            tree.add_e(graph.UndirEdge(len(tree.e), v1, v2))
-
-        # add moral edges
-        # connect all pairs of parents for each node
-        for v in self.v.values():
-            # get parents for each vertex
-            self.log.debug('Node : ' + str(v))
-            parents = [tree.v[p.name] for p in list(v.in_v)]
-            self.log.debug('parents: ' + str([p.name for p in list(v.in_v)]))
-            
-            for p1, i in zip(parents, range(len(parents))):
-                for p2 in parents[i+1:]:
-                    if not p1.connecting_e(p2):
-                        self.log.debug('adding edge '+ str(p1) + 
-                                       ' -- ' + str(p2))
-                        tree.add_e(graph.UndirEdge(len(tree.e), p1, p2))
-
-        return tree
-    
     def observed(self):
         """
         This method return the list of observed vertices. Every vertex in a
@@ -216,7 +181,7 @@ class BNet(graph.DirectedGraph):
         """
         if not self.is_dag():
             raise graph.GraphError("Not acyclic graph not supported")
-        for v in self.vertices(): 
+        for v in self.vertices: 
             v.set_parents(self.predecessors(v)) 
     
     def sample(self, nbr_samples=1):

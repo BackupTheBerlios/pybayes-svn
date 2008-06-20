@@ -55,6 +55,24 @@ class TestDirectedGarph(unittest.TestCase):
         graph.add_edge((3, 4))
         self.assertEqual(self.graph.is_dag(), True)
 
+
+    def test_moralize(self):
+        graph_2 = UndirectedGraph()
+        graph_2.add_edge((1, 2))
+        graph_2.add_edge((2, 3))
+        graph_2.add_edge((3, 1))
+        self.assertEquals(graph_2, self.graph.get_moral())
+        self.graph.del_edge((3,1))
+        self.assertNotEquals(graph_2, self.graph.get_moral())
+        self.graph.inv_edge((2,3))
+        self.assertEquals(graph_2, self.graph.get_moral())     
+
+    def test_srt(self):
+        str(self.graph)
+
+
+
+
 class TestUndirectedGarph(unittest.TestCase):
     """
     This is the testcase for the UndirectedGraph class
@@ -77,12 +95,18 @@ class TestUndirectedGarph(unittest.TestCase):
         self.assertEqual(self.graph[1], set([2,3]))
         self.assertEqual(self.graph[2], set([1,3]))
         self.assertEqual(self.graph[3], set([1,2]))
+    
+    def test_str(self):
+        str(self.graph)
 
+    def test_triangulate(self):
+        self.graph.del_edge((2,3))
+        self.graph.add_edge((2,4))
+        self.graph.add_edge((3,4))
+        self.graph.triangulate()
+        self.assertEquals(len(self.graph.edges), 5)
+        self.assertEquals(len(self.graph.vertices), 4)
+      
 
-
-
-
-
-       
 if __name__ == "__main__":
     unittest.main()

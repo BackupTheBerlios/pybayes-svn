@@ -289,7 +289,7 @@ class MoralGraph(graph.UndirectedGraph):
         3. G, modified by the additional arcs introduces in previous
         steps is now triangulated.
         
-        The WEIGHT of a node V is the nmber of values V can take (BVertex.nvalues)
+        The WEIGHT of a node V is the number of values V can take (BVertex.nvalues)
         The WEIGHT of a CLUSTER is the product of the weights of its
         constituent nodes
         
@@ -334,6 +334,12 @@ class MoralGraph(graph.UndirectedGraph):
             # remove from G2
             del graph_copy.v[v.name]
         return gt, clusters
+
+        """
+        This is now totally implemented in graph except for the concept of 
+        cluster. The transformation from the triangulate graph to the cluster
+        graph need to be done TODO
+        """
        
 #=======================================================================
 #=======================================================================
